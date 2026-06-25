@@ -1,6 +1,5 @@
 // $lib/artemis/map/mapInit.ts
 import maplibregl from "maplibre-gl";
-import basemapGeojsonUrl from "$lib/assets/Baselayer.geojson?url";
 import { ngiTileUrl } from "$lib/artemis/config/ngi";
 
 let map: maplibregl.Map | null = null;
@@ -156,7 +155,7 @@ function getBaseMapStyle(theme: BaseMapTheme): maplibregl.StyleSpecification {
     sources: {
       [BASE_WATER_SOURCE_ID]: {
         type: "geojson",
-        data: basemapGeojsonUrl
+        data: "/Baselayer.geojson"
       }
     },
     layers: [

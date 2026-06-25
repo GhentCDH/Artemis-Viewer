@@ -13,10 +13,7 @@
   export let loadingLayers: Record<string, boolean> = {};
   export let dualPaneEnabled = false;
   export let disabledPane: PaneId | null = null;
-  export let leftYear: number | undefined = undefined;
-  export let rightYear: number | undefined = undefined;
   export let searchFocusMainId: string | null = null;
-  export let searchFocusYear: number | null = null;
   export let searchFocusNonce = 0;
   export let activeCollection: CollectionInfo | null = null;
 
@@ -179,6 +176,7 @@
   let prevVisible: Record<string, boolean> = {};
   let prevPaneVisible: Record<PaneId, Record<string, boolean>> = { left: {}, right: {} };
   let layerInfoModalKey: string | null = null;
+  let activeSourceKey: string | null = null;
 
   let hoveredSrc: SourceDef | null = null;
   let tooltipFixedStyle = '';
@@ -430,6 +428,20 @@
     hoveredSrc = null;
   }
 
+  function onMeanderClick(src: SourceDef, e: MouseEvent) {
+    e.stopPropagation();
+    if (activeSourceKey === src.key) {
+      activeSourceKey = null;
+    } else {
+      activeSourceKey = src.key;
+      setLayerEnabled('left', src.key, true);
+      const overlapping = SOURCES.filter(s => s.key !== src.key);
+      for (const candidate of overlapping) {
+        setLayerEnabled('left', candidate.key, false);
+      }
+    }
+  }
+
   function onTrackClick(e: MouseEvent) {
     const target = e.target as HTMLElement | null;
     if (target?.closest('.source-pill-wrap, .img-dot, .ts-scrubber')) return;
@@ -562,7 +574,7 @@
         ...rightSublayerState,
         [key]: { ...rightSublayerState[key], [localId]: !cur },
       };
-      const rightVisible = rightEnabledLayers[key] && rightVisibleSourceKeys.has(key);
+      const rightVisible = rightEnabledLayers[key] && activeSourceKey === key;
       if (rightVisible) {
         dispatch('paneSublayerChange', { pane: 'right', subId, enabled: !cur });
       }
@@ -573,7 +585,7 @@
       ...leftSublayerState,
       [key]: { ...leftSublayerState[key], [localId]: !cur },
     };
-    const leftVisible = leftEnabledLayers[key] && leftVisibleSourceKeys.has(key);
+    const leftVisible = leftEnabledLayers[key] && activeSourceKey === key;
     if (leftVisible) {
       dispatch('sublayerChange', { subId, enabled: !cur });
       dispatch('paneSublayerChange', { pane: 'left', subId, enabled: !cur });
@@ -647,8 +659,6 @@
     };
   }
 
-  let currentSourceKeys: Set<SourceKey> = new Set();
-
   function sourceBlockStyle(src: SourceDef, isCurrent: boolean): string {
     const visualRange = sourceVisualYearRange(src);
     const wrapperTransform = 'translateX(-50%)';
@@ -683,22 +693,6 @@
     return `--c:${src.color};--pattern:${sourcePattern(src.key)};--pattern-size:${sourcePatternSize(src.key)};--pane-header-tint:${paneTint}`;
   }
 
-  // currentSourceKeys is derived reactively from the scrubber year(s) so the
-  // active pill updates continuously while scrubbing/dragging.
-  $: currentSourceKeys = (() => {
-    if (!dualPaneEnabled) {
-      return new Set<SourceKey>(paneSourcesForYear(sliderYear).map((s) => s.key));
-    }
-    const keys = new Set<SourceKey>();
-    if (disabledPane !== 'left') for (const s of paneSourcesForYear(localLeftYear)) keys.add(s.key);
-    if (disabledPane !== 'right') for (const s of paneSourcesForYear(localRightYear)) keys.add(s.key);
-    return keys;
-  })();
-
-  function sourceHasOverlap(key: SourceKey): boolean {
-    return activePanesBySource[key].length > 1;
-  }
-
   onMount(() => {
     let trackRaf = 0;
     let trackResizeObserver: ResizeObserver | null = null;
@@ -726,7 +720,7 @@
     }
 
     for (const src of SOURCES) {
-      const visible = leftEnabledLayers[src.key] && leftVisibleSourceKeys.has(src.key);
+      const visible = activeSourceKey === src.key;
       prevVisible[src.key] = visible;
       dispatch('mainToggle', { mainId: src.mainId, enabled: visible });
       prevPaneVisible.left[src.key] = visible;
@@ -740,7 +734,7 @@
         }
       }
       if (dualPaneEnabled) {
-        const rightVisible = rightEnabledLayers[src.key] && rightVisibleSourceKeys.has(src.key);
+        const rightVisible = activeSourceKey === src.key;
         prevPaneVisible.right[src.key] = rightVisible;
         dispatch('paneMainToggle', { pane: 'right', mainId: src.mainId, enabled: rightVisible });
         if (rightVisible) {
@@ -765,45 +759,12 @@
 
   $: halfKnobYears = yearLeeway;
 
-  $: if (leftYear != null && leftYear !== lastLeftYearProp) {
-    lastLeftYearProp = leftYear;
-    if (dualPaneEnabled) {
-      localLeftYear = leftYear;
-    } else {
-      sliderYear = leftYear;
-    }
-  }
-
-  $: if (rightYear != null && rightYear !== lastRightYearProp) {
-    lastRightYearProp = rightYear;
-    localRightYear = rightYear;
-  }
-
-  $: if (dualPaneEnabled !== dualPaneModePrev) {
-    if (dualPaneEnabled) {
-      if (!dualPaneYearsInitialized) {
-        localLeftYear = sliderYear;
-        localRightYear = rightYear ?? sliderYear;
-        dualPaneYearsInitialized = true;
-      }
-    } else {
-      sliderYear = localLeftYear;
-    }
-    dualPaneModePrev = dualPaneEnabled;
-  }
-
   $: if (searchFocusNonce !== lastSearchFocusNonce) {
     lastSearchFocusNonce = searchFocusNonce;
     if (searchFocusMainId) {
       const src = sourceByMainId(searchFocusMainId);
-      const targetYear = searchFocusYear ?? src?.repr;
-      if (src && targetYear != null) {
-        setLayerEnabled('left', src.key, true);
-        const overlapping = paneSourcesForYear(targetYear)
-          .filter((candidate) => candidate.key !== src.key);
-        for (const candidate of overlapping) {
-          setLayerEnabled('left', candidate.key, false);
-        }
+      if (src) {
+        activeSourceKey = src.key;
       }
     }
   }
@@ -815,21 +776,12 @@
       ]
     : []) as PaneState[];
 
-  $: singlePanelSources = paneSourcesForYear(sliderYear);
-  $: leftPanelSources = paneSourcesForYear(localLeftYear);
-  $: rightPanelSources = dualPaneEnabled ? paneSourcesForYear(localRightYear) : [];
-  $: leftVisibleSourceKeys = new Set<SourceKey>((dualPaneEnabled ? leftPanelSources : singlePanelSources).map((s) => s.key));
-  $: rightVisibleSourceKeys = new Set<SourceKey>(rightPanelSources.map((s) => s.key));
-  $: activeSourceKeys = dualPaneEnabled
-    ? new Set<SourceKey>([...leftPanelSources, ...rightPanelSources].map((s) => s.key))
-    : new Set<SourceKey>(singlePanelSources.map((s) => s.key));
-  $: activeSourceKey = (dualPaneEnabled ? leftPanelSources : singlePanelSources)[0]?.key ?? null;
   $: leftActiveVisibility = SOURCES.reduce<Record<SourceKey, boolean>>((acc, src) => {
-    acc[src.key] = Boolean(leftEnabledLayers[src.key] && leftVisibleSourceKeys.has(src.key));
+    acc[src.key] = Boolean(leftEnabledLayers[src.key] && activeSourceKey === src.key);
     return acc;
   }, {} as Record<SourceKey, boolean>);
   $: rightActiveVisibility = SOURCES.reduce<Record<SourceKey, boolean>>((acc, src) => {
-    acc[src.key] = Boolean(dualPaneEnabled && rightEnabledLayers[src.key] && rightVisibleSourceKeys.has(src.key));
+    acc[src.key] = Boolean(dualPaneEnabled && rightEnabledLayers[src.key] && activeSourceKey === src.key);
     return acc;
   }, {} as Record<SourceKey, boolean>);
 
@@ -850,17 +802,6 @@
     }))
     .filter(({ sources }) => sources.length > 0);
 
-  $: activePanesBySource = SOURCES.reduce<Record<SourceKey, PaneState[]>>((acc, src) => {
-    const panes: PaneState[] = [];
-    if ((dualPaneEnabled ? leftPanelSources : singlePanelSources).some((s) => s.key === src.key)) {
-      panes.push({ id: 'left', year: localLeftYear, label: PANE_META.left.label, color: PANE_META.left.color });
-    }
-    if (dualPaneEnabled && rightPanelSources.some((s) => s.key === src.key)) {
-      panes.push({ id: 'right', year: localRightYear, label: PANE_META.right.label, color: PANE_META.right.color });
-    }
-    acc[src.key] = panes;
-    return acc;
-  }, {} as Record<SourceKey, PaneState[]>);
 
   $: activeCollection = activeSourceKey
     ? buildCollectionInfo(sourceByKey(activeSourceKey))
@@ -995,23 +936,23 @@
 
       {#each SOURCES as src}
         {@const enabled = !dualPaneEnabled ? leftEnabledLayers[src.key] : (leftEnabledLayers[src.key] || rightEnabledLayers[src.key])}
-        {@const isCurrent = currentSourceKeys.has(src.key)}
+        {@const isCurrent = activeSourceKey === src.key}
         {@const axisOffsets = sourceAxisOffsets(src)}
         <SliderLayer
           {src}
           {enabled}
           {isCurrent}
-          isDimmed={currentSourceKeys.size > 0 && !isCurrent}
+          isDimmed={activeSourceKey !== null && !isCurrent}
           meanderColor={sourceVisualColor(src)}
           bulgeDirection={sourceBulgeDirection(src)}
           meanderWidth={sourceMeanderWidth(src)}
           startAxisOffset={axisOffsets.start}
           endAxisOffset={axisOffsets.end}
           centerAxisOffset={axisOffsets.center}
-          hasOverlap={sourceHasOverlap(src.key)}
+          hasOverlap={false}
           loading={loadingLayers[src.mainId]}
           sourceBlockStyle={sourceBlockStyle(src, isCurrent)}
-          onJumpToSource={jumpToSource}
+          onMeanderClick={onMeanderClick}
           onPillEnter={onPillEnter}
           onPillLeave={onPillLeave}
         />

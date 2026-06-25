@@ -1713,10 +1713,7 @@
         {layerMetadataByMainId}
         dualPaneEnabled={dualPaneEnabled}
         disabledPane={hasViewerPane && isSplitLayout ? viewerPane : null}
-        leftYear={massartYear}
-        rightYear={rightTimelineYear}
         {searchFocusMainId}
-        {searchFocusYear}
         {searchFocusNonce}
         yearLeeway={MASSART_LEEWAY}
         loadingLayers={combinedMainLayerLoading}
@@ -1725,7 +1722,6 @@
         on:sublayerChange={onTimesliderSublayerChange}
         on:paneMainToggle={onTimesliderPaneMainToggle}
         on:paneSublayerChange={onTimesliderPaneSublayerChange}
-        on:year-change={onMassartYearChange}
         on:focus-image={onTimelineImageFocus}
         on:open-viewer={(e) => openViewer({ title: e.detail.title, sourceManifestUrl: e.detail.sourceManifestUrl, imageServiceUrl: e.detail.imageServiceUrl }, 'left')}
       />

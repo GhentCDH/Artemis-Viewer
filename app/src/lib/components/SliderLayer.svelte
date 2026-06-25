@@ -14,7 +14,7 @@
   export let endAxisOffset = 0;
   export let centerAxisOffset = 0;
   export let sourceBlockStyle = '';
-  export let onJumpToSource: (src: SliderSource, event: MouseEvent) => void = () => {};
+  export let onMeanderClick: (src: SliderSource, event: MouseEvent) => void = () => {};
   export let onPillEnter: (src: SliderSource, event: MouseEvent) => void = () => {};
   export let onPillLeave: () => void = () => {};
 
@@ -117,8 +117,8 @@
     class:is-dimmed={isDimmed}
     type="button"
     title={`${src.label} · ${src.start}–${src.end}`}
-    aria-label={`Jump to ${src.label} (${src.start}–${src.end})`}
-    on:click={(event) => onJumpToSource(src, event)}
+    aria-label={`Toggle ${src.label} (${src.start}–${src.end})`}
+    on:click={(event) => onMeanderClick(src, event)}
     on:mouseenter={(event) => onPillEnter(src, event)}
     on:mouseleave={onPillLeave}
   >

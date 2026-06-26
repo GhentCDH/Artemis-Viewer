@@ -8,27 +8,27 @@
 
 /* Floating panel: search boxes, result lists, small popups */
 .ui-panel {
-  border: 0.5px solid var(--panel-border);
+  border: 0.5px solid var(--window-border);
   border-radius: var(--radius-sm);
-  background: var(--panel-bg);
-  box-shadow: var(--shadow-floating-ui);
+  background: var(--window-background);
+  box-shadow: var(--window-shadow);
 }
 
 /* Overlay panel: menus and drawers that sit above the map */
 .ui-panel-overlay {
   border: 1px solid var(--border-ui);
   border-radius: var(--radius-sm);
-  background: var(--overlay-bg);
+  background: var(--overlay-panel-background);
   backdrop-filter: blur(4px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--window-shadow);
 }
 
 /* Card: structured floating panel with a header row */
 .ui-card {
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
+  background: var(--window-background);
+  border: 1px solid var(--window-border);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--window-shadow);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -40,8 +40,8 @@
   align-items: center;
   gap: 7px;
   padding: 8px 10px;
-  background: var(--card-bg);
-  border-bottom: 0.5px solid var(--panel-border);
+  background: var(--window-header-background);
+  border-bottom: 0.5px solid var(--window-border);
   flex-shrink: 0;
 }
 
@@ -51,7 +51,7 @@
 .ui-btn {
   border: 1px solid var(--border-ui);
   border-radius: var(--radius-xs);
-  background: var(--card-bg);
+  background: var(--window-header-background);
   padding: 5px 10px;
   font-size: 12px;
   font-weight: 500;
@@ -65,8 +65,8 @@
   border: none;
   border-radius: var(--radius-xs);
   padding: 9px 14px;
-  background: var(--bubble-action-bg);
-  color: var(--bubble-action-text);
+  background: var(--button-primary-background);
+  color: var(--button-primary-text);
   font-size: 12px;
   font-weight: 700;
   font-family: var(--font-ui);
@@ -76,7 +76,7 @@
   gap: 8px;
 }
 .ui-btn-primary:hover {
-  background: var(--bubble-action-bg-hover);
+  background: var(--button-primary-background-hover);
 }
 
 /* Icon button: no border, no background, icon-only */
@@ -94,7 +94,7 @@
 }
 .ui-icon-btn:hover {
   color: var(--text-primary);
-  background: var(--surface-muted);
+  background: var(--muted-surface-background);
 }
 
 /* --- Interactive rows ------------------------------------- */
@@ -102,7 +102,7 @@
 /* Clickable list row: search results, IIIF item rows */
 .ui-list-item {
   border: 0;
-  background: var(--result-bg);
+  background: var(--list-row-background);
   border-radius: var(--radius-xs);
   display: flex;
   align-items: center;
@@ -116,7 +116,7 @@
   transition: background 0.12s;
 }
 .ui-list-item:hover {
-  background: var(--result-hover);
+  background: var(--list-row-background-hover);
 }
 
 /* --- Form elements ---------------------------------------- */
@@ -172,7 +172,7 @@
   border: 1px solid var(--problem-border);
   border-radius: var(--radius-xs);
   padding: 6px 8px;
-  background: var(--problem-bg);
+  background: var(--problem-background);
   color: var(--problem-error-color);
   font-size: 12px;
 }
@@ -180,5 +180,21 @@
 /* --- Utilities -------------------------------------------- */
 
 .ui-mono {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
+}
+
+/* --- Tooltip ------------------------------------------------ */
+
+.ui-tooltip {
+  position: fixed;
+  background: var(--tooltip-background);
+  color: var(--tooltip-text);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  border: 0.5px solid var(--tooltip-border);
+  box-shadow: var(--tooltip-shadow);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1000;
 }

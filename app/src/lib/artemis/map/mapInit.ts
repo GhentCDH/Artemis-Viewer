@@ -1,11 +1,8 @@
 // $lib/artemis/map/mapInit.ts
 import maplibregl from "maplibre-gl";
-import basemapGeojsonUrl from "$lib/assets/Baselayer.geojson?url";
 import { ngiTileUrl } from "$lib/artemis/config/ngi";
 
 let map: maplibregl.Map | null = null;
-type BaseMapTheme = "light" | "dark";
-const mapThemeByInstance = new WeakMap<maplibregl.Map, BaseMapTheme>();
 
 export type HistCartLayerKey =
   | "ngi1904"
@@ -114,7 +111,6 @@ const primitiveDebugDetachByMap = new WeakMap<maplibregl.Map, () => void>();
 const BASE_BACKGROUND_LAYER_ID = "artemis-base-background";
 const BASE_WATER_SOURCE_ID = "artemis-base-water-source";
 const BASE_WATER_FILL_LAYER_ID = "artemis-base-water-fill";
-const BASE_WATER_LINE_LAYER_ID = "artemis-base-water-line";
 
 function isMapStyleUsable(targetMap: maplibregl.Map | null | undefined): targetMap is maplibregl.Map {
   if (!targetMap) return false;
@@ -135,28 +131,42 @@ function firstWarpedLayerId(map: maplibregl.Map): string | undefined {
   return layers.find((l) => l.id.startsWith("warped-layer-"))?.id;
 }
 
-export function createMapContext(container: HTMLElement): maplibregl.Map {
-  return createMapContextWithTheme(container, "light");
-}
-
 function getCssColor(token: string, fallback: string): string {
   if (typeof document === "undefined") return fallback;
   const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
   return value || fallback;
 }
 
-function getBaseMapStyle(theme: BaseMapTheme): maplibregl.StyleSpecification {
-  const isDark = theme === "dark";
-  const backgroundColor = getCssColor("--map-background", isDark ? "#15120d" : "#f6f2ea");
-  const waterFillColor = getCssColor("--map-water-fill", isDark ? "#29434b" : "#c5d9dc");
-  const waterOutlineColor = getCssColor("--map-water-outline", isDark ? "#5f8790" : "#93aeb4");
+let baselayerDataPromise: Promise<GeoJSON.FeatureCollection> | null = null;
+let baselayerDataCache: GeoJSON.FeatureCollection | null = null;
+
+function loadBaselayerData(): Promise<GeoJSON.FeatureCollection> {
+  if (baselayerDataCache) return Promise.resolve(baselayerDataCache);
+  if (baselayerDataPromise) return baselayerDataPromise;
+
+  baselayerDataPromise = fetch("/Baselayer.geojson")
+    .then(res => {
+      if (!res.ok) throw new Error(`Failed to load baselayer: ${res.statusText}`);
+      return res.json();
+    })
+    .then(data => {
+      baselayerDataCache = data;
+      return data;
+    });
+
+  return baselayerDataPromise;
+}
+
+function getBaseMapStyle(baselayerData: GeoJSON.FeatureCollection | null = null): maplibregl.StyleSpecification {
+  const backgroundColor = getCssColor("--map-background", "#f6f2ea");
+  const waterFillColor = getCssColor("--map-water-fill", "#c5d9dc");
 
   return {
     version: 8,
     sources: {
       [BASE_WATER_SOURCE_ID]: {
         type: "geojson",
-        data: basemapGeojsonUrl
+        data: baselayerData || { type: "FeatureCollection", features: [] }
       }
     },
     layers: [
@@ -175,36 +185,28 @@ function getBaseMapStyle(theme: BaseMapTheme): maplibregl.StyleSpecification {
           "fill-color": waterFillColor,
           "fill-opacity": 1
         }
-      },
-      {
-        id: BASE_WATER_LINE_LAYER_ID,
-        type: "line",
-        source: BASE_WATER_SOURCE_ID,
-        paint: {
-          "line-color": waterOutlineColor,
-          "line-width": [
-            "interpolate", ["linear"], ["zoom"],
-            7, 0.35,
-            10, 0.6,
-            14, 1.1
-          ]
-        }
       }
     ]
   };
 }
 
-export function createMapContextWithTheme(container: HTMLElement, theme: BaseMapTheme = "light"): maplibregl.Map {
+export function createMapContext(container: HTMLElement): maplibregl.Map {
   const nextMap = new maplibregl.Map({
     container,
-    style: getBaseMapStyle(theme),
+    style: getBaseMapStyle(),
     center: [4.23, 51.10], // Bornem, Scheldt valley
     zoom: 10,
     attributionControl: false,
     pitchWithRotate: false,
     maxPitch: 0
   });
-  mapThemeByInstance.set(nextMap, theme);
+
+  loadBaselayerData().then(baselayerData => {
+    const updatedStyle = getBaseMapStyle(baselayerData);
+    nextMap.setStyle(updatedStyle);
+  }).catch(err => {
+    console.error("Failed to load baselayer:", err);
+  });
 
   // Resize once style is loaded (helps when container size settles after layout mount)
   nextMap.once("load", () => {
@@ -219,20 +221,13 @@ export function createMapContextWithTheme(container: HTMLElement, theme: BaseMap
   return nextMap;
 }
 
-export function setBaseMapTheme(targetMap: maplibregl.Map, theme: BaseMapTheme): boolean {
-  if (mapThemeByInstance.get(targetMap) === theme) return false;
-  targetMap.setStyle(getBaseMapStyle(theme));
-  mapThemeByInstance.set(targetMap, theme);
-  return true;
-}
-
 export function destroyMapContextInstance(targetMap: maplibregl.Map | null | undefined) {
   targetMap?.remove();
 }
 
-export function ensureMapContext(container: HTMLElement, theme: BaseMapTheme = "light"): maplibregl.Map {
+export function ensureMapContext(container: HTMLElement): maplibregl.Map {
   if (map) return map;
-  map = createMapContextWithTheme(container, theme);
+  map = createMapContext(container);
   return map;
 }
 
@@ -659,11 +654,11 @@ function makeMassartIcon(size: number, accent: string): ImageData | null {
 
 function ensureMassartIcons(map: maplibregl.Map): void {
   if (!map.hasImage(MASSART_ICON_INACTIVE)) {
-    const inactive = makeMassartIcon(18, "#D4A84B");
+    const inactive = makeMassartIcon(18, "#4F84A8");
     if (inactive) map.addImage(MASSART_ICON_INACTIVE, inactive, { pixelRatio: 2 });
   }
   if (!map.hasImage(MASSART_ICON_ACTIVE)) {
-    const active = makeMassartIcon(22, "#F59E0B");
+    const active = makeMassartIcon(22, "#4F84A8");
     if (active) map.addImage(MASSART_ICON_ACTIVE, active, { pixelRatio: 2 });
   }
 }
@@ -714,14 +709,14 @@ export function setMassartPins(
       id: MASSART_LAYER_INACTIVE,
       type: "symbol",
       source: MASSART_SOURCE_ID,
-      filter: massartInactiveFilter(year, leeway),
       layout: {
         "icon-image": MASSART_ICON_INACTIVE,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
+        "visibility": "none",
       },
       paint: {
-        "icon-opacity": 0.42,
+        "icon-opacity": 1,
       }
     });
   }
@@ -731,11 +726,11 @@ export function setMassartPins(
       id: MASSART_LAYER_ACTIVE,
       type: "symbol",
       source: MASSART_SOURCE_ID,
-      filter: massartActiveFilter(year, leeway),
       layout: {
         "icon-image": MASSART_ICON_ACTIVE,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
+        "visibility": "none",
       },
       paint: {
         "icon-opacity": 1,
@@ -759,8 +754,7 @@ export function updateMassartActiveYear(
 }
 
 export function getMassartClickLayerIds(): string[] {
-  // Only the active-year pin layer should be interactive.
-  return [MASSART_LAYER_ACTIVE];
+  return [MASSART_LAYER_INACTIVE, MASSART_LAYER_ACTIVE];
 }
 
 const FLASH_STYLE_ID = 'location-flash-marker-style';

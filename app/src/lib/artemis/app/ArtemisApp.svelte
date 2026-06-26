@@ -7,14 +7,14 @@
   import type maplibregl from 'maplibre-gl';
 
   import {
-    ensureMapContext, destroyMapContext, createMapContextWithTheme, destroyMapContextInstance, setBaseMapTheme,
+    ensureMapContext, destroyMapContext, createMapContext, destroyMapContextInstance,
     setHistCartLayerVisible, setHistCartLayerOpacity,
     setLandUsageLayerVisible, setLandUsageLayerOpacity, getLandUsageLayerId,
     setPrimitiveLayerVisible, isPrimitiveLayerVisible,
     setPrimitiveLayerOpacity, getPrimitiveLayerIds,
     setPrimitiveHoverFeature, setPrimitiveSelectFeature,
     setIiifHoverMasks,
-    setMassartPins, updateMassartActiveYear, getMassartClickLayerIds,
+    setMassartPins, getMassartClickLayerIds,
     flashLocationMarker,
   } from '$lib/artemis/map/mapInit';
   import {
@@ -36,7 +36,6 @@
     getIiifMainLayerIds as getIiifMainLayerIdsData,
     loadIiifLayerIntoPane,
     scheduleMainSync,
-    warmInitialIiifLayers as warmInitialIiifLayersData,
   } from '$lib/artemis/iiif/layerLifecycle';
   import {
     handleManifestSelection,
@@ -60,6 +59,7 @@
   import { normalizeSearchText } from '$lib/artemis/search/text';
   import { normalizeRawToponym } from '$lib/artemis/dataset/toponymNormalization';
   import { asFiniteNumber } from '$lib/artemis/shared/utils';
+  import { resolveIiifGeomapsPath } from '$lib/artemis/config/iiifGeomaps';
   import {
     MAIN_LAYER_ORDER, MAIN_LAYER_META, MAIN_LAYER_LABELS, MAIN_LAYER_INFO,
     MAIN_LAYER_SUBS, SUB_LAYER_DEFS,
@@ -77,12 +77,15 @@
   import ImageCollectionBubble from '$lib/artemis/ui/ImageCollectionBubble.svelte';
   import IiifViewer from '$lib/artemis/viewer/IiifViewer.svelte';
   import Timeslider from '$lib/components/Timeslider.svelte';
+  import MapInfoWindow from '$lib/components/MapInfoWindow.svelte';
+  import BrandingPanel from '$lib/components/BrandingPanel.svelte';
+  import ImagesInViewPanel from '$lib/components/ImagesInViewPanel.svelte';
+  import type { CollectionInfo } from '$lib/components/timeslider/types';
 
   // ─── Map ───────────────────────────────────────────────────────────────────
 
   type PaneId = 'left' | 'right';
   type ViewMode = 'single' | 'split';
-  type ThemeMode = 'light' | 'dark';
   let mapDiv: HTMLElement;
   let map: maplibregl.Map;
   let mapStageEl: HTMLElement;
@@ -92,11 +95,8 @@
   let rightMapInitInFlight = false;
   let suppressSyncPane: PaneId | null = null;
   let viewMode: ViewMode = 'single';
-  let themeMode: ThemeMode = 'light';
-  const THEME_STORAGE_KEY = 'artemis-theme-mode';
   let scaleWidthPx = 0;
   let scaleLabel = '';
-  let siteInfoOpen = false;
   let siteMetadata: RuntimeSiteMetadata = {
     title: 'About Artemis',
     info: [],
@@ -109,13 +109,17 @@
   let searchFocusMainId: MainLayerId | null = null;
   let searchFocusYear: number | null = null;
   let searchFocusNonce = 0;
+  let activeCollection: CollectionInfo | null = null;
+  let rightActiveCollection: CollectionInfo | null = null;
+  let clearLeftCollectionNonce = 0;
+  let clearRightCollectionNonce = 0;
+  let mapInfoWindowOpen = false;
+  let rightMapInfoWindowOpen = false;
 
   // ─── Config ────────────────────────────────────────────────────────────────
 
-  const DEFAULT_BASE_URL = 'https://raw.githubusercontent.com/ghentcdh/Artemis-RnD-Data/dev/build';
-  const FEATURE_FLAGS: { startupPreloadScreen: boolean; parallelIiifLoading: boolean; spriteDebugMode: boolean } = {
-    // Flip to false to bypass the startup preload/loading-screen concept.
-    startupPreloadScreen: false,
+  const DEFAULT_BASE_URL = 'https://ghentcdh.github.io/Artemis-RnD-Data/build';
+  const FEATURE_FLAGS: { parallelIiifLoading: boolean; spriteDebugMode: boolean } = {
     // Load all IIIF maps in parallel vs phased (bootstrap → background). Flip to test performance.
     parallelIiifLoading: false,
     // Use debug spritesheets (with pink tint) to visualize sprite loading. Flip to test.
@@ -152,22 +156,19 @@
     return `${base}/static`.replace(/\/+$/, '');
   }
 
-  function getLayerMetadataCandidates(mainId: string): string[] {
-    const subIds = MAIN_LAYER_SUBS[mainId] ?? [];
-    const iiifSubId = subIds.find((subId) => SUB_LAYER_DEFS[subId]?.kind === 'iiif');
-    const iiifLayer = iiifSubId ? getIiifInfoForSub(iiifSubId) : undefined;
-    const explicitLayerId = typeof (iiifLayer as any)?.layerId === 'string'
-      ? String((iiifLayer as any).layerId).trim()
-      : '';
-    const compiledTail = iiifLayer?.compiledCollectionPath?.split('/').filter(Boolean).pop() ?? '';
-    const iiifMap = typeof (iiifLayer as any)?.map === 'string' ? String((iiifLayer as any).map).trim() : '';
-    const geomapsStem = (iiifLayer as any)?.geomapsPath
-      ?.split('/')
-      .filter(Boolean)
-      .pop()
-      ?.replace(/_geomaps\.json$/i, '') ?? '';
-    return [...new Set([explicitLayerId, compiledTail, iiifMap, geomapsStem, mainId].filter(Boolean))];
-  }
+	  function getLayerMetadataCandidates(mainId: string): string[] {
+	    const subIds = MAIN_LAYER_SUBS[mainId] ?? [];
+	    const iiifSubId = subIds.find((subId) => SUB_LAYER_DEFS[subId]?.kind === 'iiif');
+	    const iiifLayer = iiifSubId ? getIiifInfoForSub(iiifSubId) : undefined;
+	    const compiledTail = iiifLayer?.compiledCollectionPath?.split('/').filter(Boolean).pop() ?? '';
+	    const iiifMap = typeof (iiifLayer as any)?.map === 'string' ? String((iiifLayer as any).map).trim() : '';
+	    const geomapsStem = (iiifLayer as any)?.geomapsPath
+	      ?.split('/')
+	      .filter(Boolean)
+	      .pop()
+	      ?.replace(/_geomaps\.json$/i, '') ?? '';
+	    return [...new Set([compiledTail, iiifMap, geomapsStem, mainId].filter(Boolean))];
+	  }
 
   async function loadRuntimeMetadata() {
     const runtimeMetadata = await loadRuntimeMetadataData({
@@ -183,7 +184,7 @@
 
   // ─── Massart ───────────────────────────────────────────────────────────────
 
-  const MASSART_LEEWAY = 3; // years each side of the scrubber that count as "active"
+  const MASSART_LEEWAY = 3; // years each side of the active collection that count as "near"
   const MASSART_YEAR_MIN = 1904;
   const MASSART_YEAR_MAX = 1912;
   const MAIN_LAYER_TIMELINE_YEAR: Partial<Record<MainLayerId, number>> = {
@@ -199,11 +200,14 @@
     NGI1904: 1904,
   };
   let massartItems: MassartItem[] = [];
-  let massartYear = Math.round((1700 + 1855) / 2); // updated by slider year-change
+  let massartYear = Math.round((1700 + 1855) / 2);
   let rightTimelineYear = MASSART_YEAR_MAX;
   let massartSpriteRects: Record<string, { x: number; y: number; width: number; height: number }> = {};
   let massartSpriteSheetUrl = '';
   let massartSpriteSheetSize: [number, number] = [0, 0];
+  let imagesInView: Array<MassartItem & { spriteRef?: any }> = [];
+  let imagesInViewPanelOpen = false;
+  let closeImagesPanel = false;
 
   async function loadMassartData() {
     try {
@@ -237,18 +241,35 @@
     };
   }
 
-  function onMassartYearChange(e: CustomEvent<{ year: number; pane?: 'left' | 'right' }>) {
-    const pane = e.detail.pane ?? 'left';
-    if (pane === 'right') {
-      rightTimelineYear = e.detail.year;
-      if (rightMap?.isStyleLoaded()) {
-        updateMassartActiveYear(rightMap, rightTimelineYear, MASSART_LEEWAY);
-      }
-      return;
+  function computeImagesInView() {
+    if (!map || massartItems.length === 0) { imagesInView = []; return; }
+    const bounds = map.getBounds();
+    const w = bounds.getWest(), e = bounds.getEast();
+    const s = bounds.getSouth(), n = bounds.getNorth();
+    const inBounds = massartItems.filter(
+      item => item.lat != null && item.lon != null &&
+              item.lat >= s && item.lat <= n &&
+              item.lon >= w && item.lon <= e
+    );
+    inBounds.sort((a, b) => {
+      const ya = parseInt(a.year ?? '9999');
+      const yb = parseInt(b.year ?? '9999');
+      return ya - yb;
+    });
+    imagesInView = inBounds.map(item => ({
+      ...item,
+      spriteRef: massartSpriteRef(item),
+    }));
+  }
+
+  function setMassartPinsVisible(visible: boolean) {
+    if (!map) return;
+    const visibility = visible ? 'visible' : 'none';
+    if (map.getLayer('massart-pins-inactive')) {
+      map.setLayoutProperty('massart-pins-inactive', 'visibility', visibility);
     }
-    massartYear = e.detail.year;
-    if (map?.isStyleLoaded()) {
-      updateMassartActiveYear(map, massartYear, MASSART_LEEWAY);
+    if (map.getLayer('massart-pins-active')) {
+      map.setLayoutProperty('massart-pins-active', 'visibility', visibility);
     }
   }
 
@@ -295,11 +316,6 @@
 
   function toggleSplitMode() {
     setViewMode(viewMode === 'split' ? 'single' : 'split');
-  }
-
-  function applyThemeMode(next: ThemeMode) {
-    themeMode = next;
-    document.documentElement.dataset.theme = next;
   }
 
   function formatScaleDistance(distanceMeters: number): string {
@@ -411,14 +427,6 @@
     }
   }
 
-  async function applyThemeToMap(targetMap: maplibregl.Map, paneId: PaneId | 'main') {
-    const changed = setBaseMapTheme(targetMap, themeMode);
-    if (!changed) return;
-    await new Promise<void>((resolve) => targetMap.once('style.load', () => resolve()));
-    await rehydratePaneMap(targetMap, paneId);
-  }
-
-
   function log(_level: 'INFO' | 'WARN' | 'ERROR', _msg: string) {}
 
   // ─── Layer state ───────────────────────────────────────────────────────────
@@ -488,11 +496,6 @@
   let imageCollectionBubbleLngLat: { lon: number; lat: number } | null = null;
   let imageCollectionBubblePane: PaneId = 'left';
   let imageCollectionBubblePlaceBelow = false;
-  let initialWarmupPending = FEATURE_FLAGS.startupPreloadScreen;
-  let initialWarmupRunning = false;
-  let initialWarmupDone = 0;
-  let initialWarmupTotal = 0;
-  let initialWarmupLabel = 'Preparing IIIF layers';
   $: dualPaneEnabled = viewMode !== 'single';
   $: isSplitLayout = viewMode === 'split';
   $: hasViewerPane = viewerOpen && viewerItem !== null;
@@ -636,69 +639,40 @@
     syncImageCollectionBubblePosition();
   }
 
-  function iiifBubbleItem(info: IiifMapInfo): PreviewBubbleItem {
-    return {
-      title: info.title,
-      manifestUrl: info.sourceManifestUrl,
-      imageServiceUrl: info.imageServiceUrl,
-      location: info.layerLabel,
-      kicker: 'Map Sheet',
-      spriteRef: info.spriteRef,
-      placeholderWidth: info.placeholderWidth,
-      placeholderHeight: info.placeholderHeight,
-    };
-  }
-
-  function iiifBubbleItems(infos: IiifMapInfo[]): PreviewBubbleItem[] {
-    return infos.map((info) => iiifBubbleItem(info));
-  }
-
-  function iiifBubbleGroup(infos: IiifMapInfo[]): PreviewBubbleItem | null {
-    const items = iiifBubbleItems(infos);
-    if (items.length === 0) return null;
-    if (items.length === 1) return items[0];
-    return { ...items[0], alternatives: items };
-  }
-
   function normalizeSourceLayers(index: CompiledIndex): UILayerInfo[] {
     const baseLayers = index.renderLayers ?? [];
     const nextIiifLayers = Array.isArray((index as any).iiifLayers) ? (index as any).iiifLayers : [];
 
-    if (baseLayers.length === 0 && nextIiifLayers.length > 0) {
-      const normalized = nextIiifLayers.map((layer: any) => {
-        const sourceCollectionLabel = cleanLayerLabel(
-          String(layer.map ?? layer.label ?? layer.sourceCollectionLabel ?? layer.layerId ?? '')
-        );
-        const normalizedLayer: UILayerInfo = {
-          sourceCollectionUrl: String(layer.sourceCollectionUrl ?? ''),
-          sourceCollectionLabel,
-          compiledCollectionPath: layer.compiledCollectionPath,
-          map: layer.map,
-          layerId: layer.layerId,
-          geomapsPath: (layer as any).geomapsPath,
-          spritesPath: layer.spritesPath,
-          manifestCount: Number(layer.manifestCount ?? 0),
-          georefCount: Number(layer.georefCount ?? 0),
-          renderLayerKey: String(layer.renderLayerKey ?? 'default'),
-          renderLayerLabel: cleanLayerLabel(String(layer.renderLayerLabel ?? 'Map')),
-          hidden: Boolean(layer.hidden),
-          uiLayerId: getLayerGroupId({
-            sourceCollectionUrl: String(layer.sourceCollectionUrl ?? ''),
-            sourceCollectionLabel,
-            compiledCollectionPath: layer.compiledCollectionPath,
-            map: layer.map,
-            layerId: layer.layerId,
-            geomapsPath: (layer as any).geomapsPath,
-            spritesPath: layer.spritesPath,
-            manifestCount: Number(layer.manifestCount ?? 0),
-            georefCount: Number(layer.georefCount ?? 0),
-            renderLayerKey: String(layer.renderLayerKey ?? 'default'),
-            renderLayerLabel: cleanLayerLabel(String(layer.renderLayerLabel ?? 'Map')),
-            hidden: Boolean(layer.hidden),
-          }),
-        };
-        return normalizedLayer;
-      });
+	    if (baseLayers.length === 0 && nextIiifLayers.length > 0) {
+	      const normalized = nextIiifLayers.map((layer: any) => {
+	        const sourceCollectionLabel = cleanLayerLabel(
+	          String(layer.map ?? layer.label ?? layer.sourceCollectionLabel ?? '')
+	        );
+          const layerMapId = String(layer.map ?? deriveIiifMapId(sourceCollectionLabel) ?? '').trim() || undefined;
+	        const normalizedLayer: UILayerInfo = {
+	          sourceCollectionUrl: String(layer.sourceCollectionUrl ?? ''),
+	          sourceCollectionLabel,
+	          compiledCollectionPath: layer.compiledCollectionPath,
+	          map: layerMapId ?? layer.map,
+	          geomapsPath: resolveIiifGeomapsPath(layerMapId, (layer as any).geomapsPath),
+	          spritesPath: layer.spritesPath,
+	          renderLayerKey: String(layer.renderLayerKey ?? 'default'),
+	          renderLayerLabel: cleanLayerLabel(String(layer.renderLayerLabel ?? 'Map')),
+	          hidden: Boolean(layer.hidden),
+	          uiLayerId: getLayerGroupId({
+	            sourceCollectionUrl: String(layer.sourceCollectionUrl ?? ''),
+	            sourceCollectionLabel,
+	            compiledCollectionPath: layer.compiledCollectionPath,
+	            map: layerMapId ?? layer.map,
+	            geomapsPath: resolveIiifGeomapsPath(layerMapId, (layer as any).geomapsPath),
+	            spritesPath: layer.spritesPath,
+	            renderLayerKey: String(layer.renderLayerKey ?? 'default'),
+	            renderLayerLabel: cleanLayerLabel(String(layer.renderLayerLabel ?? 'Map')),
+	            hidden: Boolean(layer.hidden),
+	          }),
+	        };
+	        return normalizedLayer;
+	      });
 
       return normalized;
     }
@@ -713,7 +687,9 @@
         ...layer,
         sourceCollectionLabel,
         map: map ?? (layer as any).map,
-        geomapsPath: map ? `IIIF/${map}_geomaps.json` : (layer as any).geomapsPath,
+        geomapsPath: map
+          ? resolveIiifGeomapsPath(map, undefined)
+          : resolveIiifGeomapsPath((layer as any).map, (layer as any).geomapsPath),
         spritesPath: map ? `IIIF/${map}/sprites/` : (layer as any).spritesPath,
         compiledCollectionPath: map ? undefined : layer.compiledCollectionPath,
         renderLayerLabel: layer.renderLayerLabel ? cleanLayerLabel(layer.renderLayerLabel) : layer.renderLayerLabel,
@@ -764,49 +740,20 @@
   // ─── Layer toggle operations ───────────────────────────────────────────────
 
   async function loadIiifLayer(layerInfo: UILayerInfo) {
-    await loadIiifLayerIntoPane({
-      targetMap: map,
-      cfg: cfg(),
-      layerInfo,
-      log,
-      parallelLoading: FEATURE_FLAGS.parallelIiifLoading,
-      spriteDebugMode: FEATURE_FLAGS.spriteDebugMode,
-    });
-  }
+	    await loadIiifLayerIntoPane({
+	      targetMap: map,
+	      cfg: cfg(),
+	      layerInfo,
+	      parallelLoading: FEATURE_FLAGS.parallelIiifLoading,
+	      spriteDebugMode: FEATURE_FLAGS.spriteDebugMode,
+	    });
+	  }
 
   function getIiifMainLayerIds(): string[] {
     return getIiifMainLayerIdsData({
       mainLayerOrder,
       mainLayerSubs: MAIN_LAYER_SUBS,
       subLayerDefs: SUB_LAYER_DEFS,
-    });
-  }
-
-  async function warmInitialIiifLayers() {
-    await warmInitialIiifLayersData({
-      startupPreloadScreen: FEATURE_FLAGS.startupPreloadScreen,
-      initialWarmupPending,
-      initialWarmupRunning,
-      mainLayerOrder,
-      mainLayerLabels: MAIN_LAYER_LABELS,
-      mainLayerSubs: MAIN_LAYER_SUBS,
-      subLayerDefs: SUB_LAYER_DEFS,
-      getIiifInfoForSub,
-      setInitialWarmupState: ({ running, total, done, label, pending }) => {
-        if (running != null) initialWarmupRunning = running;
-        if (total != null) initialWarmupTotal = total;
-        if (done != null) initialWarmupDone = done;
-        if (label != null) initialWarmupLabel = label;
-        if (pending != null) initialWarmupPending = pending;
-      },
-      setMainLayerLoading: (mainId, value) => {
-        mainLayerLoading = { ...mainLayerLoading, [mainId]: value };
-      },
-      loadIiifLayer,
-      parkLayerGroup: async (groupId) => {
-        await parkLayerGroup(map, groupId);
-      },
-      log,
     });
   }
 
@@ -869,16 +816,15 @@
 
   async function loadIiifLayerForRight(layerInfo: UILayerInfo) {
     if (!rightMap) return;
-    await loadIiifLayerIntoPane({
-      targetMap: rightMap,
-      paneId: 'right',
-      cfg: cfg(),
-      layerInfo,
-      log,
-      parallelLoading: FEATURE_FLAGS.parallelIiifLoading,
-      spriteDebugMode: FEATURE_FLAGS.spriteDebugMode,
-    });
-  }
+	    await loadIiifLayerIntoPane({
+	      targetMap: rightMap,
+	      paneId: 'right',
+	      cfg: cfg(),
+	      layerInfo,
+	      parallelLoading: FEATURE_FLAGS.parallelIiifLoading,
+	      spriteDebugMode: FEATURE_FLAGS.spriteDebugMode,
+	    });
+	  }
 
   function shouldShowRightIiifGroup(mainId: string, iiifSubId: string): boolean {
     return Boolean(rightMainLayerVisible[mainId] && rightSubLayerVisible[iiifSubId]);
@@ -998,8 +944,6 @@
         normalizeSearchText,
         asFiniteNumber,
       });
-
-      await warmInitialIiifLayers();
 
       // Re-trigger load for any main layers that were marked enabled before the index was
       // ready (e.g. set by Timeslider's onMount firing before layers were populated).
@@ -1160,6 +1104,13 @@
     );
   }
 
+  function onMassartClick(item: MassartItem) {
+    if (item.lat != null && item.lon != null) {
+      flashLocationMarker(map, item.lon, item.lat);
+      flyToCoordinates(item.lon, item.lat, `Photo "${item.title ?? 'Untitled'}"`);
+    }
+  }
+
   function pinParcel() {
     if (!parcelClickInfo) return;
     pinnedCards = [...pinnedCards, { type: 'parcel', info: parcelClickInfo }];
@@ -1199,6 +1150,17 @@
       });
     }
     return items;
+  }
+
+  function openFirstIiifHitInViewer(
+    hits: Array<{ mapId: string; warpedMap: any; groupId: string }>,
+    sourcePane: PaneId,
+    paneId: PaneId | 'main' = 'main'
+  ) {
+    const [item] = buildIiifInfoPanelItems(hits, paneId);
+    if (!item) return;
+    openViewer(item, sourcePane, 'right');
+    closeImageCollectionBubble();
   }
 
   // ─── Reactive derivations ──────────────────────────────────────────────────
@@ -1262,6 +1224,35 @@
       },
       scheduleRightIiifMainLayerSync,
     });
+  }
+
+  // ─── MapInfoWindow wiring ──────────────────────────────────────────────────
+
+  $: mapInfoWindowOpen = activeCollection !== null;
+  $: rightMapInfoWindowOpen = dualPaneEnabled && rightActiveCollection !== null;
+  $: anyLayerLoading = Object.values(combinedMainLayerLoading).some(Boolean);
+
+  function onMapInfoWindowClose(pane: PaneId = 'left') {
+    if (pane === 'right') {
+      rightActiveCollection = null;
+      clearRightCollectionNonce += 1;
+      return;
+    }
+    activeCollection = null;
+    clearLeftCollectionNonce += 1;
+  }
+
+  async function onMapInfoWindowSublayerToggle(
+    e: CustomEvent<{ sublayerId: string; enabled: boolean }>,
+    pane: PaneId = 'left'
+  ) {
+    if (pane === 'right') {
+      await onTimesliderPaneSublayerChange(new CustomEvent('paneSublayerChange', {
+        detail: { pane: 'right', subId: e.detail.sublayerId, enabled: e.detail.enabled },
+      }) as CustomEvent<{ pane: PaneId; subId: string; enabled: boolean }>);
+      return;
+    }
+    await toggleSubLayer(e.detail.sublayerId, e.detail.enabled);
   }
 
   function syncCamera(from: PaneId) {
@@ -1328,14 +1319,7 @@
     };
 
     const onClick = () => {
-      const items = buildIiifInfoPanelItems(rightIiifHoveredMaps, 'right');
-      const anchor = items[0];
-      const item = iiifBubbleGroup(items);
-      if (!item || !anchor) return;
-      const centerLon = anchor.centerLon;
-      const centerLat = anchor.centerLat;
-      if (centerLon == null || centerLat == null) return;
-      openPreviewBubbleAt(item, centerLon, centerLat, 'right');
+      openFirstIiifHitInViewer(rightIiifHoveredMaps, 'right', 'right');
     };
 
     targetMap.on('mousemove', onMouseMove);
@@ -1373,8 +1357,7 @@
       rightMap,
       rightMapInitInFlight,
       awaitTick: tick,
-      createMapContextWithTheme,
-      themeMode,
+      createMapContext,
       leftMap: map,
       setRightMapInitInFlight: (value) => {
         rightMapInitInFlight = value;
@@ -1443,14 +1426,7 @@
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   onMount(() => {
-    try {
-      const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-      applyThemeMode(storedTheme === 'dark' ? 'dark' : 'light');
-    } catch {
-      applyThemeMode('light');
-    }
-
-	    map = ensureMapContext(mapDiv, themeMode);
+	    map = ensureMapContext(mapDiv);
 	    map.on('load', () => {
 	      updateScaleIndicator(map);
 	      logViewLevel(map, 'left');
@@ -1484,6 +1460,7 @@
       loadMassartData().then(() => {
         if (massartItems.length > 0) {
           setMassartPins(map, massartItems, massartYear, MASSART_LEEWAY);
+          computeImagesInView();
 
           // Click on a pin → open an anchored info bubble for that photo.
           for (const layerId of getMassartClickLayerIds()) {
@@ -1571,14 +1548,7 @@
       }
 
       // IIIF click
-      const items = buildIiifInfoPanelItems(iiifHoveredMaps);
-      const anchor = items[0];
-      const item = iiifBubbleGroup(items);
-      if (!item || !anchor) return;
-      const centerLon = anchor.centerLon;
-      const centerLat = anchor.centerLat;
-      if (centerLon == null || centerLat == null) return;
-      openPreviewBubbleAt(item, centerLon, centerLat, 'left');
+      openFirstIiifHitInViewer(iiifHoveredMaps, 'left');
     };
 
 	    const onMapMove = () => {
@@ -1587,6 +1557,7 @@
 	      syncCamera('left');
 	      updateScaleIndicator(map);
 	      logViewLevel(map, 'left');
+	      computeImagesInView();
 	    };
 
     map.on('mousemove', onMouseMove);
@@ -1608,16 +1579,8 @@
     destroyMapContext();
   });
 
-  $: if (map && themeMode) {
-    void applyThemeToMap(map, 'main');
-  }
-
-  $: if (rightMap && themeMode) {
-    void applyThemeToMap(rightMap, 'right');
-  }
 </script>
 
-<svelte:window on:keydown={(e) => { if (e.key === 'Escape' && siteInfoOpen) { siteInfoOpen = false; } }} />
 <div class="wrap">
   <main class="map-shell">
     <div
@@ -1677,26 +1640,16 @@
       {/if}
     </div>
 
-    {#if initialWarmupPending || initialWarmupRunning}
-      <div class="startup-overlay" role="status" aria-live="polite">
-        <div class="startup-card">
-          <div class="startup-loader" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <div class="startup-title">Preparing Maps</div>
-        </div>
-      </div>
-    {/if}
-
     <ToponymSearch
       toponymIndex={toponymIndex}
       manifestSearchIndex={manifestSearchIndex}
+      massartIndex={massartItems}
+      activeMapIds={new Set(Object.entries(mainLayerEnabled).filter(([_, enabled]) => enabled).map(([id]) => id))}
       loading={toponymLoading}
       error={toponymError}
       on:fly-to-toponym={(e) => onFlyToToponym(e.detail)}
       on:manifest-click={(e) => onManifestClick(e.detail)}
+      on:massart-click={(e) => onMassartClick(e.detail)}
     />
 
     {#if panelOpen}
@@ -1720,17 +1673,9 @@
             aria-pressed={isSplitLayout}
             on:click={toggleSplitMode}
           >{isSplitLayout ? 'Exit Compare' : 'Compare'}</button>
-          <button
-            class="compare-toggle site-info-toggle"
-            type="button"
-            aria-label="Open site information"
-            title="Open site information"
-            aria-haspopup="dialog"
-            aria-expanded={siteInfoOpen}
-            on:click={() => (siteInfoOpen = !siteInfoOpen)}
-          >
-            About
-          </button>
+          {#if anyLayerLoading}
+            <span class="toolbar-loading-ring" aria-label="Loading map layer" role="status"></span>
+          {/if}
         </div>
         {#if scaleLabel}
           <div class="map-scale" aria-label={`Map scale indicator: ${scaleLabel} in the real world`}>
@@ -1743,112 +1688,75 @@
         {massartItems}
         {layerMetadataByMainId}
         dualPaneEnabled={dualPaneEnabled}
-        disabledPane={hasViewerPane && isSplitLayout ? viewerPane : null}
-        leftYear={massartYear}
-        rightYear={rightTimelineYear}
         {searchFocusMainId}
-        {searchFocusYear}
         {searchFocusNonce}
         yearLeeway={MASSART_LEEWAY}
         loadingLayers={combinedMainLayerLoading}
+        {clearLeftCollectionNonce}
+        {clearRightCollectionNonce}
+        bind:activeCollection
+        bind:rightActiveCollection
         on:mainToggle={onTimesliderMainToggle}
         on:sublayerChange={onTimesliderSublayerChange}
         on:paneMainToggle={onTimesliderPaneMainToggle}
         on:paneSublayerChange={onTimesliderPaneSublayerChange}
-        on:year-change={onMassartYearChange}
         on:focus-image={onTimelineImageFocus}
         on:open-viewer={(e) => openViewer({ title: e.detail.title, sourceManifestUrl: e.detail.sourceManifestUrl, imageServiceUrl: e.detail.imageServiceUrl }, 'left')}
       />
     </div>
 
-    {#if siteInfoOpen}
-      <div
-        class="site-info-backdrop"
-        role="button"
-        tabindex="0"
-        aria-label="Close site information"
-        on:click={(event) => {
-          if (event.target === event.currentTarget) siteInfoOpen = false;
-        }}
-        on:keydown={(event) => {
-          if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            siteInfoOpen = false;
-          }
-        }}
-      >
-        <div
-          class="site-info-modal ui-panel-overlay"
-          role="dialog"
-          tabindex="-1"
-          aria-modal="true"
-          aria-label={siteMetadata.title}
-        >
-          <div class="site-info-head">
-            <div>
-              <div class="ui-label">Site Info</div>
-              <h2>{siteMetadata.title}</h2>
-            </div>
-            <button class="ui-btn site-info-close" type="button" on:click={() => (siteInfoOpen = false)}>Close</button>
-          </div>
-          <div class="site-info-body">
-            {#each siteMetadata.info as paragraph}
-              <p>{paragraph}</p>
-            {/each}
-            {#if siteMetadata.team.length > 0}
-              <div class="site-info-section">
-                <div class="ui-label">Team</div>
-                <div class="site-info-team">
-                  {#each siteMetadata.team as institution}
-                    <div class="site-info-team-institution-group">
-                      <div class="site-info-team-institution">{institution.institution}</div>
-                      <div class="site-info-team-units">
-                        {#each institution.units as unit}
-                          <div class="site-info-team-unit-group">
-                            {#if unit.unit}
-                              <div class="site-info-team-unit">{unit.unit}</div>
-                            {/if}
-                            {#if unit.members.length > 0}
-                              <ul class="site-info-team-members">
-                                {#each unit.members as member}
-                                  <li>{member}</li>
-                                {/each}
-                              </ul>
-                            {/if}
-                          </div>
-                        {/each}
-                      </div>
-                    </div>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-            {#if siteMetadata.logos.length > 0}
-              <div class="site-info-section">
-                <div class="ui-label">Partners</div>
-                <div class="site-info-logos">
-                  {#each siteMetadata.logos as logo}
-                    {#if logo.href}
-                      <a href={logo.href} target="_blank" rel="noreferrer" title={logo.label}>
-                        <img src={logo.src} alt={logo.alt} loading="lazy" />
-                      </a>
-                    {:else}
-                      <img src={logo.src} alt={logo.alt} title={logo.label} loading="lazy" />
-                    {/if}
-                  {/each}
-                </div>
-              </div>
-            {/if}
-            {#if siteMetadata.attribution}
-              <div class="site-info-section">
-                <div class="ui-label">Attribution</div>
-                <p>{siteMetadata.attribution}</p>
-              </div>
-            {/if}
-          </div>
-        </div>
-      </div>
-    {/if}
+    <MapInfoWindow
+      isOpen={mapInfoWindowOpen}
+      pane="left"
+      collectionKey={activeCollection?.key ?? null}
+      collectionName={activeCollection?.name ?? ''}
+      collectionColor={activeCollection?.color ?? ''}
+      collectionDate={activeCollection?.dateRange ?? ''}
+      collectionInfo={activeCollection?.info ?? ''}
+      sublayers={activeCollection?.sublayers ?? []}
+      on:close={() => onMapInfoWindowClose('left')}
+      on:sublayer-toggle={(e) => onMapInfoWindowSublayerToggle(e, 'left')}
+    />
+
+    <MapInfoWindow
+      isOpen={rightMapInfoWindowOpen}
+      pane="right"
+      collectionKey={rightActiveCollection?.key ?? null}
+      collectionName={rightActiveCollection?.name ?? ''}
+      collectionColor={rightActiveCollection?.color ?? ''}
+      collectionDate={rightActiveCollection?.dateRange ?? ''}
+      collectionInfo={rightActiveCollection?.info ?? ''}
+      sublayers={rightActiveCollection?.sublayers ?? []}
+      on:close={() => onMapInfoWindowClose('right')}
+      on:sublayer-toggle={(e) => onMapInfoWindowSublayerToggle(e, 'right')}
+    />
+
+    <BrandingPanel {siteMetadata} />
+
+    <ImagesInViewPanel
+      items={imagesInView}
+      forceClose={closeImagesPanel}
+      on:click={(e) => {
+        const item = e.detail;
+        openViewer({
+          title: item.title,
+          sourceManifestUrl: item.manifestUrl,
+          imageServiceUrl: item.imageServiceUrl,
+          layerLabel: '',
+          centerLon: item.lon,
+          centerLat: item.lat,
+          spriteRef: item.spriteRef,
+        }, 'left');
+      }}
+      on:open={() => {
+        imagesInViewPanelOpen = true;
+        setMassartPinsVisible(true);
+      }}
+      on:close={() => {
+        imagesInViewPanelOpen = false;
+        setMassartPinsVisible(false);
+      }}
+    />
 
     {#if imageCollectionBubbleItem}
       <ImageCollectionBubble
@@ -1867,9 +1775,15 @@
             height: e.detail.placeholderHeight,
           });
           closeImageCollectionBubble();
+          closeImagesPanel = true;
+          // Reset the signal after a tick so the panel can process it
+          void Promise.resolve().then(() => {
+            closeImagesPanel = false;
+          });
         }}
       />
     {/if}
+
   </main>
 </div>
 
@@ -1940,7 +1854,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 18px;
+    width: var(--split-pane-edge-shadow-width);
     pointer-events: none;
     z-index: 3;
   }
@@ -1960,85 +1874,17 @@
     top: 10px;
     bottom: 10px;
     left: 50%;
-    width: 10px;
+    width: var(--split-divider-width);
     transform: translateX(-50%);
-    border-radius: 999px;
     pointer-events: none;
     z-index: 4;
-    background:
-      linear-gradient(90deg, var(--split-divider-shine-edge) 0%, var(--split-divider-shine) 50%, var(--split-divider-shine-edge) 100%),
-      linear-gradient(180deg, var(--split-divider-core-edge) 0%, var(--split-divider-core) 50%, var(--split-divider-core-edge) 100%);
-    box-shadow:
-      0 0 0 1px var(--split-divider-outline),
-      0 0 20px var(--split-divider-shadow);
+    background: var(--split-divider-color);
   }
 
 
   .map-canvas {
     width: 100%;
     height: 100%;
-  }
-
-  .startup-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 90;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    background: var(--startup-overlay-bg);
-    backdrop-filter: blur(4px);
-  }
-
-  .startup-card {
-    width: min(280px, calc(100vw - 32px));
-    padding: 24px 24px 22px;
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--startup-card-border);
-    background: var(--startup-card-bg);
-    box-shadow: var(--shadow-card);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
-  }
-
-  .startup-loader {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 18px;
-  }
-
-  .startup-loader span {
-    width: 10px;
-    height: 10px;
-    border-radius: var(--radius-pill);
-    background: var(--startup-loader-fill);
-    animation: startup-bounce 0.9s ease-in-out infinite;
-  }
-
-  .startup-loader span:nth-child(2) { animation-delay: 0.12s; }
-  .startup-loader span:nth-child(3) { animation-delay: 0.24s; }
-
-  .startup-title {
-    font-size: 24px;
-    line-height: 1.05;
-    font-weight: 700;
-    color: var(--startup-title-color);
-    text-align: center;
-  }
-
-  @keyframes startup-bounce {
-    0%, 80%, 100% {
-      transform: translateY(0);
-      opacity: 0.5;
-    }
-    40% {
-      transform: translateY(-5px);
-      opacity: 1;
-    }
   }
 
   .timeslider-wrap {
@@ -2066,6 +1912,25 @@
     min-width: 0;
   }
 
+  .toolbar-loading-ring {
+    width: 30px;
+    height: 30px;
+    box-sizing: border-box;
+    border: 3px solid rgba(47, 128, 237, 0.2);
+    border-top-color: #2f80ed;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--window-background) 78%, transparent);
+    box-shadow: var(--control-shadow);
+    pointer-events: none;
+    animation: toolbar-loading-spin 850ms linear infinite;
+  }
+
+  @keyframes toolbar-loading-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .map-scale {
     display: flex;
     flex-direction: column;
@@ -2079,14 +1944,14 @@
   .map-scale-label {
     padding: 4px 8px;
     border-radius: var(--radius-pill);
-    background: color-mix(in srgb, var(--surface-floating) 90%, transparent);
-    border: 1px solid var(--surface-outline-soft);
+    background: color-mix(in srgb, var(--window-background) 90%, transparent);
+    border: 1px solid var(--window-border);
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
     letter-spacing: 0.02em;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--control-shadow);
     white-space: nowrap;
   }
 
@@ -2111,14 +1976,14 @@
 
   .compare-toggle {
     padding: 11px 18px;
-    border: 1px solid var(--surface-outline-soft);
+    border: 1px solid var(--window-border);
     border-radius: var(--radius-xs);
-    background: var(--toolbar-button-bg);
+    background: var(--button-background);
     color: var(--text-primary);
     font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.01em;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--control-shadow);
     cursor: pointer;
     transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
     pointer-events: auto;
@@ -2126,196 +1991,13 @@
 
   .compare-toggle:hover {
     transform: translateY(-1px);
-    background: var(--toolbar-button-hover-bg);
+    background: var(--button-background-hover);
   }
 
   .compare-toggle.is-active {
-    background: var(--toolbar-button-active-bg);
-    border-color: var(--toolbar-button-active-border);
-    color: var(--toolbar-button-active-text);
-  }
-
-  .site-info-toggle {
-    min-width: 92px;
-    justify-content: center;
-  }
-
-  .site-info-toggle[aria-expanded='true'] {
-    background: var(--toolbar-button-active-bg);
-    border-color: var(--toolbar-button-active-border);
-    color: var(--toolbar-button-active-text);
-  }
-
-  .site-info-backdrop {
-    position: absolute;
-    inset: 0;
-    z-index: 110;
-    background: rgba(17, 15, 11, 0.26);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 88px 20px 20px;
-  }
-
-  .site-info-modal {
-    width: min(920px, calc(100vw - 40px));
-    max-height: min(84vh, 900px);
-    overflow: auto;
-    padding: 22px 24px 20px;
-    color: var(--text-primary);
-    /* Override ui-panel-overlay dark overlay bg with the warm panel surface */
-    background: var(--surface-floating);
-    backdrop-filter: blur(6px);
-    border-color: var(--surface-outline-soft);
-    box-shadow: 0 8px 32px rgba(40, 30, 10, 0.14), 0 2px 6px rgba(40, 30, 10, 0.08);
-  }
-
-  .site-info-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 18px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid color-mix(in srgb, var(--border-ui) 82%, transparent);
-  }
-
-  .site-info-head h2 {
-    margin: 6px 0 0;
-    font-size: clamp(24px, 2vw, 30px);
-    line-height: 1.08;
-    letter-spacing: -0.02em;
-    font-weight: 700;
-  }
-
-  .site-info-close {
-    flex: 0 0 auto;
-  }
-
-  .site-info-body {
-    font-family: var(--font-ui);
-  }
-
-  .site-info-body p {
-    margin: 0 0 14px;
-    max-width: 64ch;
-    font-size: 14px;
-    line-height: 1.68;
-    color: color-mix(in srgb, var(--text-primary) 94%, white 6%);
-  }
-
-  .site-info-section {
-    margin-top: 20px;
-    padding-top: 14px;
-    border-top: 1px solid color-mix(in srgb, var(--border-ui) 76%, transparent);
-  }
-
-
-  .site-info-logos {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-top: 12px;
-    align-items: center;
-  }
-
-  .site-info-logos a,
-  .site-info-logos img {
-    border-radius: var(--radius-xs);
-  }
-
-  .site-info-logos a {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, var(--border-ui) 74%, transparent);
-    background: color-mix(in srgb, var(--overlay-bg) 86%, black 14%);
-    transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
-  }
-
-  .site-info-logos a:hover {
-    transform: translateY(-1px);
-    border-color: var(--border-ui);
-    background: color-mix(in srgb, var(--overlay-bg) 92%, black 8%);
-  }
-
-  .site-info-logos img {
-    display: block;
-    max-height: 52px;
-    max-width: 140px;
-    object-fit: contain;
-  }
-
-  .site-info-team {
-    display: grid;
-    gap: 18px;
-  }
-
-  .site-info-team-institution-group {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .site-info-team-institution {
-    font-weight: 700;
-    font-size: 13px;
-    letter-spacing: 0.01em;
-    color: var(--text-primary);
-  }
-
-  .site-info-team-units {
-    display: grid;
-    gap: 10px;
-    padding-left: 8px;
-    border-left: 2px solid color-mix(in srgb, var(--border-ui) 40%, transparent);
-  }
-
-  .site-info-team-unit-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .site-info-team-unit {
-    font-size: 12px;
-    color: color-mix(in srgb, var(--text-primary) 78%, white 22%);
-    font-weight: 500;
-    margin: 0;
-  }
-
-  .site-info-team-members {
-    margin: 0;
-    padding-left: 14px;
-    list-style: none;
-    display: grid;
-    gap: 2px;
-  }
-
-  .site-info-team-members li {
-    font-size: 12px;
-    line-height: 1.35;
-    color: color-mix(in srgb, var(--text-primary) 85%, white 15%);
-  }
-
-  @media (max-width: 700px) {
-    .site-info-modal {
-      width: min(100vw - 24px, 920px);
-      max-height: min(88vh, 900px);
-      padding: 18px 18px 16px;
-    }
-
-    .site-info-head {
-      gap: 12px;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-    }
-
-    .site-info-head h2 {
-      font-size: 22px;
-    }
+    background: var(--button-active-background);
+    border-color: var(--button-active-background);
+    color: var(--button-primary-text);
   }
 
   @media (max-width: 700px) {

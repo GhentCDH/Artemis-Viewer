@@ -3,53 +3,34 @@
   import { browser } from '$app/environment';
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
   import type { MassartItem } from '$lib/artemis/shared/types';
-  import { MAIN_LAYER_LABELS } from '$lib/artemis/config/layers';
+  import { MAIN_LAYER_LABELS, MAIN_LAYER_META } from '$lib/artemis/config/layers';
   import SliderLayer from '$lib/components/SliderLayer.svelte';
-  import type { LayerMetadata, PaneId, SliderSource } from '$lib/components/timeslider/types';
+  import type { LayerMetadata, PaneId, SliderSource, CollectionInfo } from '$lib/components/timeslider/types';
 
-  export let massartItems: MassartItem[] = [];
   export let layerMetadataByMainId: Record<string, LayerMetadata> = {};
-  export let yearLeeway: number = 3;
   export let loadingLayers: Record<string, boolean> = {};
   export let dualPaneEnabled = false;
-  export let disabledPane: PaneId | null = null;
-  export let leftYear: number | undefined = undefined;
-  export let rightYear: number | undefined = undefined;
   export let searchFocusMainId: string | null = null;
-  export let searchFocusYear: number | null = null;
   export let searchFocusNonce = 0;
-
-  const PANE_META: Record<PaneId, { label: string; color: string; badgeBg: string; badgeText: string; panelTint: string }> = {
-    left: {
-      label: 'Left',
-      color: 'var(--pane-left-color)',
-      badgeBg: 'var(--pane-left-badge-bg)',
-      badgeText: 'var(--pane-left-badge-text)',
-      panelTint: 'var(--pane-left-panel-tint)',
-    },
-    right: {
-      label: 'Right',
-      color: 'var(--pane-right-color)',
-      badgeBg: 'var(--pane-right-badge-bg)',
-      badgeText: 'var(--pane-right-badge-text)',
-      panelTint: 'var(--pane-right-panel-tint)',
-    },
-  };
+  export let activeCollection: CollectionInfo | null = null;
+  export let rightActiveCollection: CollectionInfo | null = null;
+  export let clearLeftCollectionNonce = 0;
+  export let clearRightCollectionNonce = 0;
 
   const dispatch = createEventDispatcher<{
     mainToggle:     { mainId: string; enabled: boolean };
     sublayerChange: { subId: string; enabled: boolean };
     paneMainToggle: { pane: PaneId; mainId: string; enabled: boolean };
     paneSublayerChange: { pane: PaneId; subId: string; enabled: boolean };
+    'active-collection-change': { key: string | null; pane?: PaneId };
     'open-viewer':  { title: string; sourceManifestUrl: string; imageServiceUrl: string };
     'focus-image':  { pane: PaneId; title: string; lon: number; lat: number };
-    'year-change':  { pane: PaneId; year: number };
   }>();
 
   const SOURCES: SliderSource[] = [
     {
       key: 'hand', mainId: 'HanddrawnCollection', label: MAIN_LAYER_LABELS.HanddrawnCollection,
-      start: 1700, end: 1715, repr: 1707, color: 'var(--layer-hand-color)', lane: 1,
+      start: 1700, end: 1715, repr: 1707, color: 'var(--timeline-layer-color)', lane: 1,
       sublayers: [
         { id: 'iiif', subId: 'HanddrawnCollection-iiif', label: 'Map', defaultOn: true },
         { id: 'parcels', subId: 'HanddrawnCollection-parcels', label: 'Parcels', defaultOn: false },
@@ -57,21 +38,21 @@
     },
     {
       key: 'frickx', mainId: 'Frickx', label: MAIN_LAYER_LABELS.Frickx,
-      start: 1712, end: 1712, repr: 1712, color: 'var(--layer-frickx-color)', lane: 3,
+      start: 1712, end: 1712, repr: 1712, color: 'var(--timeline-layer-color)', lane: 3,
       sublayers: [
         { id: 'wmts', subId: 'Frickx-wmts', label: 'Map', defaultOn: true },
       ],
     },
     {
       key: 'villaret', mainId: 'Villaret', label: MAIN_LAYER_LABELS.Villaret,
-      start: 1745, end: 1748, repr: 1746, color: 'var(--layer-villaret-color)', lane: 4,
+      start: 1745, end: 1748, repr: 1746, color: 'var(--timeline-layer-color)', lane: 4,
       sublayers: [
         { id: 'wmts', subId: 'Villaret-wmts', label: 'Map', defaultOn: true },
       ],
     },
     {
       key: 'ferraris', mainId: 'Ferraris', label: MAIN_LAYER_LABELS.Ferraris,
-      start: 1770, end: 1778, repr: 1774, color: 'var(--layer-ferraris-color)', lane: 2,
+      start: 1770, end: 1778, repr: 1774, color: 'var(--timeline-layer-color)', lane: 2,
       sublayers: [
         { id: 'wmts', subId: 'Ferraris-wmts', label: 'Map', defaultOn: true },
         { id: 'landuse', subId: 'Ferraris-landusage', label: 'Land use', defaultOn: false },
@@ -79,7 +60,7 @@
     },
     {
       key: 'primitief', mainId: 'PrimitiefKadaster', label: MAIN_LAYER_LABELS.PrimitiefKadaster,
-      start: 1808, end: 1834, repr: 1814, color: 'var(--layer-primitief-color)', lane: 3,
+      start: 1808, end: 1834, repr: 1814, color: 'var(--timeline-layer-color)', lane: 3,
       sublayers: [
         { id: 'iiif', subId: 'PrimitiefKadaster-iiif', label: 'Map', defaultOn: true },
         { id: 'parcels', subId: 'PrimitiefKadaster-parcels', label: 'Parcels', defaultOn: false },
@@ -87,7 +68,7 @@
     },
     {
       key: 'vander', mainId: 'Vandermaelen', label: MAIN_LAYER_LABELS.Vandermaelen,
-      start: 1846, end: 1854, repr: 1850, color: 'var(--layer-vander-color)', lane: 4,
+      start: 1846, end: 1854, repr: 1850, color: 'var(--timeline-layer-color)', lane: 4,
       sublayers: [
         { id: 'wmts', subId: 'Vandermaelen-wmts', label: 'Map', defaultOn: true },
         { id: 'landuse', subId: 'Vandermaelen-landusage', label: 'Land use', defaultOn: false },
@@ -95,28 +76,28 @@
     },
     {
       key: 'gered', mainId: 'GereduceerdeKadaster', label: MAIN_LAYER_LABELS.GereduceerdeKadaster,
-      start: 1847, end: 1855, repr: 1851, color: 'var(--layer-gereduceerd-color)', lane: 1,
+      start: 1847, end: 1855, repr: 1851, color: 'var(--timeline-layer-color)', lane: 1,
       sublayers: [
         { id: 'iiif', subId: 'GereduceerdeKadaster-iiif', label: 'Map', defaultOn: true },
       ],
     },
     {
       key: 'popp', mainId: 'Popp', label: MAIN_LAYER_LABELS.Popp,
-      start: 1842, end: 1879, repr: 1860, color: 'var(--layer-popp-color)', lane: 2,
+      start: 1842, end: 1879, repr: 1860, color: 'var(--timeline-layer-color)', lane: 2,
       sublayers: [
         { id: 'wmts', subId: 'Popp-wmts', label: 'Map', defaultOn: true },
       ],
     },
     {
       key: 'ngi1873', mainId: 'NGI1873', label: MAIN_LAYER_LABELS.NGI1873,
-      start: 1873, end: 1873, repr: 1873, color: 'var(--layer-ngi1873-color)', lane: 3,
+      start: 1873, end: 1873, repr: 1873, color: 'var(--timeline-layer-color)', lane: 3,
       sublayers: [
         { id: 'wmts', subId: 'NGI1873-wmts', label: 'Map', defaultOn: true },
       ],
     },
     {
       key: 'ngi1904', mainId: 'NGI1904', label: MAIN_LAYER_LABELS.NGI1904,
-      start: 1904, end: 1904, repr: 1904, color: 'var(--layer-ngi1904-color)', lane: 1,
+      start: 1904, end: 1904, repr: 1904, color: 'var(--timeline-layer-color)', lane: 1,
       sublayers: [
         { id: 'wmts', subId: 'NGI1904-wmts', label: 'Map', defaultOn: true },
       ],
@@ -125,23 +106,22 @@
 
   type SourceDef = SliderSource;
   type SourceKey = SourceDef['key'];
-  type PaneState = { id: PaneId; year: number; label: string; color: string };
+  type BulgeDirection = 'above' | 'below';
   const TIMELINE_AXIS_START = 1690;
   const TIMELINE_AXIS_END = 1930;
-  const SCRUBBER_THUMB_SIZE = 28;
+  const MEANDER_MIN_WIDTH_PX = 24;
+  const MEANDER_MIN_SPAN_YEARS = 15;
+  const MEANDER_DIRECTIONS: Partial<Record<SourceKey, BulgeDirection>> = {
+    hand: 'above',
+    ferraris: 'below',
+    primitief: 'above',
+    vander: 'below',
+    gered: 'above',
+  };
 
-  const defaultYear = 1774;
-
-  let sliderYear = defaultYear;
   let trackEl: HTMLDivElement | null = null;
   let trackWidth = 0;
-  let localLeftYear = defaultYear;
-  let localRightYear = defaultYear;
-  let lastLeftYearProp: number | undefined = undefined;
-  let lastRightYearProp: number | undefined = undefined;
   let lastSearchFocusNonce = 0;
-  let dualPaneModePrev = dualPaneEnabled;
-  let dualPaneYearsInitialized = dualPaneEnabled;
 
   let leftEnabledLayers: Record<string, boolean> = Object.fromEntries(
     SOURCES.map(s => [s.key, true])
@@ -167,24 +147,17 @@
 
   let prevVisible: Record<string, boolean> = {};
   let prevPaneVisible: Record<PaneId, Record<string, boolean>> = { left: {}, right: {} };
-  let openMenuKey: SourceKey | null = null;
   let layerInfoModalKey: string | null = null;
+  let leftActiveSourceKey: string | null = null;
+  let rightActiveSourceKey: string | null = null;
+  let nextComparePane: PaneId = 'left';
+  let lastPublishedLeftCollectionKey: string | null = null;
+  let lastPublishedRightCollectionKey: string | null = null;
+  let lastClearLeftCollectionNonce = 0;
+  let lastClearRightCollectionNonce = 0;
 
   let hoveredSrc: SourceDef | null = null;
   let tooltipFixedStyle = '';
-  let dragCleanup: (() => void) | null = null;
-  let menuCloseTimer: ReturnType<typeof setTimeout> | null = null;
-  const MENU_CLOSE_DELAY_MS = 260;
-
-  $: massartByYear = massartItems.reduce<Map<number, MassartItem[]>>((acc, item) => {
-    const y = parseInt(item.year ?? '0', 10);
-    if (y > 1000) {
-      const arr = acc.get(y) ?? [];
-      arr.push(item);
-      acc.set(y, arr);
-    }
-    return acc;
-  }, new Map());
 
   // Hardcoded stable axis bounds:
   // historical map eras start at 1700; current Massart dataset spans 1904-1912.
@@ -193,14 +166,18 @@
   const axisEnd = TIMELINE_AXIS_END;
   const axisSpan = axisEnd - axisStart;
 
-  type TickKind = 'century' | 'decade';
+  type TickKind = 'endpoint' | 'interval';
 
   function buildTicks(start: number, end: number): { year: number; kind: TickKind }[] {
-    const result: { year: number; kind: TickKind }[] = [];
-    for (let y = Math.ceil(start / 10) * 10; y <= end; y += 10) {
-      result.push({ year: y, kind: y % 100 === 0 ? 'century' : 'decade' });
+    const byYear = new Map<number, TickKind>();
+    byYear.set(start, 'endpoint');
+    for (let y = Math.ceil(start / 50) * 50; y <= end; y += 50) {
+      if (y !== start && y !== end) byYear.set(y, 'interval');
     }
-    return result;
+    byYear.set(end, 'endpoint');
+    return [...byYear.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([year, kind]) => ({ year, kind }));
   }
 
   $: ticks = buildTicks(axisStart, axisEnd);
@@ -209,157 +186,18 @@
     return `${((year - aStart) / aSpan) * 100}%`;
   }
 
+  function axisTickStyle(year: number): string {
+    return `left:${pct(year, axisStart, axisSpan)};--tick-top:5px`;
+  }
+
+  function axisCurvePath(): string {
+    return 'M 0 14 L 100 14';
+  }
+
+  $: axisPath = axisCurvePath();
+
   function widthPct(start: number, end: number, aSpan: number): string {
     return `${((end - start) / aSpan) * 100}%`;
-  }
-
-  function paneSourcesForYear(year: number): SourceDef[] {
-    const visible = SOURCES.filter(
-      s => year >= s.start - halfKnobYears && year <= s.end + halfKnobYears
-    );
-    return visible;
-  }
-
-  function setPaneYear(pane: PaneId, year: number, emit = true) {
-    const prevYear = pane === 'left' ? localLeftYear : localRightYear;
-    if (pane === 'left') {
-      localLeftYear = year;
-    } else {
-      localRightYear = year;
-    }
-    if (emit) {
-      dispatch('year-change', { pane, year });
-    }
-  }
-
-  function yearForPane(pane: PaneId): number {
-    if (!dualPaneEnabled) return sliderYear;
-    return pane === 'left' ? localLeftYear : localRightYear;
-  }
-
-  function scrubberPctForPane(pane: PaneId): number {
-    return ((yearForPane(pane) - axisStart) / axisSpan) * 100;
-  }
-
-  function scrubberCenterPx(year: number): number {
-    if (trackWidth <= 0) return 0;
-    const ratio = Math.max(0, Math.min(1, (year - axisStart) / axisSpan));
-    const usableWidth = Math.max(0, trackWidth - SCRUBBER_THUMB_SIZE);
-    return ratio * usableWidth + SCRUBBER_THUMB_SIZE / 2;
-  }
-
-  function scrubberIndicatorStyle(year: number, color?: string, badgeBg?: string, badgeText?: string): string {
-    const ratio = Math.max(0, Math.min(1, (year - axisStart) / axisSpan));
-    const leftStyle = trackWidth > 0
-      ? `left:${scrubberCenterPx(year)}px`
-      : `left:calc(${ratio} * (100% - ${SCRUBBER_THUMB_SIZE}px) + ${SCRUBBER_THUMB_SIZE / 2}px)`;
-    const bits = [leftStyle];
-    if (color) bits.push(`--pane-color:${color}`);
-    if (badgeBg) bits.push(`--pane-badge-bg:${badgeBg}`);
-    if (badgeText) bits.push(`--pane-badge-text:${badgeText}`);
-    return bits.join(';');
-  }
-
-  function applyDraggedYear(pane: PaneId, clientX: number) {
-    const trackEl = document.querySelector('.ts-track') as HTMLElement | null;
-    if (!trackEl) return;
-    const rect = trackEl.getBoundingClientRect();
-    const year = yearFromTrackClientX(clientX, rect);
-    if (!dualPaneEnabled) {
-      setSingleYear(year);
-      return;
-    }
-    setPaneYear(pane, year);
-  }
-
-  function startKnobDrag(pane: PaneId, event: PointerEvent) {
-    if (dualPaneEnabled && disabledPane === pane) return;
-    event.preventDefault();
-    dragCleanup?.();
-    applyDraggedYear(pane, event.clientX);
-
-    const onMove = (moveEvent: PointerEvent) => {
-      moveEvent.preventDefault();
-      applyDraggedYear(pane, moveEvent.clientX);
-    };
-
-    const onEnd = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onEnd);
-      window.removeEventListener('pointercancel', onEnd);
-      dragCleanup = null;
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onEnd);
-    window.addEventListener('pointercancel', onEnd);
-    dragCleanup = onEnd;
-  }
-
-  function onSliderInput(pane: PaneId, e: Event) {
-    const year = parseFloat((e.target as HTMLInputElement).value);
-    if (!dualPaneEnabled) {
-      sliderYear = year;
-      dispatch('year-change', { pane: 'left', year });
-      return;
-    }
-    setPaneYear(pane, year);
-  }
-
-  function setSingleYear(year: number) {
-    sliderYear = year;
-    dispatch('year-change', { pane: 'left', year });
-  }
-
-  function yearFromTrackClientX(clientX: number, rect: DOMRect): number {
-    const usableWidth = Math.max(1, rect.width - SCRUBBER_THUMB_SIZE);
-    const offsetX = Math.max(0, Math.min(usableWidth, clientX - rect.left - SCRUBBER_THUMB_SIZE / 2));
-    const ratio = offsetX / usableWidth;
-    return Math.round(axisStart + ratio * axisSpan);
-  }
-
-  function closestPaneForTrackYear(year: number): PaneId {
-    const candidates: PaneId[] = dualPaneEnabled
-      ? (['left', 'right'] as PaneId[]).filter((pane) => disabledPane !== pane)
-      : ['left'];
-
-    if (candidates.length === 0) return 'left';
-    if (candidates.length === 1) return candidates[0];
-
-    const leftDistance = Math.abs(yearForPane('left') - year);
-    const rightDistance = Math.abs(yearForPane('right') - year);
-    return rightDistance <= leftDistance ? 'right' : 'left';
-  }
-
-  function jumpToYear(year: number): PaneId {
-    if (!dualPaneEnabled) {
-      setSingleYear(year);
-      return 'left';
-    }
-
-    const pane = closestPaneForTrackYear(year);
-    setPaneYear(pane, year);
-    return pane;
-  }
-
-  function jumpToSource(src: SourceDef, e: MouseEvent) {
-    let targetYear: number = src.repr;
-    const el = e.currentTarget as HTMLElement;
-    const tEl = el.closest('.ts-track') as HTMLElement | null;
-    if (tEl) {
-      const rect = tEl.getBoundingClientRect();
-      const rawYear = yearFromTrackClientX(e.clientX, rect);
-      targetYear = Math.max(src.start, Math.min(src.end, rawYear));
-    }
-
-    const pane = jumpToYear(targetYear);
-    setLayerEnabled(pane, src.key, true);
-
-    const overlapping = paneSourcesForYear(targetYear)
-      .filter((candidate) => candidate.key !== src.key);
-    for (const candidate of overlapping) {
-      setLayerEnabled(pane, candidate.key, false);
-    }
   }
 
   function onPillEnter(src: SourceDef, e: MouseEvent) {
@@ -367,10 +205,10 @@
     const el = e.currentTarget as HTMLElement;
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
-    if (src.lane <= 2) {
-      tooltipFixedStyle = `left:${cx}px;top:${rect.top - 8}px;transform:translate(-50%,-100%)`;
-    } else {
+    if (sourceBulgeDirection(src) === 'above') {
       tooltipFixedStyle = `left:${cx}px;top:${rect.bottom + 8}px;transform:translateX(-50%)`;
+    } else {
+      tooltipFixedStyle = `left:${cx}px;top:${rect.top - 8}px;transform:translate(-50%,-100%)`;
     }
   }
 
@@ -378,37 +216,84 @@
     hoveredSrc = null;
   }
 
-  function onTrackClick(e: MouseEvent) {
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('.source-pill-wrap, .source-menu-popover, .img-dot, .ts-scrubber, .sub-menu, .sub-menu-header--toggle, .sub-pill, .sub-menu-checkbox-input, .source-folder-tab')) return;
+  function distanceToPath(path: SVGPathElement, clientX: number, clientY: number): number {
+    const ctm = path.getScreenCTM();
+    if (!ctm) return Number.POSITIVE_INFINITY;
+    const totalLength = path.getTotalLength();
+    const samples = 56;
+    let nearest = Number.POSITIVE_INFINITY;
 
-    const trackEl = (e.currentTarget as HTMLElement).closest('.ts-track') as HTMLElement | null;
-    if (!trackEl) return;
-    const rect = trackEl.getBoundingClientRect();
-    const nextYear = yearFromTrackClientX(e.clientX, rect);
-    jumpToYear(nextYear);
-  }
-
-  function isDotNear(yr: number): boolean {
-    if (!dualPaneEnabled) return Math.abs(yr - sliderYear) <= yearLeeway;
-    return visiblePanes.some((pane) => Math.abs(yr - pane.year) <= yearLeeway);
-  }
-
-  function focusDot(items: MassartItem[], pane: PaneId = 'left') {
-    const firstItem = items[0];
-    if (firstItem && Number.isFinite(firstItem.lon) && Number.isFinite(firstItem.lat)) {
-      dispatch('focus-image', {
-        pane,
-        title: firstItem.title,
-        lon: Number(firstItem.lon),
-        lat: Number(firstItem.lat),
-      });
+    for (let i = 0; i <= samples; i += 1) {
+      const point = path.getPointAtLength((totalLength * i) / samples);
+      const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(ctm);
+      const dx = screenPoint.x - clientX;
+      const dy = screenPoint.y - clientY;
+      const distance = Math.hypot(dx, dy);
+      if (distance < nearest) nearest = distance;
     }
+
+    return nearest;
   }
 
-  function onPhotoDotClick(year: number, items: MassartItem[]) {
-    const pane = jumpToYear(year);
-    focusDot(items, pane);
+  function nearestSourceFromClick(event: MouseEvent, fallback: SourceDef): SourceDef {
+    if (!trackEl) return fallback;
+    const paths = Array.from(trackEl.querySelectorAll<SVGPathElement>('.meander-hit'));
+    let bestSource = fallback;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const path of paths) {
+      const sourceKey = path.dataset.sourceKey as SourceKey | undefined;
+      if (!sourceKey) continue;
+      const distance = distanceToPath(path, event.clientX, event.clientY);
+      if (distance < bestDistance) {
+        const source = sourceByKey(sourceKey);
+        if (source) {
+          bestSource = source;
+          bestDistance = distance;
+        }
+      }
+    }
+
+    return bestDistance <= 18 ? bestSource : fallback;
+  }
+
+  function onMeanderClick(src: SourceDef, e: MouseEvent | KeyboardEvent) {
+    e.stopPropagation();
+    const clickedSource = e instanceof MouseEvent ? nearestSourceFromClick(e, src) : src;
+    const key = clickedSource.key;
+    if (!dualPaneEnabled) {
+      leftActiveSourceKey = leftActiveSourceKey === key ? null : key;
+      rightActiveSourceKey = null;
+      return;
+    }
+
+    if (leftActiveSourceKey === key) {
+      leftActiveSourceKey = null;
+      nextComparePane = 'left';
+      return;
+    }
+    if (rightActiveSourceKey === key) {
+      rightActiveSourceKey = null;
+      nextComparePane = 'right';
+      return;
+    }
+
+    let targetPane = nextComparePane;
+    if (!leftActiveSourceKey) {
+      targetPane = 'left';
+    } else if (!rightActiveSourceKey) {
+      targetPane = 'right';
+    }
+
+    if (targetPane === 'right') {
+      rightActiveSourceKey = key;
+      leftActiveSourceKey = leftActiveSourceKey === key ? null : leftActiveSourceKey;
+      nextComparePane = 'left';
+    } else {
+      leftActiveSourceKey = key;
+      rightActiveSourceKey = rightActiveSourceKey === key ? null : rightActiveSourceKey;
+      nextComparePane = 'right';
+    }
   }
 
   function sourceByKey(key: SourceKey): SourceDef {
@@ -417,6 +302,25 @@
 
   function sourceByMainId(mainId: string): SourceDef | undefined {
     return SOURCES.find((src) => src.mainId === mainId);
+  }
+
+  function buildCollectionInfo(src: SourceDef): CollectionInfo {
+    const meta = MAIN_LAYER_META[src.mainId];
+    const layerInfo = mainLayerInfoCard(src.mainId, src.label);
+    return {
+      key: src.key,
+      mainId: src.mainId,
+      name: src.label,
+      color: src.color,
+      dateRange: meta?.date ?? `${src.start}–${src.end}`,
+      info: layerInfo.info.join('\n\n'),
+      sublayers: src.sublayers.map(sub => ({
+        id: sub.id,
+        subId: sub.subId,
+        label: sub.label,
+        url: undefined,
+      })),
+    };
   }
 
   function layerInfoKey(pane: PaneId, mainId: string): string {
@@ -432,34 +336,6 @@
     event?.preventDefault();
     event?.stopPropagation();
     layerInfoModalKey = null;
-  }
-
-  function toggleMenu(event: MouseEvent, key: SourceKey) {
-    event.stopPropagation();
-    if (menuCloseTimer !== null) {
-      clearTimeout(menuCloseTimer);
-      menuCloseTimer = null;
-    }
-    openMenuKey = openMenuKey === key ? null : key;
-  }
-
-  function closeMenu(key: SourceKey) {
-    if (openMenuKey !== key) return;
-    openMenuKey = null;
-  }
-
-  function scheduleCloseMenu(key: SourceKey) {
-    if (menuCloseTimer !== null) clearTimeout(menuCloseTimer);
-    menuCloseTimer = setTimeout(() => {
-      menuCloseTimer = null;
-      closeMenu(key);
-    }, MENU_CLOSE_DELAY_MS);
-  }
-
-  function cancelCloseMenu() {
-    if (menuCloseTimer === null) return;
-    clearTimeout(menuCloseTimer);
-    menuCloseTimer = null;
   }
 
   function mainLayerInfoCard(mainId: string, fallbackTitle: string): LayerMetadata {
@@ -521,7 +397,7 @@
         ...rightSublayerState,
         [key]: { ...rightSublayerState[key], [localId]: !cur },
       };
-      const rightVisible = rightEnabledLayers[key] && rightVisibleSourceKeys.has(key);
+      const rightVisible = rightEnabledLayers[key] && rightActiveSourceKey === key;
       if (rightVisible) {
         dispatch('paneSublayerChange', { pane: 'right', subId, enabled: !cur });
       }
@@ -532,7 +408,7 @@
       ...leftSublayerState,
       [key]: { ...leftSublayerState[key], [localId]: !cur },
     };
-    const leftVisible = leftEnabledLayers[key] && leftVisibleSourceKeys.has(key);
+    const leftVisible = leftEnabledLayers[key] && leftActiveSourceKey === key;
     if (leftVisible) {
       dispatch('sublayerChange', { subId, enabled: !cur });
       dispatch('paneSublayerChange', { pane: 'left', subId, enabled: !cur });
@@ -575,99 +451,39 @@
     return '18px 18px, 9px 9px';
   }
 
-  let measuredLabelWidthByKey: Partial<Record<SourceKey, number>> = {};
-
-  function measureSourceLabelWidths() {
-    if (!browser || typeof document === 'undefined') return;
-    const rootStyles = getComputedStyle(document.documentElement);
-    const fontFamily = rootStyles.getPropertyValue('--font-ui').trim() || 'sans-serif';
-    const measurer = document.createElement('span');
-    measurer.style.position = 'fixed';
-    measurer.style.left = '-9999px';
-    measurer.style.top = '0';
-    measurer.style.visibility = 'hidden';
-    measurer.style.pointerEvents = 'none';
-    measurer.style.whiteSpace = 'nowrap';
-    measurer.style.fontFamily = fontFamily;
-    measurer.style.fontSize = '10px';
-    measurer.style.fontWeight = '700';
-    measurer.style.lineHeight = '1.1';
-    measurer.style.letterSpacing = '0.01em';
-    document.body.appendChild(measurer);
-
-    const next: Partial<Record<SourceKey, number>> = {};
-    for (const src of SOURCES) {
-      measurer.textContent = src.label;
-      next[src.key] = Math.ceil(measurer.getBoundingClientRect().width);
-    }
-
-    document.body.removeChild(measurer);
-    measuredLabelWidthByKey = next;
+  function sourceMinWidthPx(_src: SourceDef): number {
+    return MEANDER_MIN_WIDTH_PX;
   }
 
-  function sourceEstimatedLabelWidthPx(label: string, key?: SourceKey): number {
-    const measuredWidth = key ? measuredLabelWidthByKey[key] : undefined;
-    if (measuredWidth && measuredWidth > 0) {
-      return Math.max(72, 52 + measuredWidth);
-    }
-    // Account for the text plus the permanent folder-tab affordance and
-    // horizontal padding used by SliderLayer.
-    return Math.max(72, 52 + label.length * 7);
+  function sourceBulgeDirection(src: SourceDef): BulgeDirection {
+    return MEANDER_DIRECTIONS[src.key] ?? (src.lane <= 2 ? 'above' : 'below');
   }
 
-  function sourceMinWidthPx(src: SourceDef): number {
-    return sourceEstimatedLabelWidthPx(src.label, src.key);
+  function sourceVisualYearRange(src: SourceDef): { start: number; end: number; center: number } {
+    const center = (src.start + src.end) / 2;
+    const span = Math.max(src.end - src.start, MEANDER_MIN_SPAN_YEARS);
+    return {
+      start: center - span / 2,
+      end: center + span / 2,
+      center,
+    };
   }
-
-  let currentSourceKeys: Set<SourceKey> = new Set();
 
   function sourceBlockStyle(src: SourceDef, isCurrent: boolean): string {
-    const inclusiveEnd = Math.max(src.start, src.end + 1);
-    const spanYears = Math.max(1, inclusiveEnd - src.start);
-    const centerYear = src.start + spanYears / 2;
+    const visualRange = sourceVisualYearRange(src);
     const wrapperTransform = 'translateX(-50%)';
-    const currentBlockTransform = isCurrent
-      ? (src.lane <= 2 ? 'translateY(-3px) scaleY(1.18)' : 'translateY(3px) scaleY(1.18)')
-      : 'none';
-    const currentBlockTransformOrigin = isCurrent
-      ? (src.lane <= 2 ? 'bottom center' : 'top center')
-      : 'center center';
-    const currentShadow = isCurrent
-      ? '0 10px 22px rgba(0, 0, 0, 0.16), 0 0 0 1px color-mix(in srgb, var(--surface-outline-soft) 75%, transparent) inset, 0 0 0 1px var(--pill-inset-active) inset'
-      : '0 0 0 1px color-mix(in srgb, var(--surface-outline-soft) 75%, transparent) inset, 0 5px 12px rgba(0, 0, 0, 0.10)';
-    const currentZ = isCurrent ? '2' : '1';
+    const currentZ = isCurrent ? '28' : '26';
     if (trackWidth <= 0) {
-      return `left:${pct(centerYear, axisStart, axisSpan)};--pill-width:${widthPct(src.start, inclusiveEnd, axisSpan)};--pill-min-width:${sourceMinWidthPx(src)}px;--c:${src.color};--pattern:${sourcePattern(src.key)};--pattern-size:${sourcePatternSize(src.key)};--pill-wrapper-transform:${wrapperTransform};--pill-block-transform:${currentBlockTransform};--pill-block-transform-origin:${currentBlockTransformOrigin};--pill-shadow:${currentShadow};--pill-z:${currentZ}`;
+      return `left:${pct(visualRange.center, axisStart, axisSpan)};--pill-width:${widthPct(visualRange.start, visualRange.end, axisSpan)};--pill-min-width:${sourceMinWidthPx(src)}px;--c:${src.color};--pattern:${sourcePattern(src.key)};--pattern-size:${sourcePatternSize(src.key)};--pill-wrapper-transform:${wrapperTransform};--pill-z:${currentZ}`;
     }
 
-    const halfThumb = SCRUBBER_THUMB_SIZE / 2;
-    const usableWidth = trackWidth - SCRUBBER_THUMB_SIZE;
-    const rangeWidthPx = (spanYears / axisSpan) * usableWidth;
+    const startPx = ((visualRange.start - axisStart) / axisSpan) * trackWidth;
+    const endPx = ((visualRange.end - axisStart) / axisSpan) * trackWidth;
+    const rangeWidthPx = Math.abs(endPx - startPx);
     const widthPx = Math.max(rangeWidthPx, sourceMinWidthPx(src));
-    const centerPx = ((centerYear - axisStart) / axisSpan) * usableWidth + halfThumb;
+    const centerPx = (startPx + endPx) / 2;
     const clampedCenterPx = Math.max(widthPx / 2, Math.min(trackWidth - widthPx / 2, centerPx));
-    return `left:${clampedCenterPx}px;--pill-width:${widthPx}px;--pill-min-width:${sourceMinWidthPx(src)}px;--c:${src.color};--pattern:${sourcePattern(src.key)};--pattern-size:${sourcePatternSize(src.key)};--pill-wrapper-transform:${wrapperTransform};--pill-block-transform:${currentBlockTransform};--pill-block-transform-origin:${currentBlockTransformOrigin};--pill-shadow:${currentShadow};--pill-z:${currentZ}`;
-  }
-
-  function sourceMenuStyle(src: SourceDef, pane: PaneId = 'left'): string {
-    const paneTint = pane === 'right' ? 'var(--pane-right-panel-tint)' : 'var(--pane-left-panel-tint)';
-    return `--c:${src.color};--pattern:${sourcePattern(src.key)};--pattern-size:${sourcePatternSize(src.key)};--pane-header-tint:${paneTint}`;
-  }
-
-  // currentSourceKeys is derived reactively from the scrubber year(s) so the
-  // active pill updates continuously while scrubbing/dragging.
-  $: currentSourceKeys = (() => {
-    if (!dualPaneEnabled) {
-      return new Set<SourceKey>(paneSourcesForYear(sliderYear).map((s) => s.key));
-    }
-    const keys = new Set<SourceKey>();
-    if (disabledPane !== 'left') for (const s of paneSourcesForYear(localLeftYear)) keys.add(s.key);
-    if (disabledPane !== 'right') for (const s of paneSourcesForYear(localRightYear)) keys.add(s.key);
-    return keys;
-  })();
-
-  function sourceHasOverlap(key: SourceKey): boolean {
-    return activePanesBySource[key].length > 1;
+    return `left:${clampedCenterPx}px;--pill-width:${widthPx}px;--pill-min-width:${sourceMinWidthPx(src)}px;--c:${src.color};--pattern:${sourcePattern(src.key)};--pattern-size:${sourcePatternSize(src.key)};--pill-wrapper-transform:${wrapperTransform};--pill-z:${currentZ}`;
   }
 
   onMount(() => {
@@ -684,12 +500,9 @@
     // Measure once immediately so pill positioning does not switch from the
     // percentage fallback to pixel positioning on first interaction.
     syncTrackWidth();
-    measureSourceLabelWidths();
     void tick().then(syncTrackWidth);
-    void tick().then(measureSourceLabelWidths);
     if (browser && 'fonts' in document) {
       void (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready.then(() => {
-        measureSourceLabelWidths();
         syncTrackWidth();
       });
     }
@@ -700,7 +513,7 @@
     }
 
     for (const src of SOURCES) {
-      const visible = leftEnabledLayers[src.key] && leftVisibleSourceKeys.has(src.key);
+      const visible = leftActiveSourceKey === src.key;
       prevVisible[src.key] = visible;
       dispatch('mainToggle', { mainId: src.mainId, enabled: visible });
       prevPaneVisible.left[src.key] = visible;
@@ -714,7 +527,7 @@
         }
       }
       if (dualPaneEnabled) {
-        const rightVisible = rightEnabledLayers[src.key] && rightVisibleSourceKeys.has(src.key);
+        const rightVisible = rightActiveSourceKey === src.key;
         prevPaneVisible.right[src.key] = rightVisible;
         dispatch('paneMainToggle', { pane: 'right', mainId: src.mainId, enabled: rightVisible });
         if (rightVisible) {
@@ -733,77 +546,22 @@
     };
   });
 
-  onDestroy(() => {
-    dragCleanup?.();
-    cancelCloseMenu();
-  });
-
-  $: halfKnobYears = yearLeeway;
-
-  $: if (leftYear != null && leftYear !== lastLeftYearProp) {
-    lastLeftYearProp = leftYear;
-    if (dualPaneEnabled) {
-      localLeftYear = leftYear;
-    } else {
-      sliderYear = leftYear;
-    }
-  }
-
-  $: if (rightYear != null && rightYear !== lastRightYearProp) {
-    lastRightYearProp = rightYear;
-    localRightYear = rightYear;
-  }
-
-  $: if (dualPaneEnabled !== dualPaneModePrev) {
-    if (dualPaneEnabled) {
-      if (!dualPaneYearsInitialized) {
-        localLeftYear = sliderYear;
-        localRightYear = rightYear ?? sliderYear;
-        dualPaneYearsInitialized = true;
-      }
-    } else {
-      sliderYear = localLeftYear;
-    }
-    dualPaneModePrev = dualPaneEnabled;
-  }
-
   $: if (searchFocusNonce !== lastSearchFocusNonce) {
     lastSearchFocusNonce = searchFocusNonce;
     if (searchFocusMainId) {
       const src = sourceByMainId(searchFocusMainId);
-      const targetYear = searchFocusYear ?? src?.repr;
-      if (src && targetYear != null) {
-        setLayerEnabled('left', src.key, true);
-        const overlapping = paneSourcesForYear(targetYear)
-          .filter((candidate) => candidate.key !== src.key);
-        for (const candidate of overlapping) {
-          setLayerEnabled('left', candidate.key, false);
-        }
+      if (src) {
+        leftActiveSourceKey = src.key;
       }
     }
   }
 
-  $: visiblePanes = (dualPaneEnabled
-    ? [
-        { id: 'left', year: localLeftYear, label: PANE_META.left.label, color: PANE_META.left.color },
-        { id: 'right', year: localRightYear, label: PANE_META.right.label, color: PANE_META.right.color },
-      ]
-    : []) as PaneState[];
-
-  $: singlePanelSources = paneSourcesForYear(sliderYear);
-  $: leftPanelSources = paneSourcesForYear(localLeftYear);
-  $: rightPanelSources = dualPaneEnabled ? paneSourcesForYear(localRightYear) : [];
-  $: leftVisibleSourceKeys = new Set<SourceKey>((dualPaneEnabled ? leftPanelSources : singlePanelSources).map((s) => s.key));
-  $: rightVisibleSourceKeys = new Set<SourceKey>(rightPanelSources.map((s) => s.key));
-  $: activeSourceKeys = dualPaneEnabled
-    ? new Set<SourceKey>([...leftPanelSources, ...rightPanelSources].map((s) => s.key))
-    : new Set<SourceKey>(singlePanelSources.map((s) => s.key));
   $: leftActiveVisibility = SOURCES.reduce<Record<SourceKey, boolean>>((acc, src) => {
-    acc[src.key] = Boolean(leftEnabledLayers[src.key] && leftVisibleSourceKeys.has(src.key));
+    acc[src.key] = Boolean(leftEnabledLayers[src.key] && leftActiveSourceKey === src.key);
     return acc;
   }, {} as Record<SourceKey, boolean>);
   $: rightActiveVisibility = SOURCES.reduce<Record<SourceKey, boolean>>((acc, src) => {
-    acc[src.key] = Boolean(dualPaneEnabled && rightEnabledLayers[src.key] && rightVisibleSourceKeys.has(src.key));
+    acc[src.key] = Boolean(dualPaneEnabled && rightEnabledLayers[src.key] && rightActiveSourceKey === src.key);
     return acc;
   }, {} as Record<SourceKey, boolean>);
 
@@ -811,20 +569,57 @@
     lane,
     sources: SOURCES.filter((source) => source.lane === lane),
   }));
-  $: topLanes = lanes.filter(({ lane }) => lane <= 2);
-  $: bottomLanes = lanes.filter(({ lane }) => lane >= 3);
+  $: topLanes = lanes
+    .map(({ lane, sources }) => ({
+      lane,
+      sources: sources.filter((source) => sourceBulgeDirection(source) === 'above'),
+    }))
+    .filter(({ sources }) => sources.length > 0);
+  $: bottomLanes = lanes
+    .map(({ lane, sources }) => ({
+      lane,
+      sources: sources.filter((source) => sourceBulgeDirection(source) === 'below'),
+    }))
+    .filter(({ sources }) => sources.length > 0);
 
-  $: activePanesBySource = SOURCES.reduce<Record<SourceKey, PaneState[]>>((acc, src) => {
-    const panes: PaneState[] = [];
-    if ((dualPaneEnabled ? leftPanelSources : singlePanelSources).some((s) => s.key === src.key)) {
-      panes.push({ id: 'left', year: localLeftYear, label: PANE_META.left.label, color: PANE_META.left.color });
+
+  $: if (!dualPaneEnabled && rightActiveSourceKey) {
+    rightActiveSourceKey = null;
+  }
+
+  $: if (clearLeftCollectionNonce !== lastClearLeftCollectionNonce) {
+    lastClearLeftCollectionNonce = clearLeftCollectionNonce;
+    leftActiveSourceKey = null;
+  }
+
+  $: if (clearRightCollectionNonce !== lastClearRightCollectionNonce) {
+    lastClearRightCollectionNonce = clearRightCollectionNonce;
+    rightActiveSourceKey = null;
+  }
+
+  $: {
+    const nextCollection = leftActiveSourceKey
+      ? buildCollectionInfo(sourceByKey(leftActiveSourceKey))
+      : null;
+    const nextKey = nextCollection?.key ?? null;
+    if (nextKey !== lastPublishedLeftCollectionKey) {
+      activeCollection = nextCollection;
+      lastPublishedLeftCollectionKey = nextKey;
+      dispatch('active-collection-change', { key: nextKey, pane: 'left' });
     }
-    if (dualPaneEnabled && rightPanelSources.some((s) => s.key === src.key)) {
-      panes.push({ id: 'right', year: localRightYear, label: PANE_META.right.label, color: PANE_META.right.color });
+  }
+
+  $: {
+    const nextCollection = dualPaneEnabled && rightActiveSourceKey
+      ? buildCollectionInfo(sourceByKey(rightActiveSourceKey))
+      : null;
+    const nextKey = nextCollection?.key ?? null;
+    if (nextKey !== lastPublishedRightCollectionKey) {
+      rightActiveCollection = nextCollection;
+      lastPublishedRightCollectionKey = nextKey;
+      dispatch('active-collection-change', { key: nextKey, pane: 'right' });
     }
-    acc[src.key] = panes;
-    return acc;
-  }, {} as Record<SourceKey, PaneState[]>);
+  }
 
   $: {
     for (const src of SOURCES) {
@@ -895,170 +690,44 @@
 
 <div class="timeslider">
   <div class="ts-track" bind:this={trackEl}>
-    {#if dualPaneEnabled}
-      {#each visiblePanes as pane}
-        <span
-          class="ts-scrub-indicator"
-          class:ts-scrub-indicator--right={pane.id === 'right'}
-          class:is-disabled={disabledPane === pane.id}
-          style={scrubberIndicatorStyle(yearForPane(pane.id), pane.color, PANE_META[pane.id].badgeBg, PANE_META[pane.id].badgeText)}
-          aria-hidden="true"
-        ></span>
-        <span
-          class="scrubber-label"
-          class:scrubber-label--right={pane.id === 'right'}
-          class:is-disabled={disabledPane === pane.id}
-          style={scrubberIndicatorStyle(yearForPane(pane.id), pane.color, PANE_META[pane.id].badgeBg, PANE_META[pane.id].badgeText)}
-          role="slider"
-          tabindex={disabledPane === pane.id ? -1 : 0}
-          aria-valuemin={axisStart}
-          aria-valuemax={axisEnd}
-          aria-valuenow={Math.round(pane.year)}
-          aria-label={`${pane.label} timeline year`}
-          on:pointerdown={(event) => startKnobDrag(pane.id, event)}
-        >&lt; {Math.round(pane.year)} &gt;</span>
-      {/each}
-    {:else}
-      <span
-        class="ts-scrub-indicator ts-scrub-indicator--single"
-        style={scrubberIndicatorStyle(sliderYear)}
-        aria-hidden="true"
-      ></span>
-      <span
-        class="scrubber-label scrubber-label--single"
-        style={scrubberIndicatorStyle(sliderYear)}
-        role="slider"
-        tabindex="0"
-        aria-valuemin={axisStart}
-        aria-valuemax={axisEnd}
-        aria-valuenow={Math.round(sliderYear)}
-        aria-label="Timeline year"
-        on:pointerdown={(event) => startKnobDrag('left', event)}
-      >&lt; {Math.round(sliderYear)} &gt;</span>
-    {/if}
-
-    <button
-      class="ts-track-hitarea"
-      type="button"
-      aria-label={dualPaneEnabled ? 'Jump nearest compare timeline thumb' : 'Jump timeline thumb'}
-      on:click={onTrackClick}
-    ></button>
     {#each topLanes as lane}
-      <div class={`ts-row ts-row--lane-${lane.lane}`}>
-        {#each lane.sources as src}
-          {@const enabled = !dualPaneEnabled ? leftEnabledLayers[src.key] : (leftEnabledLayers[src.key] || rightEnabledLayers[src.key])}
-          {@const isCurrent = currentSourceKeys.has(src.key)}
-          <SliderLayer
-            {src}
-            {enabled}
-            isOpen={openMenuKey === src.key}
-            {isCurrent}
-            hasOverlap={sourceHasOverlap(src.key)}
-            loading={loadingLayers[src.mainId]}
-            {dualPaneEnabled}
-            leftEnabled={leftEnabledLayers[src.key]}
-            rightEnabled={rightEnabledLayers[src.key]}
-            sourceBlockStyle={sourceBlockStyle(src, isCurrent)}
-            sourceMenuStyle={sourceMenuStyle(src, 'left')}
-            layerInfoExpanded={layerInfoModalKey === layerInfoKey('left', src.mainId)}
-            onCancelCloseMenu={cancelCloseMenu}
-            onScheduleCloseMenu={scheduleCloseMenu}
-            onJumpToSource={jumpToSource}
-            onPillEnter={onPillEnter}
-            onPillLeave={onPillLeave}
-            onToggleMenu={toggleMenu}
-            onInfoButtonClick={onInfoButtonClick}
-            onToggleLayerEnabled={toggleLayerEnabled}
-            onToggleSublayer={toggleSublayer}
-            {isSublayerEnabled}
-            layerInfoKeyFor={layerInfoKey}
-          />
-        {/each}
-      </div>
+      <div class={`ts-row ts-row--lane-${lane.lane}`}></div>
     {/each}
     
     <div class="ts-axis-line">
+      <svg class="ts-axis-river" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+        <path class="ts-axis-river-bank" d={axisPath}></path>
+        <path class="ts-axis-river-current" d={axisPath}></path>
+      </svg>
+
+      {#each SOURCES as src}
+        {@const enabled = !dualPaneEnabled ? leftEnabledLayers[src.key] : (leftEnabledLayers[src.key] || rightEnabledLayers[src.key])}
+        {@const isCurrent = leftActiveSourceKey === src.key || (dualPaneEnabled && rightActiveSourceKey === src.key)}
+        {@const hasActiveSelection = leftActiveSourceKey !== null || (dualPaneEnabled && rightActiveSourceKey !== null)}
+        <SliderLayer
+          {src}
+          {enabled}
+          {isCurrent}
+          isDimmed={hasActiveSelection && !isCurrent}
+          bulgeDirection={sourceBulgeDirection(src)}
+          hasOverlap={false}
+          loading={loadingLayers[src.mainId]}
+          sourceBlockStyle={sourceBlockStyle(src, isCurrent)}
+          onMeanderClick={onMeanderClick}
+          onPillEnter={onPillEnter}
+          onPillLeave={onPillLeave}
+        />
+      {/each}
+
       {#each ticks as tick}
-        <span class="ts-tick ts-tick--{tick.kind}" style="left:{pct(tick.year,axisStart,axisSpan)}">
+        <span class="ts-tick ts-tick--{tick.kind}" style={axisTickStyle(tick.year)}>
           <span class="ts-tick-label">{tick.year}</span>
         </span>
       {/each}
-
-      {#each [...massartByYear.entries()] as [yr, items]}
-        <button
-          class="img-dot"
-          class:img-dot--multi={items.length > 1}
-          class:img-dot--near={isDotNear(yr)}
-          style="left:{pct(yr,axisStart,axisSpan)}"
-          title="{yr} · {items.length} photo{items.length > 1 ? 's' : ''}"
-          aria-label="Massart photos {yr}"
-          on:click={() => onPhotoDotClick(yr, items)}
-        ></button>
-      {/each}
-
-      {#if dualPaneEnabled}
-        {#each visiblePanes as pane}
-          <input
-            class="ts-scrubber"
-            class:ts-scrubber--right={pane.id === 'right'}
-            class:is-disabled={disabledPane === pane.id}
-            style="--pane-color:{pane.color}"
-            type="range"
-            min={axisStart}
-            max={axisEnd}
-            step="1"
-            value={pane.id === 'left' ? localLeftYear : localRightYear}
-            disabled={disabledPane === pane.id}
-            on:input={(e) => onSliderInput(pane.id, e)}
-            aria-label="{pane.label} timeline year"
-          />
-        {/each}
-      {:else}
-        <input
-          class="ts-scrubber ts-scrubber--single"
-          type="range"
-          min={axisStart}
-          max={axisEnd}
-          step="1"
-          bind:value={sliderYear}
-          on:input={(e) => onSliderInput('left', e)}
-          aria-label="Timeline year"
-        />
-      {/if}
     </div>
 
     {#each bottomLanes as lane}
-      <div class={`ts-row ts-row--lane-${lane.lane}`}>
-        {#each lane.sources as src}
-          {@const enabled = !dualPaneEnabled ? leftEnabledLayers[src.key] : (leftEnabledLayers[src.key] || rightEnabledLayers[src.key])}
-          {@const isCurrent = currentSourceKeys.has(src.key)}
-          <SliderLayer
-            {src}
-            {enabled}
-            isOpen={openMenuKey === src.key}
-            {isCurrent}
-            hasOverlap={sourceHasOverlap(src.key)}
-            loading={loadingLayers[src.mainId]}
-            {dualPaneEnabled}
-            leftEnabled={leftEnabledLayers[src.key]}
-            rightEnabled={rightEnabledLayers[src.key]}
-            sourceBlockStyle={sourceBlockStyle(src, isCurrent)}
-            sourceMenuStyle={sourceMenuStyle(src, 'left')}
-            layerInfoExpanded={layerInfoModalKey === layerInfoKey('left', src.mainId)}
-            onCancelCloseMenu={cancelCloseMenu}
-            onScheduleCloseMenu={scheduleCloseMenu}
-            onJumpToSource={jumpToSource}
-            onPillEnter={onPillEnter}
-            onPillLeave={onPillLeave}
-            onToggleMenu={toggleMenu}
-            onInfoButtonClick={onInfoButtonClick}
-            onToggleLayerEnabled={toggleLayerEnabled}
-            onToggleSublayer={toggleSublayer}
-            {isSublayerEnabled}
-            layerInfoKeyFor={layerInfoKey}
-          />
-        {/each}
-      </div>
+      <div class={`ts-row ts-row--lane-${lane.lane}`}></div>
     {/each}
   </div>
 </div>
@@ -1117,13 +786,13 @@
 
 <style>
   .timeslider {
-    background: var(--timeline-panel-bg);
-    border: 0.5px solid var(--panel-border);
+    background: var(--window-background);
+    border: 0.5px solid var(--window-border);
     border-radius: var(--radius-md);
     padding: 12px 16px;
     user-select: none;
     font-family: var(--font-ui);
-    box-shadow: var(--shadow-timeline);
+    box-shadow: var(--window-shadow);
     pointer-events: auto;
   }
 
@@ -1132,23 +801,6 @@
     display: flex;
     flex-direction: column;
     overflow: visible;
-  }
-
-  .ts-track-hitarea {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    border: none;
-    background: transparent;
-    padding: 0;
-    margin: 0;
-    cursor: pointer;
-  }
-
-  .ts-track-hitarea:focus-visible {
-    outline: 2px solid var(--surface-focus);
-    outline-offset: 4px;
-    border-radius: var(--radius-md);
   }
 
   .ts-row {
@@ -1168,216 +820,47 @@
   .ts-axis-line {
     position: relative;
     height: 10px;
-    background: var(--timeline-track-bg);
-    border-radius: var(--radius-pill);
+    background: transparent;
     z-index: 20;
     isolation: isolate;
     overflow: visible;
     pointer-events: auto;
-    box-shadow:
-      inset 0 1px 0 color-mix(in srgb, var(--surface-inset-strong) 80%, transparent),
-      inset 0 -1px 0 color-mix(in srgb, var(--surface-outline-soft) 90%, transparent);
   }
 
-  .ts-scrub-indicator {
-    position: absolute;
-    top: -22px;
-    bottom: 0;
-    width: 4px;
-    transform: translateX(-50%);
-    border-radius: 999px;
-    background: var(--pane-color);
-    z-index: 21;
-    pointer-events: none;
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--surface-raised) 42%, transparent),
-      0 4px 10px color-mix(in srgb, var(--pane-color) 18%, transparent);
-  }
-
-  .ts-scrub-indicator--single {
-    background: var(--text-secondary);
-  }
-
-  .ts-scrub-indicator.is-disabled {
-    opacity: 0.4;
-    filter: saturate(0.18);
-  }
-
-
-  .scrubber-label {
-    position: absolute;
-    top: -34px;
-    transform: translateX(-50%);
-    font-family: var(--font-mono);
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--pane-badge-text);
-    background: var(--pane-badge-bg);
-    border: 2px solid rgba(24, 18, 10, 0.82);
-    border-radius: 99px;
-    padding: 7px 12px;
-    white-space: nowrap;
-    pointer-events: auto;
-    cursor: ew-resize;
-    touch-action: none;
-    z-index: 24;
-    box-shadow:
-      0 0 0 2px var(--scrubber-badge-ring),
-      var(--shadow-md);
-  }
-
-  .scrubber-label.is-disabled {
-    opacity: 0.42;
-    filter: saturate(0.18);
-    pointer-events: none;
-    cursor: default;
-  }
-
-  .scrubber-label--single {
-    color: var(--text-secondary);
-    background: var(--surface-floating);
-    border-radius: 999px;
-    padding: 7px 12px;
-  }
-
-  .scrubber-label--right {
-    top: -34px;
-  }
-
-  .ts-scrubber {
+  .ts-axis-river {
     position: absolute;
     left: 0;
-    top: -40px;
-    height: 42px;
+    top: -9px;
     width: 100%;
-    margin: 0;
-    padding: 0;
-    z-index: 25;
-    cursor: ew-resize;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    background: transparent;
-    border: none;
-    outline: none;
-    accent-color: transparent;
-    pointer-events: auto;
+    height: 28px;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 0;
   }
 
-  .ts-scrubber.is-disabled {
-    opacity: 0.34;
-    filter: saturate(0.18);
+  .ts-axis-river-bank,
+  .ts-axis-river-current {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
   }
 
-  .ts-scrubber--right {
-    z-index: 22;
+  .ts-axis-river-bank {
+    stroke: var(--timeline-layer-color);
+    stroke-width: var(--river-stroke-width);
+    opacity: 0.46;
   }
 
-  .ts-scrubber::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 72px;
-    height: 34px;
-    border-radius: 50%;
-    background: transparent;
-    border: none;
-    cursor: ew-resize;
-    box-shadow: none;
-    pointer-events: auto;
-  }
-
-  .ts-scrubber.is-disabled::-webkit-slider-thumb {
-    cursor: default;
-    box-shadow: none;
-  }
-
-  .ts-scrubber::-webkit-slider-thumb:hover {
-    box-shadow: none;
-  }
-
-  .ts-scrubber::-moz-range-thumb {
-    -moz-appearance: none;
-    width: 72px;
-    height: 34px;
-    border-radius: 50%;
-    background: transparent;
-    border: none;
-    cursor: ew-resize;
-    box-shadow: none;
-    pointer-events: auto;
-  }
-
-  .ts-scrubber.is-disabled::-moz-range-thumb {
-    cursor: default;
-    box-shadow: none;
-  }
-
-  .ts-scrubber::-moz-focus-outer {
-    border: 0;
-  }
-
-  .ts-scrubber--single {
-    --pane-color: var(--surface-outline);
-  }
-
-  .ts-scrubber::-webkit-slider-runnable-track {
-    height: 42px;
-    background: transparent;
-  }
-
-  .ts-scrubber::-moz-range-track {
-    height: 42px;
-    background: transparent;
-    border: none;
-  }
-
-  .ts-scrubber::-moz-range-progress {
-    background: transparent;
-    border: none;
-  }
-
-  .img-dot {
-    position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%) scale(1);
-    width: 18px;
-    height: 18px;
-    border-radius: 5px;
-    background-color: var(--photo-chip-bg);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Crect x='2.25' y='3' width='13.5' height='12' rx='2' fill='%23d4a84b'/%3E%3Ccircle cx='6.2' cy='7.1' r='1.35' fill='white'/%3E%3Cpath d='M4.2 13l3.1-3.2 2.1 2 2.2-2.5 2.2 3.7H4.2z' fill='white'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: center;
-    border: 1.5px solid var(--photo-chip-border);
-    padding: 0;
-    cursor: pointer;
-    z-index: 9;
-    pointer-events: auto;
-    box-shadow: var(--photo-chip-shadow);
-    transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
-  }
-
-  .img-dot:hover {
-    transform: translate(-50%, -50%) scale(1.35);
-    box-shadow: var(--photo-chip-shadow-hover);
-  }
-
-  .img-dot--multi {
-    width: 20px;
-    height: 20px;
-    box-shadow: var(--photo-chip-shadow-multi);
-  }
-
-  .img-dot--near {
-    width: 22px;
-    height: 22px;
-    background-color: var(--photo-chip-bg);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Crect x='2.5' y='3.25' width='17' height='15' rx='2.4' fill='%23f59e0b'/%3E%3Ccircle cx='7.7' cy='8.5' r='1.65' fill='white'/%3E%3Cpath d='M5.2 15.9l4-4.1 2.7 2.5 2.8-3.2 2.8 4.8H5.2z' fill='white'/%3E%3C/svg%3E");
-    transform: translate(-50%, -50%) scale(1.18);
-    box-shadow: var(--photo-chip-shadow-near);
+  .ts-axis-river-current {
+    stroke: var(--timeline-layer-color);
+    stroke-width: calc(var(--river-stroke-width) * 0.42);
+    opacity: 0.86;
   }
 
   .ts-tick {
     position: absolute;
-    top: 100%;
+    top: var(--tick-top, 5px);
     transform: translateX(-50%);
     display: flex;
     flex-direction: column;
@@ -1392,18 +875,18 @@
     width: 1px;
   }
 
-  .ts-tick--decade::before { height: 8px; background: var(--timeline-tick); }
-  .ts-tick--century::before { height: 18px; background: var(--timeline-tick-strong); }
+  .ts-tick--interval::before { height: 14px; background: var(--timeline-tick); }
+  .ts-tick--endpoint::before { height: 20px; background: var(--timeline-tick-strong); }
 
   .ts-tick-label {
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 9px;
     color: var(--timeline-label);
     margin-top: 2px;
     white-space: nowrap;
   }
 
-  :global(.ts-tick--century) .ts-tick-label {
+  :global(.ts-tick--endpoint) .ts-tick-label {
     color: var(--timeline-label-strong);
     font-weight: 600;
   }
@@ -1416,11 +899,11 @@
     align-items: center;
     gap: 5px;
     padding: 4px 9px;
-    border-radius: 999px;
-    background: var(--surface-floating);
-    border: 1px solid var(--surface-outline-soft);
+    border-radius: var(--radius-pill);
+    background: var(--window-background);
+    border: 1px solid var(--window-border);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
     font-size: 9px;
     font-weight: 600;
     color: var(--text-secondary);
@@ -1450,10 +933,10 @@
     overflow: auto;
     padding: 22px 24px 20px;
     color: var(--text-primary);
-    /* Override ui-panel-overlay dark overlay bg with the warm panel surface */
-    background: var(--surface-floating);
+    /* Override ui-panel-overlay with the warm panel surface */
+    background: var(--window-background);
     backdrop-filter: blur(6px);
-    border-color: var(--surface-outline-soft);
+    border-color: var(--window-border);
     box-shadow: 0 8px 32px rgba(40, 30, 10, 0.14), 0 2px 6px rgba(40, 30, 10, 0.08);
   }
 

@@ -188,12 +188,12 @@
   }
 
   .info-card.pinned {
-    border-color: var(--group-color, var(--panel-border));
+    border-color: var(--group-color, var(--window-border));
   }
 
   /* Override ui-card-header: tint header with layer color */
   .info-card-header {
-    background: color-mix(in srgb, var(--group-color, #aaa) 10%, var(--card-bg));
+    background: color-mix(in srgb, var(--group-color, #aaa) 10%, var(--window-header-background));
   }
 
   .info-card-title {
@@ -219,13 +219,13 @@
   .swatch {
     width: 9px;
     height: 9px;
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
     flex-shrink: 0;
   }
 
   /* Override ui-badge: layer-colored chip */
   .group-count {
-    background: color-mix(in srgb, var(--group-color, #aaa) 15%, var(--card-bg));
+    background: color-mix(in srgb, var(--group-color, #aaa) 15%, var(--window-header-background));
     color: var(--group-color, #555);
   }
 
@@ -236,7 +236,7 @@
     padding: 7px 8px;
   }
   .iiif-map-row:hover {
-    background: color-mix(in srgb, var(--group-color, #aaa) 10%, var(--card-bg));
+    background: color-mix(in srgb, var(--group-color, #aaa) 10%, var(--window-header-background));
   }
 
   .iiif-thumb {
@@ -289,7 +289,7 @@
     gap: 8px;
     padding: 4px 8px;
     border-radius: var(--radius-xs);
-    background: color-mix(in srgb, var(--group-color, #aaa) 7%, var(--card-bg));
+    background: color-mix(in srgb, var(--group-color, #aaa) 7%, var(--window-header-background));
     font-size: 12px;
     line-height: 1.4;
   }

@@ -223,7 +223,7 @@
         </div>
         <div class="viewer-inline-actions">
           <button
-            class="viewer-inline-toggle"
+            class="ui-btn-primary"
             type="button"
             on:click={() => (metadataCollapsed = !metadataCollapsed)}
             aria-expanded={!metadataCollapsed}
@@ -267,7 +267,7 @@
         {#if inline && !metadataCollapsed}
           <div class="viewer-meta-topbar">
             <button
-              class="viewer-inline-toggle viewer-inline-toggle--sidebar"
+              class="ui-btn-primary"
               type="button"
               on:click={() => (metadataCollapsed = true)}
               aria-label="Hide metadata"
@@ -281,7 +281,7 @@
               {#each historyItems as item}
                 <button
                   type="button"
-                  class="viewer-history-chip"
+                  class="ui-list-item"
                   class:is-active={item.sourceManifestUrl === sourceManifestUrl && (item.imageServiceUrl ?? '') === (imageServiceUrl ?? '')}
                   on:click={() => dispatch('select-history', item)}
                 >{item.title}</button>
@@ -311,10 +311,10 @@
                 {#if sourceManifestUrl}
                   <button
                     type="button"
-                    class="viewer-infobar-btn viewer-infobar-btn--primary"
+                    class="ui-btn-primary"
                     on:click={async () => { try { await navigator.clipboard.writeText(sourceManifestUrl); } catch { /* ignore */ } }}
                   >
-                    <svg class="viewer-infobar-btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex-shrink: 0;">
                       <rect x="5" y="3.5" width="8" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
                       <path d="M6 2.5h3.5a1.5 1.5 0 0 1 1.5 1.5v0.5H6.5A1.5 1.5 0 0 0 5 6v5H4A1.5 1.5 0 0 1 2.5 9.5V4A1.5 1.5 0 0 1 4 2.5H6Z" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.1"/>
                     </svg>
@@ -324,7 +324,7 @@
                 {#if manifestAllmapsUrl}
                   <button
                     type="button"
-                    class="viewer-infobar-btn"
+                    class="ui-btn"
                     on:click={() => window.open(manifestAllmapsUrl, "_blank", "noopener,noreferrer")}
                   >Allmaps</button>
                 {/if}
@@ -411,13 +411,13 @@
     height: 100%;
     max-width: 100%;
     max-height: 100%;
-    background: var(--viewer-bg);
+    background: var(--window-background);
     border-radius: var(--radius-md);
-    border: 1px solid var(--panel-border);
+    border: 1px solid var(--window-border);
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    box-shadow: var(--shadow-viewer);
+    box-shadow: var(--window-shadow);
   }
 
   .viewer-window--inline {
@@ -437,8 +437,8 @@
     justify-content: flex-end;
     gap: 12px;
     padding: 12px 14px;
-    background: color-mix(in srgb, var(--viewer-topbar-bg) 92%, transparent);
-    border: 1px solid var(--panel-border);
+    background: color-mix(in srgb, var(--window-header-background) 92%, transparent);
+    border: 1px solid var(--window-border);
     border-radius: var(--radius-sm);
     backdrop-filter: blur(8px);
   }
@@ -474,7 +474,7 @@
   .viewer-meta-year {
     font-size: 12px;
     font-weight: 700;
-    color: var(--text-muted);
+    color: var(--text-primary);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -490,27 +490,6 @@
     order: -1;
   }
 
-  .viewer-inline-toggle {
-    height: 36px;
-    padding: 8px 12px;
-    border: 1px solid var(--viewer-toggle-border);
-    border-radius: var(--radius-pill);
-    background: var(--viewer-toggle-bg);
-    color: var(--viewer-toggle-text);
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1;
-    cursor: pointer;
-  }
-
-  .viewer-inline-toggle:hover {
-    background: var(--viewer-toggle-bg-hover);
-  }
-
-  .viewer-inline-toggle--sidebar {
-    align-self: flex-end;
-  }
-
   .viewer-topbar {
     display: flex;
     align-items: center;
@@ -519,7 +498,7 @@
     padding: 0 14px;
     height: 44px;
     flex-shrink: 0;
-    background: var(--viewer-topbar-bg);
+    background: var(--window-header-background);
   }
 
   .viewer-title {
@@ -704,30 +683,6 @@
     gap: 8px;
   }
 
-  .viewer-history-chip {
-    max-width: 100%;
-    padding: 7px 11px;
-    border-radius: 999px;
-    border: 1px solid var(--viewer-chip-border);
-    background: var(--viewer-chip-bg);
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.2;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-  }
-
-  .viewer-history-chip:hover,
-  .viewer-history-chip.is-active {
-    background: var(--viewer-chip-bg-hover);
-    color: var(--text-primary);
-    border-color: var(--viewer-chip-border-hover);
-  }
-
   .viewer-sprite-placeholder {
     position: absolute;
     inset: 0;
@@ -779,41 +734,10 @@
     color: var(--text-error);
   }
 
-  .viewer-infobar-btn {
-    flex-shrink: 0;
-    min-height: 38px;
-    padding: 9px 14px;
-    font-size: 12px;
-    font-weight: 700;
-    border-radius: var(--radius-xs);
-    border: none;
-    background: var(--viewer-action-bg);
-    color: var(--text-primary);
-    box-shadow: none;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s, transform 0.15s;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .viewer-infobar-btn:hover {
-    background: var(--viewer-action-bg-hover);
-    transform: translateY(-1px);
-  }
-
-  .viewer-infobar-btn--primary {
-    min-width: 136px;
-  }
-
-  .viewer-infobar-btn-icon {
-    flex: 0 0 auto;
-  }
-
   /* Override OSD's default canvas background */
   :global(.viewer-body .openseadragon-container),
   :global(.viewer-body .openseadragon-canvas) {
-    background: var(--viewer-canvas-bg) !important;
+    background: var(--window-background) !important;
   }
 
   @media (max-width: 900px) {
@@ -836,7 +760,7 @@
     .viewer-meta {
       max-height: 34vh;
       border-left: none;
-      border-top: 0.5px solid var(--panel-border);
+      border-top: 0.5px solid var(--window-border);
     }
 
     .viewer-meta--collapsed {

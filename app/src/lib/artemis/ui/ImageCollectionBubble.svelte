@@ -1,5 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
+  import Button from '$lib/artemis/ui/primitives/Button.svelte';
+  import Window from '$lib/artemis/ui/primitives/Window.svelte';
   import type { PreviewBubbleItem, SpriteRef } from '$lib/artemis/shared/types';
   import { loadManifestPreview } from '$lib/artemis/viewer/manifestPreview';
 
@@ -202,8 +204,15 @@
   class="image-collection-bubble-anchor"
   style="left:{clampedX}px;top:{clampedY}px;transform:{bubbleTransform}"
 >
-  <div class="image-collection-bubble" class:is-below={placeBelow} style={`width:${bubbleWidth}px;`}>
-    <button class="ui-icon-btn image-collection-bubble-close" type="button" on:click={() => dispatch('close')} aria-label="Close">×</button>
+  <Window
+    class={`image-collection-bubble ${placeBelow ? 'is-below' : ''}`}
+    style={`width:${bubbleWidth}px;`}
+    variant="popover"
+    placement="anchored"
+    showClose={true}
+    closeLabel="Close"
+    on:close={() => dispatch('close')}
+  >
     <div class="ui-mono image-collection-bubble-kicker">{currentItem?.kicker || item.kicker || 'Image Collection'}</div>
     {#if bubbleItems.length > 1}
       <div class="image-collection-bubble-group-title">{bubbleItems.length} map sheets at this location</div>
@@ -238,12 +247,12 @@
             {/if}
           </div>
           <div class="image-collection-bubble-actions">
-            <button class="ui-btn-primary" type="button" on:click={() => openViewer(bubbleItem)}>Open in viewer</button>
+            <Button variant="primary" on:click={() => openViewer(bubbleItem)}>Open in viewer</Button>
           </div>
         </section>
       {/each}
     </div>
-  </div>
+  </Window>
 </div>
 
 <style>
@@ -253,18 +262,28 @@
     pointer-events: none;
   }
 
-  .image-collection-bubble {
+  :global(.image-collection-bubble) {
     position: relative;
     max-height: min(70vh, 760px);
-    background: var(--bubble-bg);
-    border: 1px solid var(--bubble-border);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-card);
+    pointer-events: auto;
+  }
+
+  :global(.image-collection-bubble .artemis-window-header) {
+    position: absolute;
+    top: 8px;
+    right: 9px;
+    z-index: 2;
+    padding: 0;
+    border-bottom: 0;
+    background: transparent;
+  }
+
+  :global(.image-collection-bubble .artemis-window-body) {
     padding: 14px;
     display: flex;
     flex-direction: column;
     gap: 10px;
-    pointer-events: auto;
+    overflow-y: auto;
   }
 
   .image-collection-bubble-list {
@@ -308,7 +327,7 @@
     background: var(--bubble-card-bg);
   }
 
-  .image-collection-bubble::after {
+  :global(.image-collection-bubble::after) {
     content: '';
     position: absolute;
     left: 50%;
@@ -321,7 +340,7 @@
     transform: translate(-50%, -9px) rotate(45deg);
   }
 
-  .image-collection-bubble.is-below::after {
+  :global(.image-collection-bubble.is-below::after) {
     top: auto;
     bottom: 100%;
     border-right: none;
@@ -331,14 +350,12 @@
     transform: translate(-50%, 9px) rotate(45deg);
   }
 
-  /* Override ui-icon-btn: absolute position, bubble close color */
-  .image-collection-bubble-close {
-    position: absolute;
-    top: 8px;
-    right: 9px;
+  :global(.image-collection-bubble .artemis-button--icon-only) {
     color: var(--bubble-close);
     font-size: 18px;
     line-height: 1;
+    background: transparent;
+    border: 0;
   }
 
   /* Override ui-mono: kicker-specific color and treatment */

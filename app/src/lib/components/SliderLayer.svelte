@@ -101,7 +101,7 @@
 
 <style>
   .source-block:focus-visible {
-    outline: 2px solid var(--surface-focus);
+    outline: 2px solid var(--control-focus-ring);
     outline-offset: 2px;
   }
 
@@ -246,7 +246,7 @@
     width: 7px;
     height: 7px;
     border: 1.5px solid #fff;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: currentColor;
     transform: translate(-50%, -50%);
     pointer-events: none;

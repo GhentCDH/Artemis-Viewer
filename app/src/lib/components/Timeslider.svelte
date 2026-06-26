@@ -340,12 +340,14 @@
 
   function buildCollectionInfo(src: SourceDef): CollectionInfo {
     const meta = MAIN_LAYER_META[src.mainId];
+    const layerInfo = mainLayerInfoCard(src.mainId, src.label);
     return {
       key: src.key,
       mainId: src.mainId,
       name: src.label,
       color: src.color,
       dateRange: meta?.date ?? `${src.start}–${src.end}`,
+      info: layerInfo.info.join('\n\n'),
       sublayers: src.sublayers.map(sub => ({
         id: sub.id,
         subId: sub.subId,
@@ -830,13 +832,13 @@
 
 <style>
   .timeslider {
-    background: var(--timeline-panel-bg);
-    border: 0.5px solid var(--panel-border);
+    background: var(--window-background);
+    border: 0.5px solid var(--window-border);
     border-radius: var(--radius-md);
     padding: 12px 16px;
     user-select: none;
     font-family: var(--font-ui);
-    box-shadow: var(--shadow-timeline);
+    box-shadow: var(--window-shadow);
     pointer-events: auto;
   }
 
@@ -908,8 +910,8 @@
     transform: translate(-50%, -50%) scale(1);
     width: 18px;
     height: 18px;
-    border-radius: 5px;
-    background-color: var(--photo-chip-bg);
+    border-radius: var(--radius-xs);
+    background-color: var(--photo-chip-background);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Crect x='2.25' y='3' width='13.5' height='12' rx='2' fill='%23d4a84b'/%3E%3Ccircle cx='6.2' cy='7.1' r='1.35' fill='white'/%3E%3Cpath d='M4.2 13l3.1-3.2 2.1 2 2.2-2.5 2.2 3.7H4.2z' fill='white'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: center;
@@ -936,7 +938,7 @@
   .img-dot--near {
     width: 22px;
     height: 22px;
-    background-color: var(--photo-chip-bg);
+    background-color: var(--photo-chip-background);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22'%3E%3Crect x='2.5' y='3.25' width='17' height='15' rx='2.4' fill='%23f59e0b'/%3E%3Ccircle cx='7.7' cy='8.5' r='1.65' fill='white'/%3E%3Cpath d='M5.2 15.9l4-4.1 2.7 2.5 2.8-3.2 2.8 4.8H5.2z' fill='white'/%3E%3C/svg%3E");
     transform: translate(-50%, -50%) scale(1.18);
     box-shadow: var(--photo-chip-shadow-near);
@@ -983,9 +985,9 @@
     align-items: center;
     gap: 5px;
     padding: 4px 9px;
-    border-radius: 999px;
-    background: var(--surface-floating);
-    border: 1px solid var(--surface-outline-soft);
+    border-radius: var(--radius-pill);
+    background: var(--window-background);
+    border: 1px solid var(--window-border);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
     font-family: var(--font-ui);
     font-size: 9px;
@@ -1018,9 +1020,9 @@
     padding: 22px 24px 20px;
     color: var(--text-primary);
     /* Override ui-panel-overlay with the warm panel surface */
-    background: var(--surface-floating);
+    background: var(--window-background);
     backdrop-filter: blur(6px);
-    border-color: var(--surface-outline-soft);
+    border-color: var(--window-border);
     box-shadow: 0 8px 32px rgba(40, 30, 10, 0.14), 0 2px 6px rgba(40, 30, 10, 0.08);
   }
 

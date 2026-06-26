@@ -4,6 +4,7 @@ import type { CompiledIndex } from '$lib/artemis/iiif/layerController';
 type VisibleLayer = {
   sourceCollectionUrl: string;
   sourceCollectionLabel: string;
+  map?: string;
 };
 
 type BuildManifestSearchIndexOptions = {
@@ -22,10 +23,14 @@ export function buildManifestSearchIndex({
   asFiniteNumber,
 }: BuildManifestSearchIndexOptions): ManifestSearchItem[] {
   const sourceLabelByUrl = new Map<string, string>();
+  const mapIdByUrl = new Map<string, string>();
   for (const layer of visibleLayers) {
     const label = cleanLayerLabel(layer.sourceCollectionLabel || '');
     if (label && !sourceLabelByUrl.has(layer.sourceCollectionUrl)) {
       sourceLabelByUrl.set(layer.sourceCollectionUrl, label);
+    }
+    if (layer.map && !mapIdByUrl.has(layer.sourceCollectionUrl)) {
+      mapIdByUrl.set(layer.sourceCollectionUrl, layer.map);
     }
   }
 
@@ -40,6 +45,7 @@ export function buildManifestSearchIndex({
 
     const lon = asFiniteNumber((entry as any).centerLon);
     const lat = asFiniteNumber((entry as any).centerLat);
+    const mapId = mapIdByUrl.get(entry.sourceCollectionUrl) || '';
     const mapName =
       sourceLabelByUrl.get(entry.sourceCollectionUrl) ||
       (entry as any).sourceCollectionLabel ||
@@ -54,6 +60,7 @@ export function buildManifestSearchIndex({
       label,
       text,
       textNormalized: normalizeSearchText(text),
+      mapId,
       mapName,
       sourceManifestUrl,
       compiledManifestPath,

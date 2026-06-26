@@ -30,5 +30,6 @@ export type CollectionInfo = {
   name: string;
   color: string;
   dateRange: string;
+  info?: string;
   sublayers: Array<{ id: string; subId: string; label: string; url?: string }>;
 };

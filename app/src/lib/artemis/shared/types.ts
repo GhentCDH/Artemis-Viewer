@@ -62,6 +62,7 @@ export type ManifestSearchItem = {
   label: string;
   text: string;
   textNormalized: string;
+  mapId: string;
   mapName: string;
   sourceManifestUrl: string;
   compiledManifestPath: string;

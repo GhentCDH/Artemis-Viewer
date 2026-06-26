@@ -1068,6 +1068,13 @@
     );
   }
 
+  function onMassartClick(item: MassartItem) {
+    if (item.lat != null && item.lon != null) {
+      flashLocationMarker(map, item.lon, item.lat);
+      flyToCoordinates({ lon: item.lon, lat: item.lat }, 11);
+    }
+  }
+
   function pinParcel() {
     if (!parcelClickInfo) return;
     pinnedCards = [...pinnedCards, { type: 'parcel', info: parcelClickInfo }];
@@ -1598,10 +1605,13 @@
     <ToponymSearch
       toponymIndex={toponymIndex}
       manifestSearchIndex={manifestSearchIndex}
+      massartIndex={massartItems}
+      activeMapIds={new Set(Object.entries(mainLayerEnabled).filter(([_, enabled]) => enabled).map(([id]) => id))}
       loading={toponymLoading}
       error={toponymError}
       on:fly-to-toponym={(e) => onFlyToToponym(e.detail)}
       on:manifest-click={(e) => onManifestClick(e.detail)}
+      on:massart-click={(e) => onMassartClick(e.detail)}
     />
 
     {#if panelOpen}
@@ -1664,6 +1674,7 @@
       collectionName={activeCollection?.name ?? ''}
       collectionColor={activeCollection?.color ?? ''}
       collectionDate={activeCollection?.dateRange ?? ''}
+      collectionInfo={activeCollection?.info ?? ''}
       sublayers={activeCollection?.sublayers ?? []}
       on:close={() => onMapInfoWindowClose('left')}
       on:sublayer-toggle={(e) => onMapInfoWindowSublayerToggle(e, 'left')}
@@ -1676,6 +1687,7 @@
       collectionName={rightActiveCollection?.name ?? ''}
       collectionColor={rightActiveCollection?.color ?? ''}
       collectionDate={rightActiveCollection?.dateRange ?? ''}
+      collectionInfo={rightActiveCollection?.info ?? ''}
       sublayers={rightActiveCollection?.sublayers ?? []}
       on:close={() => onMapInfoWindowClose('right')}
       on:sublayer-toggle={(e) => onMapInfoWindowSublayerToggle(e, 'right')}
@@ -1838,9 +1850,9 @@
     box-sizing: border-box;
     border: 3px solid rgba(47, 128, 237, 0.2);
     border-top-color: #2f80ed;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--surface-floating) 78%, transparent);
-    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--window-background) 78%, transparent);
+    box-shadow: var(--control-shadow);
     pointer-events: none;
     animation: toolbar-loading-spin 850ms linear infinite;
   }
@@ -1864,14 +1876,14 @@
   .map-scale-label {
     padding: 4px 8px;
     border-radius: var(--radius-pill);
-    background: color-mix(in srgb, var(--surface-floating) 90%, transparent);
-    border: 1px solid var(--surface-outline-soft);
+    background: color-mix(in srgb, var(--window-background) 90%, transparent);
+    border: 1px solid var(--window-border);
     color: var(--text-secondary);
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
     letter-spacing: 0.02em;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--control-shadow);
     white-space: nowrap;
   }
 
@@ -1896,14 +1908,14 @@
 
   .compare-toggle {
     padding: 11px 18px;
-    border: 1px solid var(--surface-outline-soft);
+    border: 1px solid var(--window-border);
     border-radius: var(--radius-xs);
-    background: var(--toolbar-button-bg);
+    background: var(--button-background);
     color: var(--text-primary);
     font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.01em;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--control-shadow);
     cursor: pointer;
     transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
     pointer-events: auto;
@@ -1911,13 +1923,13 @@
 
   .compare-toggle:hover {
     transform: translateY(-1px);
-    background: var(--toolbar-button-hover-bg);
+    background: var(--button-background-hover);
   }
 
   .compare-toggle.is-active {
-    background: var(--toolbar-button-active-bg);
-    border-color: var(--toolbar-button-active-border);
-    color: var(--toolbar-button-active-text);
+    background: var(--button-active-background);
+    border-color: var(--button-active-background);
+    color: var(--button-primary-text);
   }
 
   @media (max-width: 700px) {

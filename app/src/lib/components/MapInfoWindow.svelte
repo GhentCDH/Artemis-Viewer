@@ -1,12 +1,15 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
   import { createEventDispatcher } from 'svelte';
+  import Button from '$lib/artemis/ui/primitives/Button.svelte';
+  import Window from '$lib/artemis/ui/primitives/Window.svelte';
 
   export let isOpen = false;
   export let collectionKey: string | null = null;
   export let collectionName: string = '';
   export let collectionColor: string = '';
   export let collectionDate: string = '';
+  export let collectionInfo: string = '';
   export let sublayers: Array<{ id: string; subId: string; label: string; url?: string }> = [];
   export let pane: 'left' | 'right' = 'left';
 
@@ -18,6 +21,7 @@
   let sublayerState: Record<string, Record<string, boolean>> = {};
   let copiedSubId: string | null = null;
   let previousCollectionKey: string | null = null;
+  let infoDropdownOpen = false;
   $: currentSublayerState = collectionKey
     ? (sublayerState[collectionKey] ?? defaultSublayerState())
     : {};
@@ -77,104 +81,109 @@
 </script>
 
 {#if isOpen && collectionKey}
-  <div class="map-info-window" class:is-right={pane === 'right'} transition:fade={{ duration: 180 }}>
-    <!-- Header row -->
-    <div class="window-header">
-      <div class="header-left">
+  <div transition:fade={{ duration: 180 }}>
+    <Window
+      class={`map-info-window ${pane === 'right' ? 'is-right' : ''}`}
+      variant="floating"
+      placement={pane}
+      showClose={true}
+      closeLabel={`Close ${collectionName} info`}
+      on:close={close}
+    >
+      <div slot="header" class="header-left">
         <div class="collection-dot" style={`--c:${collectionColor}`}></div>
-        <span class="collection-name">{collectionName}</span>
+        <div class="header-text">
+          <span class="collection-name">{collectionName}</span>
+          <span class="collection-date">{collectionDate}</span>
+        </div>
       </div>
-      <button
-        class="close-button"
-        type="button"
-        aria-label={`Close ${collectionName} info`}
-        on:click={close}
-      >×</button>
-    </div>
 
-    <!-- Period row -->
-    <div class="period-row">{collectionDate}</div>
-
-    <!-- Layers label -->
-    <div class="layers-label">LAYERS</div>
-
-    <!-- Sublayer rows -->
-    <div class="sublayers-list">
-      {#each sublayers as sub}
-        <div class="sublayer-row">
-          <span class="sublayer-name">{sub.label}</span>
-          <div class="sublayer-controls">
-            <button
-              class="toggle-switch"
-              class:is-enabled={currentSublayerState[sub.id] ?? false}
-              type="button"
+      <!-- Sublayer rows -->
+      <div class="sublayers-list">
+        {#each sublayers as sub}
+          <div class="sublayer-buttons">
+            <Button
+              class="sublayer-toggle"
+              variant="chrome"
+              active={currentSublayerState[sub.id] ?? false}
               aria-label={`Toggle ${sub.label} layer`}
               on:click={() => toggleSublayer(sub.id)}
             >
-              <div class="toggle-thumb"></div>
-            </button>
-            {#if sub.url}
-              <button
-                class="copy-url-button"
-                class:is-copied={copiedSubId === sub.id}
-                type="button"
-                title="Copy layer URL"
-                aria-label={`Copy ${sub.label} URL`}
-                on:click={() => copyUrl(sub.id)}
-              >
-                {#if copiedSubId === sub.id}
-                  ✓
-                {:else}
-                  🔗
-                {/if}
-              </button>
-            {/if}
+              {sub.label}
+            </Button>
+            <Button
+              class="sublayer-copy"
+              variant="chrome"
+              active={copiedSubId === sub.id}
+              title="Copy layer source"
+              aria-label={`Copy ${sub.label} source`}
+              on:click={() => copyUrl(sub.id)}
+            >
+              {#if copiedSubId === sub.id}
+                ✓
+              {:else}
+                🔗
+              {/if}
+            </Button>
           </div>
+        {/each}
+      </div>
+
+      <div class="info-dropdown-header">
+        <span class="info-dropdown-label">about this map</span>
+        <Button
+          class="info-dropdown-toggle"
+          variant="chrome"
+          iconOnly={true}
+          active={infoDropdownOpen}
+          aria-label="Toggle collection info"
+          on:click={() => (infoDropdownOpen = !infoDropdownOpen)}
+        >
+          <span class="dropdown-arrow">▼</span>
+        </Button>
+      </div>
+      {#if infoDropdownOpen && collectionInfo}
+        <div class="info-dropdown-content">
+          {collectionInfo}
         </div>
-      {/each}
-    </div>
+      {/if}
+    </Window>
   </div>
 {/if}
 
 <style>
-  .map-info-window {
+  :global(.map-info-window) {
     position: fixed;
     top: 82px;
     left: 16px;
     z-index: 50;
-    background: white;
-    border: 0.5px solid rgba(0, 0, 0, 0.1);
-    border-radius: var(--radius-md);
     box-shadow: none;
     min-width: 240px;
     max-width: 280px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    background: white;
+    border-color: rgba(0, 0, 0, 0.1);
   }
 
-  .map-info-window.is-right {
+  :global(.map-info-window.is-right) {
     left: calc(50vw + 16px);
   }
 
   @media (max-width: 900px) {
-    .map-info-window.is-right {
+    :global(.map-info-window.is-right) {
       left: 16px;
       top: 268px;
     }
   }
 
-  .window-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+  :global(.map-info-window .artemis-window-header) {
+    padding: 12px 12px 0;
+    border-bottom: 0;
+    background: transparent;
   }
 
   .header-left {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     min-width: 0;
   }
@@ -185,6 +194,14 @@
     height: 10px;
     border-radius: 50%;
     background: var(--c);
+    margin-top: 2px;
+  }
+
+  .header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
   }
 
   .collection-name {
@@ -197,43 +214,77 @@
     white-space: nowrap;
   }
 
-  .close-button {
-    flex: 0 0 auto;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font-size: 18px;
-    line-height: 1;
-    color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: opacity 150ms ease;
-  }
-
-  .close-button:hover {
-    opacity: 0.6;
-  }
-
-  .period-row {
+  .collection-date {
     font-family: var(--font-ui);
     font-size: 12px;
     color: var(--text-muted);
-    margin-left: 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .layers-label {
+  :global(.map-info-window .artemis-window-body) {
+    padding: 8px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .info-dropdown-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .info-dropdown-label {
     font-family: var(--font-ui);
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-size: 11px;
     color: var(--text-muted);
-    margin-top: 4px;
-    margin-left: 0;
+    text-transform: lowercase;
+  }
+
+  :global(.info-dropdown-toggle) {
+    width: auto;
+    height: auto;
+    padding: 0;
+    min-height: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  :global(.info-dropdown-toggle:hover:not(:disabled)) {
+    background: transparent;
+    color: var(--text-primary);
+  }
+
+  :global(.info-dropdown-toggle.is-active) {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+  }
+
+  .dropdown-arrow {
+    font-size: 8px;
+    transition: transform 150ms ease;
+    display: inline-block;
+    margin-left: 4px;
+  }
+
+  :global(.info-dropdown-toggle.is-active .dropdown-arrow) {
+    transform: rotate(180deg);
+  }
+
+  .info-dropdown-content {
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    border: 1px solid rgba(0, 0, 0, 0.05);
   }
 
   .sublayers-list {
@@ -242,83 +293,20 @@
     gap: 6px;
   }
 
-  .sublayer-row {
+  .sublayer-buttons {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 6px 8px;
-    background: rgba(0, 0, 0, 0.03);
-    border-radius: 4px;
-  }
-
-  .sublayer-name {
-    font-family: var(--font-ui);
-    font-size: 13px;
-    color: var(--text-primary);
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .sublayer-controls {
-    display: flex;
-    align-items: center;
     gap: 4px;
-    flex: 0 0 auto;
+    align-items: stretch;
   }
 
-  .toggle-switch {
-    width: 32px;
-    height: 18px;
-    padding: 2px;
-    background: rgba(0, 0, 0, 0.15);
-    border: none;
-    border-radius: 999px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    transition: background 150ms ease;
+  :global(.sublayer-toggle) {
+    flex: 4;
   }
 
-  .toggle-switch.is-enabled {
-    background: var(--text-ok, #4a7a4a);
-  }
-
-  .toggle-thumb {
-    width: 14px;
-    height: 14px;
-    background: white;
-    border-radius: 50%;
-    transition: transform 150ms ease;
-  }
-
-  .toggle-switch.is-enabled .toggle-thumb {
-    transform: translateX(14px);
-  }
-
-  .copy-url-button {
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font-size: 12px;
+  :global(.sublayer-copy) {
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-muted);
-    transition: color 150ms ease;
-  }
-
-  .copy-url-button:hover {
-    color: var(--text-primary);
-  }
-
-  .copy-url-button.is-copied {
-    color: var(--text-ok, #4a7a4a);
   }
 </style>

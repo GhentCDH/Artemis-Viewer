@@ -7,9 +7,7 @@
   import SliderLayer from '$lib/components/SliderLayer.svelte';
   import type { LayerMetadata, PaneId, SliderSource, CollectionInfo } from '$lib/components/timeslider/types';
 
-  export let massartItems: MassartItem[] = [];
   export let layerMetadataByMainId: Record<string, LayerMetadata> = {};
-  export let yearLeeway: number = 3;
   export let loadingLayers: Record<string, boolean> = {};
   export let dualPaneEnabled = false;
   export let searchFocusMainId: string | null = null;

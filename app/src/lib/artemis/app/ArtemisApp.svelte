@@ -14,7 +14,7 @@
     setPrimitiveLayerOpacity, getPrimitiveLayerIds,
     setPrimitiveHoverFeature, setPrimitiveSelectFeature,
     setIiifHoverMasks,
-    setMassartPins, updateMassartActiveYear, getMassartClickLayerIds,
+    setMassartPins, getMassartClickLayerIds,
     flashLocationMarker,
   } from '$lib/artemis/map/mapInit';
   import {
@@ -113,7 +113,11 @@
   let searchFocusYear: number | null = null;
   let searchFocusNonce = 0;
   let activeCollection: CollectionInfo | null = null;
+  let rightActiveCollection: CollectionInfo | null = null;
+  let clearLeftCollectionNonce = 0;
+  let clearRightCollectionNonce = 0;
   let mapInfoWindowOpen = false;
+  let rightMapInfoWindowOpen = false;
 
   // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -185,7 +189,7 @@
 
   // ─── Massart ───────────────────────────────────────────────────────────────
 
-  const MASSART_LEEWAY = 3; // years each side of the scrubber that count as "active"
+  const MASSART_LEEWAY = 3; // years each side of the active collection that count as "near"
   const MASSART_YEAR_MIN = 1904;
   const MASSART_YEAR_MAX = 1912;
   const MAIN_LAYER_TIMELINE_YEAR: Partial<Record<MainLayerId, number>> = {
@@ -201,7 +205,7 @@
     NGI1904: 1904,
   };
   let massartItems: MassartItem[] = [];
-  let massartYear = Math.round((1700 + 1855) / 2); // updated by slider year-change
+  let massartYear = Math.round((1700 + 1855) / 2);
   let rightTimelineYear = MASSART_YEAR_MAX;
   let massartSpriteRects: Record<string, { x: number; y: number; width: number; height: number }> = {};
   let massartSpriteSheetUrl = '';
@@ -237,21 +241,6 @@
       sheetHeight: massartSpriteSheetSize[1],
       ...rect,
     };
-  }
-
-  function onMassartYearChange(e: CustomEvent<{ year: number; pane?: 'left' | 'right' }>) {
-    const pane = e.detail.pane ?? 'left';
-    if (pane === 'right') {
-      rightTimelineYear = e.detail.year;
-      if (rightMap?.isStyleLoaded()) {
-        updateMassartActiveYear(rightMap, rightTimelineYear, MASSART_LEEWAY);
-      }
-      return;
-    }
-    massartYear = e.detail.year;
-    if (map?.isStyleLoaded()) {
-      updateMassartActiveYear(map, massartYear, MASSART_LEEWAY);
-    }
   }
 
   function onTimelineImageFocus(e: CustomEvent<{ pane: PaneId; title: string; lon: number; lat: number }>) {
@@ -1250,12 +1239,29 @@
   // ─── MapInfoWindow wiring ──────────────────────────────────────────────────
 
   $: mapInfoWindowOpen = activeCollection !== null;
+  $: rightMapInfoWindowOpen = dualPaneEnabled && rightActiveCollection !== null;
+  $: anyLayerLoading = Object.values(combinedMainLayerLoading).some(Boolean);
 
-  function onMapInfoWindowClose() {
+  function onMapInfoWindowClose(pane: PaneId = 'left') {
+    if (pane === 'right') {
+      rightActiveCollection = null;
+      clearRightCollectionNonce += 1;
+      return;
+    }
     activeCollection = null;
+    clearLeftCollectionNonce += 1;
   }
 
-  async function onMapInfoWindowSublayerToggle(e: CustomEvent<{ sublayerId: string; enabled: boolean }>) {
+  async function onMapInfoWindowSublayerToggle(
+    e: CustomEvent<{ sublayerId: string; enabled: boolean }>,
+    pane: PaneId = 'left'
+  ) {
+    if (pane === 'right') {
+      await onTimesliderPaneSublayerChange(new CustomEvent('paneSublayerChange', {
+        detail: { pane: 'right', subId: e.detail.sublayerId, enabled: e.detail.enabled },
+      }) as CustomEvent<{ pane: PaneId; subId: string; enabled: boolean }>);
+      return;
+    }
     await toggleSubLayer(e.detail.sublayerId, e.detail.enabled);
   }
 
@@ -1700,6 +1706,9 @@
             aria-pressed={isSplitLayout}
             on:click={toggleSplitMode}
           >{isSplitLayout ? 'Exit Compare' : 'Compare'}</button>
+          {#if anyLayerLoading}
+            <span class="toolbar-loading-ring" aria-label="Loading map layer" role="status"></span>
+          {/if}
         </div>
         {#if scaleLabel}
           <div class="map-scale" aria-label={`Map scale indicator: ${scaleLabel} in the real world`}>
@@ -1716,7 +1725,10 @@
         {searchFocusNonce}
         yearLeeway={MASSART_LEEWAY}
         loadingLayers={combinedMainLayerLoading}
+        {clearLeftCollectionNonce}
+        {clearRightCollectionNonce}
         bind:activeCollection
+        bind:rightActiveCollection
         on:mainToggle={onTimesliderMainToggle}
         on:sublayerChange={onTimesliderSublayerChange}
         on:paneMainToggle={onTimesliderPaneMainToggle}
@@ -1728,13 +1740,26 @@
 
     <MapInfoWindow
       isOpen={mapInfoWindowOpen}
+      pane="left"
       collectionKey={activeCollection?.key ?? null}
       collectionName={activeCollection?.name ?? ''}
       collectionColor={activeCollection?.color ?? ''}
       collectionDate={activeCollection?.dateRange ?? ''}
       sublayers={activeCollection?.sublayers ?? []}
-      on:close={onMapInfoWindowClose}
-      on:sublayer-toggle={onMapInfoWindowSublayerToggle}
+      on:close={() => onMapInfoWindowClose('left')}
+      on:sublayer-toggle={(e) => onMapInfoWindowSublayerToggle(e, 'left')}
+    />
+
+    <MapInfoWindow
+      isOpen={rightMapInfoWindowOpen}
+      pane="right"
+      collectionKey={rightActiveCollection?.key ?? null}
+      collectionName={rightActiveCollection?.name ?? ''}
+      collectionColor={rightActiveCollection?.color ?? ''}
+      collectionDate={rightActiveCollection?.dateRange ?? ''}
+      sublayers={rightActiveCollection?.sublayers ?? []}
+      on:close={() => onMapInfoWindowClose('right')}
+      on:sublayer-toggle={(e) => onMapInfoWindowSublayerToggle(e, 'right')}
     />
 
     <BrandingPanel {siteMetadata} />
@@ -1759,6 +1784,7 @@
         }}
       />
     {/if}
+
   </main>
 </div>
 
@@ -1947,6 +1973,25 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
+  }
+
+  .toolbar-loading-ring {
+    width: 30px;
+    height: 30px;
+    box-sizing: border-box;
+    border: 3px solid rgba(47, 128, 237, 0.2);
+    border-top-color: #2f80ed;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-floating) 78%, transparent);
+    box-shadow: var(--shadow-sm);
+    pointer-events: none;
+    animation: toolbar-loading-spin 850ms linear infinite;
+  }
+
+  @keyframes toolbar-loading-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .map-scale {

@@ -9,12 +9,8 @@
   export let isDimmed = false;
   export let meanderColor = '';
   export let bulgeDirection: 'above' | 'below' = 'above';
-  export let meanderWidth = 300;
-  export let startAxisOffset = 0;
-  export let endAxisOffset = 0;
-  export let centerAxisOffset = 0;
   export let sourceBlockStyle = '';
-  export let onMeanderClick: (src: SliderSource, event: MouseEvent) => void = () => {};
+  export let onMeanderClick: (src: SliderSource, event: MouseEvent | KeyboardEvent) => void = () => {};
   export let onPillEnter: (src: SliderSource, event: MouseEvent) => void = () => {};
   export let onPillLeave: () => void = () => {};
 
@@ -22,39 +18,6 @@
   const viewBoxHeight = 72;
   const axisYAbove = 64;
   const axisYBelow = 8;
-  const minPrimaryWave = 7;
-  const maxPrimaryWave = 30;
-  const minSecondaryWave = 4;
-  const maxSecondaryWave = 14;
-
-  function clamp(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value));
-  }
-
-  function lerp(start: number, end: number, progress: number): number {
-    return start + (end - start) * progress;
-  }
-
-  function hashString(value: string): number {
-    let hash = 2166136261;
-    for (let i = 0; i < value.length; i += 1) {
-      hash ^= value.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    return hash >>> 0;
-  }
-
-  function seededUnit(seed: number, salt: number): number {
-    let value = seed + Math.imul(salt, 374761393);
-    value = Math.imul(value ^ (value >>> 15), 2246822519);
-    value = Math.imul(value ^ (value >>> 13), 3266489917);
-    return ((value ^ (value >>> 16)) >>> 0) / 4294967295;
-  }
-
-  function seededRange(seed: number, salt: number, min: number, max: number): number {
-    return lerp(min, max, seededUnit(seed, salt));
-  }
-
   function trackWaveFloor(lane: number): { primary: number; secondary: number } {
     if (lane === 1 || lane === 4) return { primary: 58, secondary: 46 };
     if (lane === 2 || lane === 3) return { primary: 46, secondary: 32 };
@@ -62,24 +25,25 @@
   }
 
   $: nominalAxisY = bulgeDirection === 'above' ? axisYAbove : axisYBelow;
-  $: startY = nominalAxisY + startAxisOffset;
-  $: endY = nominalAxisY + endAxisOffset;
-  $: axisY = nominalAxisY + centerAxisOffset;
-  $: waveProgress = clamp((meanderWidth - 24) / 96, 0, 1);
+  $: startY = nominalAxisY;
+  $: endY = nominalAxisY;
+  $: axisY = nominalAxisY;
   $: waveFloor = trackWaveFloor(src.lane);
-  $: subtleWave = Math.max(1, Math.min(3, (meanderWidth - 24) / 120));
   $: apexWave = waveFloor.primary * 0.65;
   $: apexY = bulgeDirection === 'above' ? axisY - apexWave : axisY + apexWave;
-  $: meanderSeed = hashString(`${src.key}:${src.start}:${src.end}:${bulgeDirection}`);
-  $: leftWobbleOffset = seededRange(meanderSeed, 1, 0, subtleWave);
-  $: rightWobbleOffset = seededRange(meanderSeed, 2, 0, subtleWave);
   $: meanderPath = [
     `M 0 ${startY}`,
-    `C 25 ${startY + (bulgeDirection === 'above' ? -leftWobbleOffset : leftWobbleOffset)}, 25 ${apexY}, 50 ${apexY}`,
-    `C 75 ${apexY}, 75 ${endY + (bulgeDirection === 'above' ? -rightWobbleOffset : rightWobbleOffset)}, 100 ${endY}`,
+    `C 25 ${startY}, 25 ${apexY}, 50 ${apexY}`,
+    `C 75 ${apexY}, 75 ${endY}, 100 ${endY}`,
   ].join(' ');
   $: dotTrackY = apexY;
   $: dotTop = `${(dotTrackY / viewBoxHeight) * 100}%`;
+
+  function onSourceKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    onMeanderClick(src, event);
+  }
 </script>
 
 <div
@@ -101,9 +65,7 @@
     type="button"
     title={`${src.label} · ${src.start}–${src.end}`}
     aria-label={`Toggle ${src.label} (${src.start}–${src.end})`}
-    on:click={(event) => onMeanderClick(src, event)}
-    on:mouseenter={(event) => onPillEnter(src, event)}
-    on:mouseleave={onPillLeave}
+    on:keydown={onSourceKeydown}
   >
     <svg
       class="meander-svg"
@@ -112,6 +74,15 @@
       aria-hidden="true"
       focusable="false"
     >
+      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+      <path
+        class="meander-hit"
+        data-source-key={src.key}
+        d={meanderPath}
+        on:click={(event) => onMeanderClick(src, event)}
+        on:mouseenter={(event) => onPillEnter(src, event)}
+        on:mouseleave={onPillLeave}
+      ></path>
       <path class="meander-river" d={meanderPath}></path>
       <path class="meander-current" d={meanderPath}></path>
       <path class="meander-flow" d={meanderPath}></path>
@@ -136,13 +107,12 @@
     display: block;
     background: transparent;
     border: none;
-    cursor: pointer;
     appearance: none;
     z-index: 1;
     overflow: visible;
     padding: 0;
     margin: 0;
-    pointer-events: auto;
+    pointer-events: none;
     color: var(--meander-color, var(--c));
     transition: opacity 200ms ease, filter 200ms ease;
   }
@@ -153,7 +123,7 @@
     height: 72px;
     width: var(--pill-width);
     min-width: var(--pill-min-width);
-    pointer-events: auto;
+    pointer-events: none;
     transform: var(--pill-wrapper-transform, translateX(-50%));
     z-index: var(--pill-z, auto);
   }
@@ -165,23 +135,6 @@
   .source-block.is-disabled {
     opacity: 0.5;
     filter: saturate(0.22) brightness(1.02) contrast(0.82);
-  }
-
-  .source-block.is-loading::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent 0%, var(--pill-shimmer) 50%, transparent 100%);
-    background-size: 200% 100%;
-    animation: pill-shimmer 1.3s ease-in-out infinite;
-    clip-path: inset(0 round 999px);
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  @keyframes pill-shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
   }
 
   .source-block.is-current {
@@ -202,6 +155,17 @@
     pointer-events: none;
   }
 
+  .meander-hit {
+    fill: none;
+    stroke: transparent;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: var(--river-stroke-width);
+    vector-effect: non-scaling-stroke;
+    pointer-events: stroke;
+    cursor: pointer;
+  }
+
   .meander-river,
   .meander-current,
   .meander-flow {
@@ -211,6 +175,7 @@
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
     transition: opacity 200ms ease, stroke-width 200ms ease;
+    pointer-events: none;
   }
 
   .meander-river {

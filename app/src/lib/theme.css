@@ -84,9 +84,6 @@
   --photo-chip-shadow-multi: 0 0 0 3px rgba(212, 168, 75, 0.34), 0 4px 12px rgba(86, 54, 8, 0.28);
   --photo-chip-shadow-near:  0 0 0 4px rgba(245, 158, 11, 0.32), 0 0 0 8px rgba(245, 158, 11, 0.14), 0 6px 16px rgba(124, 72, 1, 0.34);
 
-  /* --- Pill / Timeline Items ------------------------------ */
-  --pill-shimmer: rgba(255, 248, 232, 0.42);
-
   /* --- Scrubber Badge ------------------------------------ */
   --scrubber-badge-ring: color-mix(in srgb, var(--pane-color) 14%, transparent);
 
@@ -223,8 +220,6 @@ html[data-theme='dark'] {
   --photo-chip-shadow-hover: 0 0 0 3px rgba(212, 168, 75, 0.32), 0 4px 12px rgba(0, 0, 0, 0.38);
   --photo-chip-shadow-multi: 0 0 0 3px rgba(212, 168, 75, 0.38), 0 4px 12px rgba(0, 0, 0, 0.36);
   --photo-chip-shadow-near:  0 0 0 4px rgba(245, 158, 11, 0.34), 0 0 0 8px rgba(245, 158, 11, 0.12), 0 6px 16px rgba(0, 0, 0, 0.4);
-
-  --pill-shimmer: rgba(255, 255, 255, 0.22);
 
   --scrubber-badge-ring: color-mix(in srgb, var(--pane-color) 14%, transparent);
 

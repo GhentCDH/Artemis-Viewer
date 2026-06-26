@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher } from 'svelte';
 
   export let isOpen = false;
   export let collectionKey: string | null = null;
@@ -8,6 +8,7 @@
   export let collectionColor: string = '';
   export let collectionDate: string = '';
   export let sublayers: Array<{ id: string; subId: string; label: string; url?: string }> = [];
+  export let pane: 'left' | 'right' = 'left';
 
   const dispatch = createEventDispatcher<{
     close: void;
@@ -16,38 +17,42 @@
 
   let sublayerState: Record<string, Record<string, boolean>> = {};
   let copiedSubId: string | null = null;
+  let previousCollectionKey: string | null = null;
+  $: currentSublayerState = collectionKey
+    ? (sublayerState[collectionKey] ?? defaultSublayerState())
+    : {};
 
-  onMount(() => {
-    const stored = sessionStorage.getItem('artemis-sublayer-state');
-    if (stored) {
-      try {
-        sublayerState = JSON.parse(stored);
-      } catch {
-        sublayerState = {};
-      }
+  $: if (collectionKey !== previousCollectionKey) {
+    previousCollectionKey = collectionKey;
+    if (collectionKey) {
+      resetSublayersToDefaults(collectionKey);
     }
-  });
-
-  $: if (collectionKey && !sublayerState[collectionKey]) {
-    sublayerState[collectionKey] = {};
-    for (const sub of sublayers) {
-      if (!sublayerState[collectionKey].hasOwnProperty(sub.id)) {
-        sublayerState[collectionKey][sub.id] = sub.id === 'iiif' || sub.id === 'wmts';
-      }
-    }
-    persistState();
   }
 
-  function persistState() {
-    sessionStorage.setItem('artemis-sublayer-state', JSON.stringify(sublayerState));
+  function defaultSublayerState() {
+    return Object.fromEntries(
+      sublayers.map((sub) => [sub.id, sub.id === 'iiif' || sub.id === 'wmts'])
+    );
+  }
+
+  function resetSublayersToDefaults(key: string) {
+    sublayerState = {
+      ...sublayerState,
+      [key]: defaultSublayerState(),
+    };
   }
 
   function toggleSublayer(localId: string) {
     if (!collectionKey) return;
-    if (!sublayerState[collectionKey]) sublayerState[collectionKey] = {};
-    const newState = !sublayerState[collectionKey][localId];
-    sublayerState[collectionKey][localId] = newState;
-    persistState();
+    const collectionState = sublayerState[collectionKey] ?? defaultSublayerState();
+    const newState = !collectionState[localId];
+    sublayerState = {
+      ...sublayerState,
+      [collectionKey]: {
+        ...collectionState,
+        [localId]: newState,
+      },
+    };
     const sub = sublayers.find(s => s.id === localId);
     if (sub) {
       dispatch('sublayer-toggle', { sublayerId: sub.subId, enabled: newState });
@@ -69,14 +74,10 @@
     dispatch('close');
   }
 
-  function isSublayerEnabled(subId: string): boolean {
-    if (!collectionKey) return false;
-    return sublayerState[collectionKey]?.[subId] ?? false;
-  }
 </script>
 
 {#if isOpen && collectionKey}
-  <div class="map-info-window" transition:fade={{ duration: 180 }}>
+  <div class="map-info-window" class:is-right={pane === 'right'} transition:fade={{ duration: 180 }}>
     <!-- Header row -->
     <div class="window-header">
       <div class="header-left">
@@ -105,7 +106,7 @@
           <div class="sublayer-controls">
             <button
               class="toggle-switch"
-              class:is-enabled={isSublayerEnabled(sub.id)}
+              class:is-enabled={currentSublayerState[sub.id] ?? false}
               type="button"
               aria-label={`Toggle ${sub.label} layer`}
               on:click={() => toggleSublayer(sub.id)}
@@ -151,6 +152,17 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .map-info-window.is-right {
+    left: calc(50vw + 16px);
+  }
+
+  @media (max-width: 900px) {
+    .map-info-window.is-right {
+      left: 16px;
+      top: 268px;
+    }
   }
 
   .window-header {

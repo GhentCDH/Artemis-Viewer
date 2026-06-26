@@ -15,6 +15,9 @@
   export let searchFocusMainId: string | null = null;
   export let searchFocusNonce = 0;
   export let activeCollection: CollectionInfo | null = null;
+  export let rightActiveCollection: CollectionInfo | null = null;
+  export let clearLeftCollectionNonce = 0;
+  export let clearRightCollectionNonce = 0;
 
   const PANE_META: Record<PaneId, { label: string; color: string; badgeBg: string; badgeText: string; panelTint: string }> = {
     left: {
@@ -38,9 +41,9 @@
     sublayerChange: { subId: string; enabled: boolean };
     paneMainToggle: { pane: PaneId; mainId: string; enabled: boolean };
     paneSublayerChange: { pane: PaneId; subId: string; enabled: boolean };
+    'active-collection-change': { key: string | null; pane?: PaneId };
     'open-viewer':  { title: string; sourceManifestUrl: string; imageServiceUrl: string };
     'focus-image':  { pane: PaneId; title: string; lon: number; lat: number };
-    'year-change':  { pane: PaneId; year: number };
   }>();
 
   const SOURCES: SliderSource[] = [
@@ -165,11 +168,16 @@
   let prevVisible: Record<string, boolean> = {};
   let prevPaneVisible: Record<PaneId, Record<string, boolean>> = { left: {}, right: {} };
   let layerInfoModalKey: string | null = null;
-  let activeSourceKey: string | null = null;
+  let leftActiveSourceKey: string | null = null;
+  let rightActiveSourceKey: string | null = null;
+  let nextComparePane: PaneId = 'left';
+  let lastPublishedLeftCollectionKey: string | null = null;
+  let lastPublishedRightCollectionKey: string | null = null;
+  let lastClearLeftCollectionNonce = 0;
+  let lastClearRightCollectionNonce = 0;
 
   let hoveredSrc: SourceDef | null = null;
   let tooltipFixedStyle = '';
-  let dragCleanup: (() => void) | null = null;
 
   $: massartByYear = massartItems.reduce<Map<number, MassartItem[]>>((acc, item) => {
     const y = parseInt(item.year ?? '0', 10);
@@ -208,21 +216,6 @@
     return `${((year - aStart) / aSpan) * 100}%`;
   }
 
-  function axisRatio(year: number): number {
-    return Math.max(0, Math.min(1, (year - axisStart) / axisSpan));
-  }
-
-  function axisOffsetForRatio(ratio: number): number {
-    const zeroAtEnds = Math.sin(Math.PI * ratio);
-    const primary = Math.sin((ratio * Math.PI * 2.15) + 0.35) * 7.5;
-    const secondary = Math.sin((ratio * Math.PI * 5.35) + 1.1) * 3.25;
-    return zeroAtEnds * (primary + secondary);
-  }
-
-  function axisOffsetForYear(year: number): number {
-    return axisOffsetForRatio(axisRatio(year));
-  }
-
   function axisTickStyle(year: number): string {
     return `left:${pct(year, axisStart, axisSpan)};--tick-top:5px`;
   }
@@ -253,23 +246,89 @@
     hoveredSrc = null;
   }
 
-  function onMeanderClick(src: SourceDef, e: MouseEvent) {
-    e.stopPropagation();
-    if (activeSourceKey === src.key) {
-      activeSourceKey = null;
-    } else {
-      activeSourceKey = src.key;
-      setLayerEnabled('left', src.key, true);
-      const overlapping = SOURCES.filter(s => s.key !== src.key);
-      for (const candidate of overlapping) {
-        setLayerEnabled('left', candidate.key, false);
+  function distanceToPath(path: SVGPathElement, clientX: number, clientY: number): number {
+    const ctm = path.getScreenCTM();
+    if (!ctm) return Number.POSITIVE_INFINITY;
+    const totalLength = path.getTotalLength();
+    const samples = 56;
+    let nearest = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i <= samples; i += 1) {
+      const point = path.getPointAtLength((totalLength * i) / samples);
+      const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(ctm);
+      const dx = screenPoint.x - clientX;
+      const dy = screenPoint.y - clientY;
+      const distance = Math.hypot(dx, dy);
+      if (distance < nearest) nearest = distance;
+    }
+
+    return nearest;
+  }
+
+  function nearestSourceFromClick(event: MouseEvent, fallback: SourceDef): SourceDef {
+    if (!trackEl) return fallback;
+    const paths = Array.from(trackEl.querySelectorAll<SVGPathElement>('.meander-hit'));
+    let bestSource = fallback;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const path of paths) {
+      const sourceKey = path.dataset.sourceKey as SourceKey | undefined;
+      if (!sourceKey) continue;
+      const distance = distanceToPath(path, event.clientX, event.clientY);
+      if (distance < bestDistance) {
+        const source = sourceByKey(sourceKey);
+        if (source) {
+          bestSource = source;
+          bestDistance = distance;
+        }
       }
+    }
+
+    return bestDistance <= 18 ? bestSource : fallback;
+  }
+
+  function onMeanderClick(src: SourceDef, e: MouseEvent | KeyboardEvent) {
+    e.stopPropagation();
+    const clickedSource = e instanceof MouseEvent ? nearestSourceFromClick(e, src) : src;
+    const key = clickedSource.key;
+    if (!dualPaneEnabled) {
+      leftActiveSourceKey = leftActiveSourceKey === key ? null : key;
+      rightActiveSourceKey = null;
+      return;
+    }
+
+    if (leftActiveSourceKey === key) {
+      leftActiveSourceKey = null;
+      nextComparePane = 'left';
+      return;
+    }
+    if (rightActiveSourceKey === key) {
+      rightActiveSourceKey = null;
+      nextComparePane = 'right';
+      return;
+    }
+
+    let targetPane = nextComparePane;
+    if (!leftActiveSourceKey) {
+      targetPane = 'left';
+    } else if (!rightActiveSourceKey) {
+      targetPane = 'right';
+    }
+
+    if (targetPane === 'right') {
+      rightActiveSourceKey = key;
+      leftActiveSourceKey = leftActiveSourceKey === key ? null : leftActiveSourceKey;
+      nextComparePane = 'left';
+    } else {
+      leftActiveSourceKey = key;
+      rightActiveSourceKey = rightActiveSourceKey === key ? null : rightActiveSourceKey;
+      nextComparePane = 'right';
     }
   }
 
   function isDotNear(yr: number): boolean {
-    if (!activeSourceKey) return false;
-    const activeSrc = sourceByKey(activeSourceKey as SourceKey);
+    if (!leftActiveSourceKey) return false;
+    const activeSrc = sourceByKey(leftActiveSourceKey as SourceKey);
     return activeSrc && Math.abs(yr - activeSrc.repr) <= yearLeeway;
   }
 
@@ -388,7 +447,7 @@
         ...rightSublayerState,
         [key]: { ...rightSublayerState[key], [localId]: !cur },
       };
-      const rightVisible = rightEnabledLayers[key] && activeSourceKey === key;
+      const rightVisible = rightEnabledLayers[key] && rightActiveSourceKey === key;
       if (rightVisible) {
         dispatch('paneSublayerChange', { pane: 'right', subId, enabled: !cur });
       }
@@ -399,7 +458,7 @@
       ...leftSublayerState,
       [key]: { ...leftSublayerState[key], [localId]: !cur },
     };
-    const leftVisible = leftEnabledLayers[key] && activeSourceKey === key;
+    const leftVisible = leftEnabledLayers[key] && leftActiveSourceKey === key;
     if (leftVisible) {
       dispatch('sublayerChange', { subId, enabled: !cur });
       dispatch('paneSublayerChange', { pane: 'left', subId, enabled: !cur });
@@ -464,15 +523,6 @@
     };
   }
 
-  function sourceAxisOffsets(src: SourceDef): { start: number; end: number; center: number } {
-    const visualRange = sourceVisualYearRange(src);
-    return {
-      start: axisOffsetForYear(visualRange.start),
-      end: axisOffsetForYear(visualRange.end),
-      center: axisOffsetForYear(visualRange.center),
-    };
-  }
-
   function sourceBlockStyle(src: SourceDef, isCurrent: boolean): string {
     const visualRange = sourceVisualYearRange(src);
     const wrapperTransform = 'translateX(-50%)';
@@ -489,14 +539,6 @@
     const centerPx = (startPx + endPx) / 2;
     const clampedCenterPx = Math.max(widthPx / 2, Math.min(trackWidth - widthPx / 2, centerPx));
     return `left:${clampedCenterPx}px;--pill-width:${widthPx}px;--pill-min-width:${sourceMinWidthPx(src)}px;--c:${src.color};--meander-color:${visualColor};--pattern:${sourcePattern(src.key)};--pattern-size:${sourcePatternSize(src.key)};--pill-wrapper-transform:${wrapperTransform};--pill-z:${currentZ}`;
-  }
-
-  function sourceMeanderWidth(src: SourceDef): number {
-    if (trackWidth <= 0) return sourceMinWidthPx(src);
-    const visualRange = sourceVisualYearRange(src);
-    const startPx = ((visualRange.start - axisStart) / axisSpan) * trackWidth;
-    const endPx = ((visualRange.end - axisStart) / axisSpan) * trackWidth;
-    return Math.max(Math.abs(endPx - startPx), sourceMinWidthPx(src));
   }
 
   function sourceMenuStyle(src: SourceDef, pane: PaneId = 'left'): string {
@@ -531,7 +573,7 @@
     }
 
     for (const src of SOURCES) {
-      const visible = activeSourceKey === src.key;
+      const visible = leftActiveSourceKey === src.key;
       prevVisible[src.key] = visible;
       dispatch('mainToggle', { mainId: src.mainId, enabled: visible });
       prevPaneVisible.left[src.key] = visible;
@@ -545,7 +587,7 @@
         }
       }
       if (dualPaneEnabled) {
-        const rightVisible = activeSourceKey === src.key;
+        const rightVisible = rightActiveSourceKey === src.key;
         prevPaneVisible.right[src.key] = rightVisible;
         dispatch('paneMainToggle', { pane: 'right', mainId: src.mainId, enabled: rightVisible });
         if (rightVisible) {
@@ -569,17 +611,17 @@
     if (searchFocusMainId) {
       const src = sourceByMainId(searchFocusMainId);
       if (src) {
-        activeSourceKey = src.key;
+        leftActiveSourceKey = src.key;
       }
     }
   }
 
   $: leftActiveVisibility = SOURCES.reduce<Record<SourceKey, boolean>>((acc, src) => {
-    acc[src.key] = Boolean(leftEnabledLayers[src.key] && activeSourceKey === src.key);
+    acc[src.key] = Boolean(leftEnabledLayers[src.key] && leftActiveSourceKey === src.key);
     return acc;
   }, {} as Record<SourceKey, boolean>);
   $: rightActiveVisibility = SOURCES.reduce<Record<SourceKey, boolean>>((acc, src) => {
-    acc[src.key] = Boolean(dualPaneEnabled && rightEnabledLayers[src.key] && activeSourceKey === src.key);
+    acc[src.key] = Boolean(dualPaneEnabled && rightEnabledLayers[src.key] && rightActiveSourceKey === src.key);
     return acc;
   }, {} as Record<SourceKey, boolean>);
 
@@ -601,9 +643,43 @@
     .filter(({ sources }) => sources.length > 0);
 
 
-  $: activeCollection = activeSourceKey
-    ? buildCollectionInfo(sourceByKey(activeSourceKey))
-    : null;
+  $: if (!dualPaneEnabled && rightActiveSourceKey) {
+    rightActiveSourceKey = null;
+  }
+
+  $: if (clearLeftCollectionNonce !== lastClearLeftCollectionNonce) {
+    lastClearLeftCollectionNonce = clearLeftCollectionNonce;
+    leftActiveSourceKey = null;
+  }
+
+  $: if (clearRightCollectionNonce !== lastClearRightCollectionNonce) {
+    lastClearRightCollectionNonce = clearRightCollectionNonce;
+    rightActiveSourceKey = null;
+  }
+
+  $: {
+    const nextCollection = leftActiveSourceKey
+      ? buildCollectionInfo(sourceByKey(leftActiveSourceKey))
+      : null;
+    const nextKey = nextCollection?.key ?? null;
+    if (nextKey !== lastPublishedLeftCollectionKey) {
+      activeCollection = nextCollection;
+      lastPublishedLeftCollectionKey = nextKey;
+      dispatch('active-collection-change', { key: nextKey, pane: 'left' });
+    }
+  }
+
+  $: {
+    const nextCollection = dualPaneEnabled && rightActiveSourceKey
+      ? buildCollectionInfo(sourceByKey(rightActiveSourceKey))
+      : null;
+    const nextKey = nextCollection?.key ?? null;
+    if (nextKey !== lastPublishedRightCollectionKey) {
+      rightActiveCollection = nextCollection;
+      lastPublishedRightCollectionKey = nextKey;
+      dispatch('active-collection-change', { key: nextKey, pane: 'right' });
+    }
+  }
 
   $: {
     for (const src of SOURCES) {
@@ -686,19 +762,15 @@
 
       {#each SOURCES as src}
         {@const enabled = !dualPaneEnabled ? leftEnabledLayers[src.key] : (leftEnabledLayers[src.key] || rightEnabledLayers[src.key])}
-        {@const isCurrent = activeSourceKey === src.key}
-        {@const axisOffsets = sourceAxisOffsets(src)}
+        {@const isCurrent = leftActiveSourceKey === src.key || (dualPaneEnabled && rightActiveSourceKey === src.key)}
+        {@const hasActiveSelection = leftActiveSourceKey !== null || (dualPaneEnabled && rightActiveSourceKey !== null)}
         <SliderLayer
           {src}
           {enabled}
           {isCurrent}
-          isDimmed={activeSourceKey !== null && !isCurrent}
+          isDimmed={hasActiveSelection && !isCurrent}
           meanderColor={sourceVisualColor(src)}
           bulgeDirection={sourceBulgeDirection(src)}
-          meanderWidth={sourceMeanderWidth(src)}
-          startAxisOffset={axisOffsets.start}
-          endAxisOffset={axisOffsets.end}
-          centerAxisOffset={axisOffsets.center}
           hasOverlap={false}
           loading={loadingLayers[src.mainId]}
           sourceBlockStyle={sourceBlockStyle(src, isCurrent)}
@@ -802,23 +874,6 @@
     display: flex;
     flex-direction: column;
     overflow: visible;
-  }
-
-  .ts-track-hitarea {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    border: none;
-    background: transparent;
-    padding: 0;
-    margin: 0;
-    cursor: pointer;
-  }
-
-  .ts-track-hitarea:focus-visible {
-    outline: 2px solid var(--surface-focus);
-    outline-offset: 4px;
-    border-radius: var(--radius-md);
   }
 
   .ts-row {

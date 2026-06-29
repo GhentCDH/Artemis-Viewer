@@ -179,7 +179,7 @@
 <style>
   .images-panel-container {
     position: fixed;
-    top: calc(16px + 8vh);
+    top: 16px;
     right: 16px;
     z-index: 51;
   }
@@ -225,11 +225,11 @@
 
   :global(.images-panel) {
     position: fixed;
-    top: calc(16px + 5vh);
+    top: 16px;
     right: 16px;
     width: 13vw;
     min-width: 240px;
-    max-height: calc(100vh - 280px);
+    max-height: calc(100vh - 200px);
     z-index: 98;
     background: var(--window-background) !important;
     backdrop-filter: blur(12px);

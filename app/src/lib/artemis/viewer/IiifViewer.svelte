@@ -41,6 +41,8 @@
   let _resizeObserver: ResizeObserver | null = null;
   let containerWidth = 0;
   let containerHeight = 0;
+  let isFullscreen = false;
+  let viewerRoot: HTMLElement | undefined;
 
   function buildSpriteStyle(ref: SpriteRef): string {
     const maxWidth = Math.max(containerWidth, 320);
@@ -75,6 +77,8 @@
 
   onMount(async () => {
     window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
     updateContainerSize();
     if (typeof ResizeObserver !== 'undefined') {
       _resizeObserver = new ResizeObserver(() => updateContainerSize());
@@ -138,6 +142,7 @@
       visibilityRatio: 0.5,
       minZoomLevel: 0.1,
       gestureSettingsMouse: { scrollToZoom: true },
+      crossOriginPolicy: 'Anonymous',
     } as OpenSeadragonType.Options);
 
     viewer.addOnceHandler('open', () => {
@@ -164,6 +169,8 @@
 
   onDestroy(() => {
     window.removeEventListener("keydown", onKeyDown);
+    document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
     _resizeObserver?.disconnect();
     if (_tileImageRef && _onTileLoaded) {
       _tileImageRef.removeHandler('fully-loaded-change', _onTileLoaded);
@@ -172,7 +179,33 @@
   });
 
   function onKeyDown(e: KeyboardEvent) {
-    if (e.key === "Escape") dispatch("close");
+    if (e.key === "Escape" && !isFullscreen) dispatch("close");
+  }
+
+  async function toggleFullscreen() {
+    if (!viewerRoot) return;
+
+    try {
+      if (!isFullscreen) {
+        if (viewerRoot.requestFullscreen) {
+          await viewerRoot.requestFullscreen();
+        } else if ((viewerRoot as any).webkitRequestFullscreen) {
+          await (viewerRoot as any).webkitRequestFullscreen();
+        }
+      } else {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitFullscreenElement) {
+          await (document as any).webkitExitFullscreen();
+        }
+      }
+    } catch (err: any) {
+      console.error('Fullscreen error:', err);
+    }
+  }
+
+  function handleFullscreenChange() {
+    isFullscreen = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
   }
 
   function resolveDisplayYear(): string {
@@ -199,22 +232,49 @@
   class="viewer-root"
   class:viewer-root--inline={inline}
   class:viewer-backdrop={!inline}
+  class:viewer-root--fullscreen={isFullscreen}
   on:click|self={() => !inline && dispatch("close")}
   role="presentation"
+  bind:this={viewerRoot}
 >
   <div class="viewer-window" class:viewer-window--inline={inline}>
     {#if !inline}
       <div class="viewer-topbar">
         <span class="viewer-title">{title}</span>
-        <button class="ui-icon-btn viewer-close" type="button" on:click={() => dispatch("close")} aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </button>
+        <div class="viewer-topbar-actions">
+          <button class="ui-icon-btn viewer-close" type="button" on:click={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
+            {#if isFullscreen}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 5.5h3M2 2h4v4M14 10.5h-3M14 14h-4v-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            {:else}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 6V2h4M14 6v4h-4M2 10v4h4M14 10v-4h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            {/if}
+          </button>
+          <button class="ui-icon-btn viewer-close" type="button" on:click={() => dispatch("close")} aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
       </div>
     {/if}
     {#if inline}
       <div class="viewer-inline-header" class:viewer-inline-header--mirrored={mirrored}>
+        <button class="viewer-fullscreen-btn" type="button" on:click={toggleFullscreen} aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}>
+          {#if isFullscreen}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 5.5h3M2 2h4v4M14 10.5h-3M14 14h-4v-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          {:else}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 6V2h4M14 6v4h-4M2 10v4h4M14 10v-4h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          {/if}
+          <span>Fullscreen</span>
+        </button>
         <div class="viewer-inline-header-copy">
           <div class="viewer-inline-title">{manifestDetails?.title || title || 'Untitled document'}</div>
           {#if resolveDisplayYear()}
@@ -434,7 +494,7 @@
     z-index: 4;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 8px;
     padding: 7px 9px;
     background: color-mix(in srgb, var(--window-header-background) 92%, transparent);
@@ -443,24 +503,55 @@
     backdrop-filter: blur(8px);
   }
 
-  .viewer-inline-header--mirrored {
-    justify-content: flex-start;
+  .viewer-fullscreen-btn {
+    flex-shrink: 0;
+    order: -2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border: 1px solid var(--window-border);
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 400;
+    cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+
+  .viewer-fullscreen-btn:hover {
+    background: var(--button-background-hover);
+  }
+
+  .viewer-fullscreen-btn svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
   }
 
   .viewer-inline-header-copy {
     min-width: 0;
-    max-width: min(300px, calc(100% - 82px));
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 160px);
     display: flex;
     flex-direction: column;
     gap: 2px;
-    align-items: flex-end;
-    text-align: right;
+    align-items: center;
+    text-align: center;
     justify-content: center;
   }
 
   .viewer-inline-header--mirrored .viewer-inline-header-copy {
     align-items: flex-start;
     text-align: left;
+  }
+
+  .viewer-inline-actions {
+    flex-shrink: 0;
+    order: 0;
   }
 
   .viewer-inline-title {
@@ -772,6 +863,28 @@
   :global(.viewer-body .openseadragon-container),
   :global(.viewer-body .openseadragon-canvas) {
     background: var(--window-background) !important;
+  }
+
+  .viewer-root--fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+  }
+
+  .viewer-root--fullscreen .viewer-window {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .viewer-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .viewer-topbar-actions .viewer-close:last-child {
+    margin-left: auto;
   }
 
   @media (max-width: 900px) {

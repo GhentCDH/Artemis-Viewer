@@ -80,8 +80,7 @@
 
 </script>
 
-{#if isOpen && collectionKey}
-  <div transition:fade={{ duration: 180 }}>
+<div class="map-info-window-container" class:is-open={isOpen && collectionKey}>
     <Window
       class={`map-info-window ${pane === 'right' ? 'is-right' : ''}`}
       variant="floating"
@@ -153,14 +152,24 @@
       {/if}
     </Window>
   </div>
-{/if}
 
 <style>
+  .map-info-window-container {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .map-info-window-container.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   :global(.map-info-window) {
     position: fixed;
-    top: 82px;
+    top: 16px;
     left: 16px;
-    z-index: 50;
+    z-index: 52;
     min-width: 220px;
     max-width: 290px;
     overflow: visible;
@@ -173,7 +182,7 @@
   @media (max-width: 900px) {
     :global(.map-info-window.is-right) {
       left: 16px;
-      top: 268px;
+      top: 16px;
     }
   }
 

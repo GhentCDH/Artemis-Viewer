@@ -25,9 +25,9 @@ When a user activates an IIIF layer the app shows a **pre-warped raster tile pyr
 
 Lifecycle of one activation:
 
-- **t0 — tiles + masks + bundle:** add the (empty) `WarpedMapLayer`, the raster tile source on top of it, and the mask fill layer; kick off the bundle fetch. The raster preview paints within ~one request round-trip.
-- **overview browsing:** the raster pyramid is the sole renderer. **No triangulation happens** — panning is free.
-- **zoom past 11.5 (`ALLMAPS_TRIGGER_ZOOM`):** viewport-driven loading starts — only the canvases whose footprint intersects the viewport (+ margin) are triangulated, nearest-first; then a `moveend` listener reconciles again on every settle. Allmaps renders these at full IIIF resolution **on top of** the raster, which stays as the permanent base so not-yet-loaded areas always show something. Loaded canvases are kept (no eviction), so panning back is instant.
+- **t0 — tiles + masks + bundle:** add the (empty) `WarpedMapLayer`, the raster tile source **beneath** it (base layer), and the mask fill layer on top; kick off the bundle fetch. The raster preview paints within ~one request round-trip.
+- **overview browsing:** the raster pyramid is the sole visible renderer (the `WarpedMapLayer` above it is empty/transparent). **No triangulation happens** — panning is free.
+- **zoom past 12.5 (`ALLMAPS_TRIGGER_ZOOM`):** viewport-driven loading starts — only the canvases whose footprint intersects the viewport (+ margin) are triangulated, nearest-first; then a `moveend` listener reconciles again on every settle. Allmaps renders these at full IIIF resolution in the `WarpedMapLayer` **above** the raster base, so the sharp warp occludes the raster where loaded and the raster shows through only where it hasn't. Loaded canvases are kept (no eviction), so panning back is instant.
 - **toggle off:** the group (raster base + Allmaps meshes + masks) is fully removed. A later re-show re-inits cheaply — raster + masks are instant and only the current viewport re-triangulates, not the whole collection.
 
 Two supporting mechanisms keep this clean:
@@ -168,7 +168,7 @@ Known pyramids as of this writing (directory names aren't a fixed convention —
 
 ### Full zoom range (z8–12), uniform per collection
 
-`KNOWN_TILE_DIRS` uses `minZoom: 8, maxZoom: 12` — everything the pipeline generates — identically for both collections (no per-layer pinning). This changed once the raster pyramid became the **persistent base renderer** rather than a transient placeholder: since Allmaps is now loaded lazily only on zoom-in (see "Lazy Allmaps" below), the pyramid must be sharp at whatever zoom the user is actually at, not a single overzoomed level. The full range costs nothing extra at render time because MapLibre requests only viewport-intersecting tiles on demand (and still overzooms past z12 for the brief window before Allmaps takes over). An earlier iteration pinned this to z10-only to shrink a prewarm payload; that's obsolete now that prewarming is gone.
+`KNOWN_TILE_DIRS` uses `minZoom: 8, maxZoom: 12` — everything the pipeline generates — identically for both collections (no per-layer pinning). This changed once the raster pyramid became the **persistent base renderer** rather than a transient placeholder: since Allmaps is now loaded lazily only on zoom-in (see "Lazy Allmaps" below), the pyramid must be sharp at whatever zoom the user is actually at, not a single overzoomed level. The full range costs nothing extra at render time because MapLibre requests only viewport-intersecting tiles on demand (and overzooms past z12 wherever the `WarpedMapLayer` above hasn't warped yet). An earlier iteration pinned this to z10-only to shrink a prewarm payload; that's obsolete now that prewarming is gone.
 
 ### App-side resolution (`bundleLoader.ts`)
 
@@ -177,10 +177,10 @@ Known pyramids as of this writing (directory names aren't a fixed convention —
 ### Runtime rendering + lazy Allmaps (`initialization.ts`)
 
 Per layer-group init:
-1. `WarpedMapLayer` added first (bottom of stack, initially empty), same as before.
-2. If `resolveTilesConfig` returns a config, immediately `map.addSource(tilesSourceId, { type: "raster", tiles: [...], tileSize: 256, minzoom, maxzoom })` + `map.addLayer({ ..., paint: { "raster-opacity": 0.85 } })` on top — synchronous, no manifest fetch. Its layer id joins the group's `layerIds` so reorder/teardown track it like any other layer. MapLibre lazily requests only the `{z}/{x}/{y}` tiles intersecting the viewport.
-3. The geomaps bundle is still fetched eagerly (masks-click index by `sourceManifestUrl` depends on it), but the **expensive Allmaps pipeline is deferred**. It's wrapped in an idempotent `startAllmaps()` and only run when the map zoom reaches `ALLMAPS_TRIGGER_ZOOM` (**11.5**): if already zoomed in at activation (e.g. a deep-linked/persistent URL), it fires immediately; otherwise a one-shot `map.on("zoom", …)` listener arms it. Fire-and-forget either way — the raster preview shows instantly and callers don't await triangulation.
-4. `startAllmaps()` does **not** batch-load everything. It attaches a `moveend` listener and runs `reconcileViewport()` — see below. The raster tile layer is **never** auto-removed; it stays as the permanent base underneath Allmaps for the group's whole lifetime.
+1. `WarpedMapLayer` added first (initially empty). This is the group's top visual layer — Allmaps' full-res warp.
+2. If `resolveTilesConfig` returns a config, `map.addSource(tilesSourceId, { type: "raster", … })` + `map.addLayer({ ..., paint: { "raster-opacity": 0.85 } }, warpedBaseLayerId)` — inserted with the `WarpedMapLayer` as `beforeId` so the raster sits **beneath** it (above the base map). **This z-order is critical:** the raster is the permanent *base*, not an overlay — if it went on top it would occlude the full-res IIIF with overzoomed z8–12 tiles (this was a real bug). Its layer id is `unshift`ed to the **front** of `layerIds` (bottom of the group's stack) so `reorderLayerGroups` keeps it below the warp. MapLibre lazily requests only the `{z}/{x}/{y}` tiles intersecting the viewport.
+3. The geomaps bundle is still fetched eagerly (masks-click index by `sourceManifestUrl` depends on it), but the **expensive Allmaps pipeline is deferred**. It's wrapped in an idempotent `startAllmaps()` and only run when the map zoom reaches `ALLMAPS_TRIGGER_ZOOM` (**12.5**): if already zoomed in at activation (e.g. a deep-linked/persistent URL), it fires immediately; otherwise a one-shot `map.on("zoom", …)` listener arms it. Fire-and-forget either way — the raster base shows instantly and callers don't await triangulation.
+4. `startAllmaps()` does **not** batch-load everything. It attaches a `moveend` listener and runs `reconcileViewport()` — see below. The raster tile layer is **never** auto-removed; it stays as the permanent base beneath the `WarpedMapLayer` for the group's whole lifetime.
 
 Below `ALLMAPS_TRIGGER_ZOOM` the raster pyramid is the sole renderer — visually equivalent to Allmaps at overview zoom (the doc's earlier accuracy finding), but with zero triangulation cost. This means panning around at overview never pays the `addGeoreferencedMap` × N cost at all; it's incurred only when a user zooms in to read detail, and even then only for what's on screen.
 
@@ -198,6 +198,13 @@ Why this is cheap at runtime: canvases are added *inside* the one custom `Warped
 **Teardown / toggle-off.** Because the raster base is permanent, its `activeLayerCleanup` entry now lives for the group's whole lifetime — which conveniently means `parkLayerGroup`'s existing `activeLayerCleanup.has(groupId)` check is *always* true for an IIIF group, so toggling one off **fully removes** it (base + meshes + masks + the `moveend`/zoom listeners, all unhooked in that one cleanup closure) rather than opacity-parking a now-permanent raster on screen. Re-show re-inits cheaply (bundle is cached; only the viewport re-triangulates). This is a fine trade *because* loading is viewport-bounded — parking to preserve meshes mattered when a toggle re-warped all 455; now it re-warps ~20.
 
 This eliminates the entire "fetch+decode one big sheet" bottleneck that Attempts 1 & 2 were chasing — there's no sheet to fetch at all; MapLibre's own tile-request pipeline (caching, cancellation, viewport-driven prioritization) does the work at **per-tile** granularity — and it also defers the triangulation cost out of the common overview-browsing path entirely.
+
+### Sprites vs. full-res IIIF (and the z-order lesson)
+
+Two texture sources feed Allmaps and it's easy to confuse them when things look blurry:
+
+- **The sprite atlas** (`sprites.jpg` — the regular one, *not* the deleted gr_sprites) is a coarse thumbnail sheet: e.g. Gereduceerd Kadaster packs 111 canvases into a 1024×1197 image → ~128×87px per canvas at `scaleFactor: 87.5` (≈1/87 of the 11200px originals). Fed via `addSprites`, it's what makes maps appear instantly. Allmaps is *designed* to upgrade: its renderer picks a tile zoom level per viewport (`getTileZoomLevelForScale`) and fires distinct events — `maptilesloadedfromsprites` (atlas) vs `maptileloaded` (real IIIF tile) — so once the viewport needs finer than the sprite's scale factor it fetches real tiles from the image service. The `iiif.ghentcdh.ugent.be/iiif/images/...` service is healthy (info.json 200, `access-control-allow-origin: *`, real JPEG tiles), so full-res *is* available.
+- **The "we never see full-res IIIF" symptom was not a sprite problem** — it was a **z-order bug**: when the raster pyramid became a permanent base (Phase 1), it was initially still added *on top* of the `WarpedMapLayer`, so the overzoomed z8–12 raster (at `raster-opacity: 0.85`) painted over the full-res warp the whole time. Fixed by inserting the raster with the warped layer as `beforeId` (step 2 above). **Lesson:** if IIIF detail looks permanently soft, check layer stacking before suspecting the sprite/tile-upgrade path. There are two temporary diagnostics in `initialization.ts` for this — `DEBUG_SKIP_SPRITES` (force full-res by not feeding the atlas) and `DEBUG_LOG_TILE_SOURCE` (subscribe to the renderer's events and log real-vs-sprite tile counts per second) — both marked TEMP and off/removable once settled.
 
 ### No prewarming
 
@@ -225,11 +232,10 @@ Separately, `mapInit.ts` also installs a scoped `map.on("error")` that swallows 
 
 Every activation logs a `[IIIF <layer> · <pane>] <step> … Nms` timeline (monotonic `performance.now()` via `nowMs()`), so time-to-visible and each warp stage are profilable in the browser console without a debugger:
 
-- `tiles: raster placeholder added (z8-12) +Nms` and `tiles: first tile painted Nms`
+- `tiles: raster base added beneath warp (z8-12) +Nms` and `tiles: first tile painted Nms`
 - `bundle: loaded N manifests / N canvases in Nms`
-- `warp: deferred — armed zoom trigger at ≥ 11.5 …` **or** `warp: already at zoom … — loading Allmaps immediately`
+- `warp: deferred — armed zoom trigger at ≥ 12.5 …` **or** `warp: already at zoom … — starting viewport loading`
 - `warp: start at zoom X — viewport-driven (margin 0.5×, N canvases available)` → `warp: viewport reconcile — queued N (loaded/total)` → `warp: sprite atlas uploaded Nms` → `warp: +N canvases Nms (M queued)` (one per drained chunk, repeating on each pan/zoom)
-- `warp: ready in Nms — placeholder removed, WarpedMapLayer live`
 
 (The base-map zoom logger `[Artemis] pane=… zoom=… tileZ=…` in `ArtemisApp.svelte` is separate and still present. The old `[Artemis debug] …` overlay/click logs were removed.)
 
@@ -249,7 +255,7 @@ Previously (see the earlier "how do we build the clickable outline" discussion),
 
 - `resolveMasksPath(layerInfo)` — same override-then-known-mapId-lookup pattern as `resolveTilesConfig`/`resolveGrSpritesPath`.
 - `mapInit.ts` registers the `pmtiles://` protocol once (`maplibregl.addProtocol("pmtiles", new PMTilesProtocol().tile)`, from the `pmtiles` npm package) so a `vector` source can reference an archive directly.
-- Per layer group, `initialization.ts` adds one `vector` source + a single **invisible** `fill` layer (`fill-opacity: 0`), **persistent for the group's whole lifetime** (unlike the transient raster-tile placeholder) — it exists purely so `queryRenderedFeatures` can hit-test it. Source/layer ids are fully deterministic from `groupId` (`getMaskLayerIds()` in `runtime.ts`), so creation, hit-testing, and teardown never need extra bookkeeping to find them.
+- Per layer group, `initialization.ts` adds one `vector` source + a single **invisible** `fill` layer (`fill-opacity: 0`), persistent for the group's whole lifetime — it exists purely so `queryRenderedFeatures` can hit-test it. Source/layer ids are fully deterministic from `groupId` (`getMaskLayerIds()` in `runtime.ts`), so creation, hit-testing, and teardown never need extra bookkeeping to find them.
 - `runtime.ts`'s `removeLayerGroup` also removes the group's mask source (by deterministic id) on full teardown; the fill layer id rides along in the same `layerIds` array as the `WarpedMapLayer`, so park/restore/removal all work for free through existing machinery.
 - Manifest info needed to open the viewer is indexed two ways, both populated directly from the geomaps bundle's parsed entries as soon as they load — independent of Allmaps triangulation, so hover/click work the instant a layer's masks source loads:
   - **`sourceManifestUrlToManifestInfo`** (`getManifestInfoForSourceManifestUrl`) — manifest-level fallback.
@@ -305,7 +311,7 @@ New questions raised by the WebGL approach:
 
 9. **Texture memory / size limits**: the whole sprite sheet is uploaded as one texture. For a full 111-canvas sheet (or multiple layers active at once), is there a risk of hitting `MAX_TEXTURE_SIZE` or excessive GPU memory use? Would tiling the sheet across multiple textures be needed at scale?
 
-10. **Opacity/z-order interaction with `WarpedMapLayer`**: the placeholder currently renders at a fixed `opacity` (default 0.85) above the (initially empty) `WarpedMapLayer`. As Allmaps maps get added incrementally underneath during the bootstrap/background batches, is there any visible popping/flicker at the swap point when the placeholder layer is removed, and would a crossfade be worth adding?
+10. ~~**Opacity/z-order interaction with `WarpedMapLayer`**~~ **Resolved.** There is no longer a swap: the raster is a permanent base **beneath** the `WarpedMapLayer` (`raster-opacity: 0.85`), and Allmaps warps on top of it incrementally — no placeholder removal, no crossfade needed. (Getting the z-order wrong here was the real cause of the "never see full-res IIIF" bug — see "Sprites vs. full-res IIIF" above.)
 
 11. **Tiled raster mosaic vs. single-texture atlas — which wins in practice?** The proposed tiled approach (see "Next direction" above) should reduce initial fetch/decode cost for large layers like Primitief Kadaster, but this is currently a hypothesis, not a measurement. Needs a prototype pipeline (mosaic + `gdal2tiles.py` or similar) and a side-by-side timing comparison against the current 111-tile / 1015ms baseline before committing.
 

@@ -52,9 +52,37 @@ const DEBUG_SKIP_SPRITES = false;
 // any tile fetch errors. Definitively answers "does Allmaps ever upgrade sprites → full-res tiles?".
 const DEBUG_LOG_TILE_SOURCE = true;
 
+// The UGent IIIF server serves WebP (much smaller than JPG — ~5× on typical tiles) but does not
+// advertise it in info.json (`formats:["jpg"]` only). Allmaps' render pipeline already requests
+// `preferredFormats:["webp","jpg"]`, but only emits `.webp` when webp is in the image's
+// supportedFormats — which it derives purely from info.json. When this is true we patch the info we
+// hand to Allmaps to advertise webp, so its full-res IIIF tile fetches use WebP. Flip to false to
+// fall back to the server-advertised JPG. Remove once the server advertises webp itself.
+const FORCE_WEBP_IIIF_TILES = true;
+
 function toAbsoluteUrl(baseUrl: string, maybePathOrUrl: string): string {
   if (/^https?:\/\//i.test(maybePathOrUrl)) return maybePathOrUrl;
   return joinUrl(baseUrl, maybePathOrUrl);
+}
+
+// Patch a IIIF info.json so Allmaps treats webp as supported: webp is added to the IIIF-2 profile
+// `formats` array (the effective path for the UGent server) and set as IIIF-3
+// extraFormats/preferredFormats. See FORCE_WEBP_IIIF_TILES.
+function forceWebpFormat(info: any): any {
+  try {
+    if (Array.isArray(info.profile)) {
+      info.profile = info.profile.map((p: any) =>
+        p && typeof p === "object" && Array.isArray(p.formats) && !p.formats.includes("webp")
+          ? { ...p, formats: [...p.formats, "webp"] }
+          : p
+      );
+    }
+    info.extraFormats = [...new Set([...(info.extraFormats ?? []), "webp"])];
+    info.preferredFormats = ["webp", ...((info.preferredFormats ?? []).filter((f: string) => f !== "webp"))];
+  } catch {
+    // ignore — fall back to server-advertised formats
+  }
+  return info;
 }
 
 function squaredDistance(a: [number, number] | null, to: [number, number]): number {
@@ -400,7 +428,10 @@ export async function initializeLayerGroup(opts: {
   type Fetched = { entry: any; maps: FetchedGeoreferencedMap[]; sprites: FetchedSprite[] } | { entry: any; error: string };
 
   try {
-    const valid = [...infoByServiceUrl.entries()].map(([serviceUrl, info]) => ({ ...info, "@id": serviceUrl, id: serviceUrl })).filter(Boolean);
+    const valid = [...infoByServiceUrl.entries()].map(([serviceUrl, info]) => {
+      const withId = { ...info, "@id": serviceUrl, id: serviceUrl };
+      return FORCE_WEBP_IIIF_TILES ? forceWebpFormat(withId) : withId;
+    }).filter(Boolean);
     if (valid.length > 0) {
       for (const l of layers) (l as any).addImageInfos?.(valid);
     }

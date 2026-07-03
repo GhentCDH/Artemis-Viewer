@@ -103,7 +103,9 @@ export const ALLMAPS_DEBUG_CONFIG: AllmapsDebugConfig = {
 
   // Applied to every IIIF map when enabled (unless overwritten below).
   defaults: {
-    debugTriangles: false,
+    transformationType: "thinPlateSpline",
+    distortionMeasure: "log2sigma",
+    debugTriangles: true,
     debugTriangulation: false,
     debugTiles: false,
   },

@@ -93,7 +93,7 @@ Collection detail panel that appears when a historical layer is active.
 - Shows collection name, date range, and a color swatch matching the timeline pill
 - Lists all sublayers for the active collection (IIIF map, WMTS tiles, cadastral parcels, land-use)
 - Sublayer toggles enable/disable individual layers on the map without deactivating the whole collection
-- Copy-URL button for WMTS and IIIF sublayers (copies the tile or manifest URL to the clipboard)
+- Copy-URL button for WMTS and IIIF sublayers (/home/alexander/Documents/Artemis-RnD/IIIF-Geotiffcopies the tile or manifest URL to the clipboard)
 - Close button deactivates the collection
 - Separate instances can appear for left and right panes in split-view
 

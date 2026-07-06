@@ -30,16 +30,19 @@ importers:
       pmtiles:
         specifier: ^4.4.1
         version: 4.4.1
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
     devDependencies:
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
-        version: 3.0.10(@sveltejs/kit@2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2))
+        version: 3.0.10(@sveltejs/kit@2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2(yaml@2.9.0)))
       '@sveltejs/kit':
         specifier: ^2.57.1
-        version: 2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2)
+        version: 2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2(yaml@2.9.0))
       '@sveltejs/vite-plugin-svelte':
         specifier: ^6.2.4
-        version: 6.2.4(svelte@5.53.5)(vite@7.3.2)
+        version: 6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0))
       '@types/openseadragon':
         specifier: ^5.0.2
         version: 5.0.2
@@ -54,7 +57,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^7.3.2
-        version: 7.3.2
+        version: 7.3.2(yaml@2.9.0)
 
 packages:
 
@@ -862,6 +865,11 @@ packages:
   wkt-parser@1.5.5:
     resolution: {integrity: sha512-/zMYi94/7D7fxcOSlVmWn6vnOMj3Gq5d1xvVjaYOS9n6h0qOJ4I7YYVxBWYcH1vq9+suhqzXkn05Yx47zQNUIA==}
 
+  yaml@2.9.0:
+    resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   zimmerframe@1.1.4:
     resolution: {integrity: sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ==}
 
@@ -1198,15 +1206,15 @@ snapshots:
     dependencies:
       acorn: 8.16.0
 
-  '@sveltejs/adapter-static@3.0.10(@sveltejs/kit@2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2))':
+  '@sveltejs/adapter-static@3.0.10(@sveltejs/kit@2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2(yaml@2.9.0)))':
     dependencies:
-      '@sveltejs/kit': 2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2)
+      '@sveltejs/kit': 2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2(yaml@2.9.0))
 
-  '@sveltejs/kit@2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2)':
+  '@sveltejs/kit@2.57.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.2(yaml@2.9.0))':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@sveltejs/acorn-typescript': 1.0.9(acorn@8.16.0)
-      '@sveltejs/vite-plugin-svelte': 6.2.4(svelte@5.53.5)(vite@7.3.2)
+      '@sveltejs/vite-plugin-svelte': 6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0))
       '@types/cookie': 0.6.0
       acorn: 8.16.0
       cookie: 0.7.2
@@ -1218,26 +1226,26 @@ snapshots:
       set-cookie-parser: 3.0.1
       sirv: 3.0.2
       svelte: 5.53.5
-      vite: 7.3.2
+      vite: 7.3.2(yaml@2.9.0)
     optionalDependencies:
       typescript: 5.9.3
 
-  '@sveltejs/vite-plugin-svelte-inspector@5.0.2(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2))(svelte@5.53.5)(vite@7.3.2)':
+  '@sveltejs/vite-plugin-svelte-inspector@5.0.2(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0)))(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0))':
     dependencies:
-      '@sveltejs/vite-plugin-svelte': 6.2.4(svelte@5.53.5)(vite@7.3.2)
+      '@sveltejs/vite-plugin-svelte': 6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0))
       obug: 2.1.1
       svelte: 5.53.5
-      vite: 7.3.2
+      vite: 7.3.2(yaml@2.9.0)
 
-  '@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2)':
+  '@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0))':
     dependencies:
-      '@sveltejs/vite-plugin-svelte-inspector': 5.0.2(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2))(svelte@5.53.5)(vite@7.3.2)
+      '@sveltejs/vite-plugin-svelte-inspector': 5.0.2(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0)))(svelte@5.53.5)(vite@7.3.2(yaml@2.9.0))
       deepmerge: 4.3.1
       magic-string: 0.30.21
       obug: 2.1.1
       svelte: 5.53.5
-      vite: 7.3.2
-      vitefu: 1.1.2(vite@7.3.2)
+      vite: 7.3.2(yaml@2.9.0)
+      vitefu: 1.1.2(vite@7.3.2(yaml@2.9.0))
 
   '@turf/boolean-clockwise@7.3.4':
     dependencies:
@@ -1603,7 +1611,7 @@ snapshots:
 
   typescript@5.9.3: {}
 
-  vite@7.3.2:
+  vite@7.3.2(yaml@2.9.0):
     dependencies:
       esbuild: 0.27.3
       fdir: 6.5.0(picomatch@4.0.4)
@@ -1613,12 +1621,15 @@ snapshots:
       tinyglobby: 0.2.15
     optionalDependencies:
       fsevents: 2.3.3
+      yaml: 2.9.0
 
-  vitefu@1.1.2(vite@7.3.2):
+  vitefu@1.1.2(vite@7.3.2(yaml@2.9.0)):
     optionalDependencies:
-      vite: 7.3.2
+      vite: 7.3.2(yaml@2.9.0)
 
   wkt-parser@1.5.5: {}
+
+  yaml@2.9.0: {}
 
   zimmerframe@1.1.4: {}
 

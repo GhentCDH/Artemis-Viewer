@@ -16,6 +16,13 @@ export type LayerInfo = {
   renderLayerKey?: string;
   renderLayerLabel?: string;
   hidden?: boolean;
+  // ── Data build v2 (layer-oriented registry) ──────────────────────────────────
+  // Deploy-relative artifact paths under `Layers/<LayerId>/`, taken verbatim from
+  // `layers.yaml` `artifacts`. When present these drive rendering instead of the
+  // legacy KNOWN_* path conventions. See datasetV2.ts.
+  rasterPmtilesPath?: string;   // artifacts.raster — raster.pmtiles preview pyramid
+  spritesImagePath?: string;    // artifacts.sprites — sprites.webp atlas image
+  spritesIndexPath?: string;    // artifacts.spritesIndex — sprites.json (flat {hash: sprite})
 };
 
 export type TilesConfig = {
@@ -180,6 +187,164 @@ export async function loadCompiledIndex(cfg: CompiledRunnerConfig): Promise<Comp
   return index;
 }
 
+/** True for a Data-build-v2 compact geomaps bundle (`geomapsVersion: 1`): a flat per-canvas
+ *  `maps[]` with top-level `baseImageUrl`, rather than the legacy `maps[].canvases[].georeferencedMap`
+ *  nesting. Detected from the payload so the caller need not thread a mode flag. */
+function isV2GeomapsBundle(bundle: any): boolean {
+  if (!bundle || typeof bundle !== "object") return false;
+  if (typeof bundle.geomapsVersion === "number") return true;
+  const first = Array.isArray(bundle.maps) ? bundle.maps[0] : undefined;
+  return Boolean(first && !("canvases" in first) && Array.isArray(first.gcps));
+}
+
+/** `[x,y,lon,lat, …]`-flat GCPs → Allmaps `{resource:[x,y], geo:[lon,lat]}[]`. */
+function toAllmapsGcps(flat: unknown): Array<{ resource: [number, number]; geo: [number, number] }> {
+  if (!Array.isArray(flat)) return [];
+  const out: Array<{ resource: [number, number]; geo: [number, number] }> = [];
+  for (const g of flat) {
+    if (!Array.isArray(g) || g.length < 4) continue;
+    out.push({ resource: [Number(g[0]), Number(g[1])], geo: [Number(g[2]), Number(g[3])] });
+  }
+  return out;
+}
+
+/** `[x,y,x,y, …]`-flat mask → Allmaps polygon `[[x,y], …]`. */
+function toAllmapsResourceMask(flat: unknown): Array<[number, number]> {
+  if (!Array.isArray(flat)) return [];
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i + 1 < flat.length; i += 2) out.push([Number(flat[i]), Number(flat[i + 1])]);
+  return out;
+}
+
+/** Measure a sprite atlas's pixel dimensions (v2 sprites.json carries no imageSize metadata). */
+async function measureImageSize(url: string): Promise<[number, number] | null> {
+  if (typeof createImageBitmap !== "function" || typeof fetch !== "function") return null;
+  try {
+    const res = await fetch(url, { redirect: "follow" });
+    if (!res.ok) return null;
+    const bmp = await createImageBitmap(await res.blob());
+    const size: [number, number] = [bmp.width, bmp.height];
+    bmp.close?.();
+    return size;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Map a Data-build-v2 compact geomaps bundle into the runtime entry shape. Each flat `maps[]`
+ * element is one canvas; the Allmaps `GeoreferencedMap` is reconstructed per element, and sprites
+ * (a separate `sprites.webp` + flat `sprites.json` keyed by opaque hashes) are joined by full image
+ * service URL — `sprite.imageId === baseImageUrl + map.imageId`. See DATA_BUILD_V2_MIGRATION_PLAN.md.
+ */
+async function mapV2GeomapsBundle(
+  cfg: CompiledRunnerConfig,
+  layerInfo: LayerInfo,
+  bundle: any,
+  geomapsUrl: string,
+  timeout: number,
+  spriteDebugMode: boolean
+): Promise<{ entries: RuntimeLayerEntry[]; infoByServiceUrl: Map<string, any>; grSpritesPath?: string }> {
+  const maps = (bundle?.maps ?? []) as any[];
+  const baseImageUrl = readString(bundle?.baseImageUrl) ?? "";
+  const iiifDefaults = bundle?.iiifDefaults;
+  const entries: RuntimeLayerEntry[] = [];
+  const infoByServiceUrl = new Map<string, any>();
+
+  const toServiceUrl = (imageId: string): string =>
+    (/^https?:\/\//i.test(imageId) ? imageId : `${baseImageUrl}${imageId}`).replace(/\/+$/, "");
+
+  // ── Sprites: separate atlas image + flat {hash: sprite} index, joined by full image URL. ──────
+  const spritesByServiceUrl = new Map<string, BundleSprite>();
+  let spriteImageUrl = "";
+  let spriteImageSize: [number, number] | null = null;
+  const spritesImagePath = readString(layerInfo.spritesImagePath);
+  const spritesIndexPath = readString(layerInfo.spritesIndexPath);
+  if (spritesImagePath && spritesIndexPath) {
+    spriteImageUrl = joinUrl(
+      cfg.datasetBaseUrl,
+      spriteDebugMode ? spritesImagePath.replace(/(\.[^.]+)$/, "_debug$1") : spritesImagePath
+    );
+    try {
+      const spritesUrl = joinUrl(cfg.datasetBaseUrl, spritesIndexPath);
+      const [spritesJson, measured] = await Promise.all([
+        fetchJson<Record<string, BundleSprite>>(spritesUrl, timeout),
+        measureImageSize(spriteImageUrl),
+      ]);
+      spriteImageSize = measured;
+      for (const sprite of Object.values(spritesJson ?? {})) {
+        const key = readString(sprite?.imageId);
+        if (key) spritesByServiceUrl.set(key.replace(/\/+$/, ""), sprite);
+      }
+    } catch {
+      // sprites are an optimization — proceed without them (Allmaps fetches full-res IIIF tiles)
+    }
+  }
+
+  for (const map of maps) {
+    const imageId = String(map?.imageId ?? map?.id ?? "").trim();
+    if (!imageId) continue;
+    const imageServiceUrl = toServiceUrl(imageId);
+    const label = String(map?.label ?? map?.id ?? imageId).trim();
+    const width = Number(map?.width) || undefined;
+    const height = Number(map?.height) || undefined;
+
+    // IIIF info: prefer the per-map IIIF-3 override wholesale (it does NOT shallow-merge cleanly
+    // with the IIIF-2 defaults — different @context/profile shape); fall back to bundle defaults.
+    const info = { ...(map?.iiifOverrides ?? iiifDefaults ?? {}), id: imageServiceUrl, "@id": imageServiceUrl };
+    if (width) info.width = width;
+    if (height) info.height = height;
+    infoByServiceUrl.set(imageServiceUrl, info);
+
+    const resourceType = map?.iiifOverrides ? "ImageService3" : "ImageService2";
+    const raw = {
+      "@context": "https://schemas.allmaps.org/map/2/context.json",
+      type: "GeoreferencedMap",
+      resource: { id: imageServiceUrl, type: resourceType, width, height },
+      gcps: toAllmapsGcps(map?.gcps),
+      resourceMask: toAllmapsResourceMask(map?.resourceMask),
+      transformation: { type: readString(map?.transformation) ?? "polynomial1" },
+    };
+
+    const sprite = spritesByServiceUrl.get(imageServiceUrl);
+    const spriteRef =
+      sprite && spriteImageSize && spriteImageUrl
+        ? {
+            sheetUrl: spriteImageUrl,
+            sheetWidth: spriteImageSize[0],
+            sheetHeight: spriteImageSize[1],
+            x: sprite.x,
+            y: sprite.y,
+            width: sprite.width,
+            height: sprite.height,
+          }
+        : undefined;
+
+    entries.push({
+      label,
+      sourceManifestUrl: imageServiceUrl,
+      compiledManifestPath: imageServiceUrl,
+      isVerzamelblad: false,
+      inlineMaps: [{
+        url: `${geomapsUrl}#${encodeURIComponent(imageId)}`,
+        raw,
+        canvasAllmapsId: undefined,
+        imageServiceUrl,
+        spriteRef,
+        placeholderWidth: width,
+        placeholderHeight: height,
+      }],
+      inlineSprites:
+        sprite && spriteImageSize && spriteImageUrl
+          ? [{ imageUrl: spriteImageUrl, imageSize: spriteImageSize, sprite }]
+          : [],
+      manifestAllmapsUrl: readString(layerInfo.sourceCollectionUrl),
+    });
+  }
+
+  return { entries, infoByServiceUrl, grSpritesPath: undefined };
+}
+
 export async function loadNewIiifEntries(
   cfg: CompiledRunnerConfig,
   layerInfo: LayerInfo,
@@ -193,6 +358,9 @@ export async function loadNewIiifEntries(
   const bundlePromise = (async () => {
     const geomapsUrl = joinUrl(cfg.datasetBaseUrl, layerInfo.geomapsPath!);
     const bundle = await fetchJson<any>(geomapsUrl, timeout);
+    if (isV2GeomapsBundle(bundle)) {
+      return mapV2GeomapsBundle(cfg, layerInfo, bundle, geomapsUrl, timeout, spriteDebugMode);
+    }
     const maps = (bundle?.maps ?? []) as any[];
     const entries: RuntimeLayerEntry[] = [];
     const infoByServiceUrl = new Map<string, any>();

@@ -105,6 +105,35 @@ const LAND_USAGE_LAYERS: Record<
   }
 };
 
+// Data-build-v2: remote WMTS/WMS/NGI tile templates come from each sublayer's `source.url` in
+// `layers.yaml` rather than the hardcoded literals above. These overrides are populated at load
+// time via `setRemoteLayerSources`; when empty (legacy roots) the hardcoded `tiles` are used.
+// NGI v2 URLs are already a direct `{z}/{y}/{x}` XYZ template, consumed verbatim.
+const histCartTileOverrides: Partial<Record<HistCartLayerKey, string>> = {};
+const landUsageTileOverrides: Partial<Record<LandUsageLayerKey, string>> = {};
+
+function histCartTiles(key: HistCartLayerKey): string[] {
+  const override = histCartTileOverrides[key];
+  return override ? [override] : HISTCART_LAYERS[key].tiles;
+}
+function landUsageTiles(key: LandUsageLayerKey): string[] {
+  const override = landUsageTileOverrides[key];
+  return override ? [override] : LAND_USAGE_LAYERS[key].tiles;
+}
+
+/** Override remote tile templates from the v2 registry. Pass only the keys you have URLs for. */
+export function setRemoteLayerSources(sources: {
+  histcart?: Partial<Record<HistCartLayerKey, string>>;
+  landusage?: Partial<Record<LandUsageLayerKey, string>>;
+}): void {
+  for (const [k, v] of Object.entries(sources.histcart ?? {})) {
+    if (typeof v === "string" && v.trim()) histCartTileOverrides[k as HistCartLayerKey] = v.trim();
+  }
+  for (const [k, v] of Object.entries(sources.landusage ?? {})) {
+    if (typeof v === "string" && v.trim()) landUsageTileOverrides[k as LandUsageLayerKey] = v.trim();
+  }
+}
+
 const BELGIUM_BOUNDS: [number, number, number, number] = [2.53, 50.685, 5.92, 51.52];
 
 const PRIMITIVE_SOURCE_ID = "primitive-parcels-source";
@@ -349,7 +378,7 @@ export function setHistCartLayerVisible(map: maplibregl.Map | null | undefined, 
     if (!hasSource) {
       map.addSource(cfg.sourceId, {
         type: "raster",
-        tiles: cfg.tiles,
+        tiles: histCartTiles(key),
         tileSize: 256,
         bounds: BELGIUM_BOUNDS
       });
@@ -405,7 +434,7 @@ export function setLandUsageLayerVisible(map: maplibregl.Map | null | undefined,
     if (!hasSource) {
       map.addSource(cfg.sourceId, {
         type: "raster",
-        tiles: cfg.tiles,
+        tiles: landUsageTiles(key),
         tileSize: 256,
         bounds: BELGIUM_BOUNDS
       });
@@ -492,14 +521,22 @@ export function setPrimitiveLayerVisible(map: maplibregl.Map | null | undefined,
     `[primitive] set visible=${visible} hasSource=${hasSource} hasHoverSource=${hasHoverSource} hasFillLayer=${hasFillLayer} hasLayer=${hasLayer} hasHoverLayer=${hasHoverLayer} url=${geojsonUrl}`
   );
 
+  // Data-build-v2 ships parcels as a `parcels.pmtiles` vector archive (source-layer "parcels")
+  // instead of a raw GeoJSON URL; the feature schema is identical (`type`, `parcel_number`, …), so
+  // only the source shape and a `source-layer` differ. Legacy GeoJSON roots pass an http(s) URL.
+  const isPmtiles = /^pmtiles:\/\//i.test(geojsonUrl) || /\.pmtiles(\?|#|$)/i.test(geojsonUrl);
+  const primitiveSourceLayer = isPmtiles ? { "source-layer": "parcels" } : {};
+
   if (visible) {
     if (!hasSource) {
       attachPrimitiveDebugListeners(map, geojsonUrl);
       console.debug(`[primitive] addSource id=${PRIMITIVE_SOURCE_ID} data=${geojsonUrl}`);
-      map.addSource(PRIMITIVE_SOURCE_ID, {
-        type: "geojson",
-        data: geojsonUrl
-      });
+      map.addSource(
+        PRIMITIVE_SOURCE_ID,
+        isPmtiles
+          ? { type: "vector", url: geojsonUrl.startsWith("pmtiles://") ? geojsonUrl : `pmtiles://${geojsonUrl}` }
+          : { type: "geojson", data: geojsonUrl }
+      );
     }
     if (!hasFillLayer) {
       console.debug(`[primitive] addLayer id=${PRIMITIVE_FILL_LAYER_ID} source=${PRIMITIVE_SOURCE_ID}`);
@@ -507,6 +544,7 @@ export function setPrimitiveLayerVisible(map: maplibregl.Map | null | undefined,
         id: PRIMITIVE_FILL_LAYER_ID,
         type: "fill",
         source: PRIMITIVE_SOURCE_ID,
+        ...primitiveSourceLayer,
         filter: ["==", ["get", "type"], "parcel"],
         paint: {
           // Invisible pick layer: captures hover inside polygons.
@@ -521,6 +559,7 @@ export function setPrimitiveLayerVisible(map: maplibregl.Map | null | undefined,
         id: PRIMITIVE_LAYER_ID,
         type: "line",
         source: PRIMITIVE_SOURCE_ID,
+        ...primitiveSourceLayer,
         filter: ["==", ["get", "type"], "parcel"],
         paint: {
           "line-color": "#C07B28",

@@ -17,9 +17,10 @@
     setIiifMaskHover,
     setMassartPins, getMassartClickLayerIds,
     flashLocationMarker,
+    setRemoteLayerSources,
   } from '$lib/artemis/map/mapInit';
   import {
-    loadCompiledIndex, runLayerGroup, removeLayerGroup, parkLayerGroup, clearAllLayerGroups,
+    runLayerGroup, removeLayerGroup, parkLayerGroup, clearAllLayerGroups,
     isLayerGroupParked, setLayerGroupOpacity, getLayerGroupLayerIds,
     resetCompiledIndexCache, resetPaneRuntime, getLayerGroupId, refreshActiveLayerGroups,
     getActiveGroupIds, getManifestInfoForSourceManifestUrl, getManifestInfoForCanvasKey, getMaskLayerIds,
@@ -31,8 +32,9 @@
     type RuntimeLayerMetadata,
     type RuntimeTeamInstitution,
   } from '$lib/artemis/dataset/runtimeMetadata';
-  import { buildManifestSearchIndex as buildManifestSearchIndexData } from '$lib/artemis/dataset/manifestSearch';
+  import { buildManifestSearchIndex as buildManifestSearchIndexData, buildV2ManifestSearchIndex } from '$lib/artemis/dataset/manifestSearch';
   import { loadToponymIndex as loadToponymIndexData } from '$lib/artemis/dataset/toponyms';
+  import { loadNormalizedDataset, type NormalizedDataset } from '$lib/artemis/dataset/datasetV2';
   import {
     getIiifMainLayerIds as getIiifMainLayerIdsData,
     loadIiifLayerIntoPane,
@@ -129,6 +131,10 @@
   type ViewMode = 'single' | 'split';
   let mapDiv: HTMLElement;
   let map: maplibregl.Map;
+  // Set once the left map has finished its initial style load. After that, camera moves (fly-to)
+  // can run immediately — we must NOT gate them on `isStyleLoaded()`/`idle`, which flip false while
+  // sources load and, with heavy IIIF layers active, can defer a fly by seconds.
+  let mapEverReady = false;
   let mapStageEl: HTMLElement;
   let rightMapDiv: HTMLElement;
   let rightMap: maplibregl.Map | null = null;
@@ -253,22 +259,31 @@
     return { datasetBaseUrl: normalizeDatasetBaseUrl(datasetBaseUrl.trim()), fetchTimeoutMs: 30000 };
   }
 
+  // Any of these root markers may be pasted; normalize to the build root by stripping them.
+  // `index.json` = legacy; `layers.yaml`/`imagecollection.yaml` (or `.json`) = data build v2.
+  const DATASET_ROOT_FILE = /\/(?:index\.json|layers\.(?:yaml|json)|imagecollection\.(?:yaml|json))\/?$/i;
+
   function normalizeDatasetBaseUrl(input: string): string {
     let url = input.trim();
     if (!url) return url;
-    // Accept pasted GitHub blob URL: https://github.com/…/blob/…/build/index.json
+    // Accept pasted GitHub blob URL, e.g. https://github.com/…/blob/…/build/layers.yaml
     const blobMatch = url.match(
-      /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+?)\/index\.json\/?$/i
+      /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+?)(?:\/(?:index\.json|layers\.(?:yaml|json)|imagecollection\.(?:yaml|json)))?\/?$/i
     );
     if (blobMatch) {
-      const [, owner, repo, ref, buildPath] = blobMatch;
+      const [, owner, repo, , buildPath] = blobMatch;
       return `https://${owner.toLowerCase()}.github.io/${repo}/${buildPath}`.replace(/\/+$/, '');
     }
-    return url.replace(/\/index\.json\/?$/i, '').replace(/\/+$/, '');
+    return url.replace(DATASET_ROOT_FILE, '').replace(/\/+$/, '');
   }
 
   function primitiveGeojsonUrl(): string {
-    return `${normalizeDatasetBaseUrl(datasetBaseUrl.trim())}/Parcels/PrimitiefKadaster/PrimitiefKadasterParcels.geojson`;
+    const base = normalizeDatasetBaseUrl(datasetBaseUrl.trim());
+    // Data-build-v2: parcels ship as a `parcels.pmtiles` vector archive (source-layer "parcels").
+    // setPrimitiveLayerVisible detects the `pmtiles://` scheme and builds a vector source.
+    const v2Parcels = datasetV2Model?.parcelArtifacts?.[0]?.path;
+    if (v2Parcels) return `pmtiles://${base}/${v2Parcels}`;
+    return `${base}/Parcels/PrimitiefKadaster/PrimitiefKadasterParcels.geojson`;
   }
 
   function runtimeStaticBaseUrl(): string {
@@ -334,8 +349,15 @@
 
   async function loadMassartData() {
     try {
-      const base = `${cfg().datasetBaseUrl}/Image collections/Massart`;
-      const res = await fetch(`${base}/Massart_index.json`);
+      const baseUrl = cfg().datasetBaseUrl;
+      // Data-build-v2: the collection index path comes from `imagecollection.yaml` (lowercase
+      // `Image collections/massart/massart_index.json`); its embedded `sprites` block carries the
+      // correct relative WEBP paths + imageSize. Legacy roots use the capitalized Massart path.
+      const v2Index = datasetV2Model?.imageCollections?.[0]?.indexPath;
+      const indexUrl = v2Index
+        ? `${baseUrl}/${v2Index}`
+        : `${baseUrl}/Image collections/Massart/Massart_index.json`;
+      const res = await fetch(indexUrl);
       if (!res.ok) return;
       const data = await res.json();
       massartItems = Array.isArray(data.items) ? data.items : [];
@@ -701,6 +723,32 @@
   type UILayerInfo = LayerInfo & { uiLayerId: string };
   let layers: UILayerInfo[] = [];
 
+  // Data-build-v2 normalized registry (null in legacy `index.json` mode). Drives remote layer
+  // URLs, artifact-backed search/toponyms/parcels, and image collections.
+  let datasetV2Model: NormalizedDataset | null = null;
+
+  // Apply v2 registry-derived config that the app can honor without a tree refactor: remote
+  // WMTS/WMS/NGI tile templates sourced from each sublayer's `source.url`. The hardcoded map in
+  // mapInit.ts remains the legacy fallback. (Timeline positions/labels are already hardcoded to
+  // match the registry, so no tree derivation is needed for parity.)
+  function applyDatasetV2(dataset: NormalizedDataset): void {
+    const histcart: Record<string, string> = {};
+    const landusage: Record<string, string> = {};
+    for (const main of dataset.layers) {
+      for (const sub of main.sublayers) {
+        if (!sub.remoteUrl) continue;
+        if (sub.id.endsWith('-wmts')) {
+          const key = getMainWmtsKey(main.id);
+          if (key) histcart[key] = sub.remoteUrl;
+        } else if (sub.id.endsWith('-landusage')) {
+          const key = getLandUsageKey(main.id);
+          if (key) landusage[key] = sub.remoteUrl;
+        }
+      }
+    }
+    setRemoteLayerSources({ histcart: histcart as any, landusage: landusage as any });
+  }
+
   let mainLayerOrder: MainLayerId[] = [...MAIN_LAYER_ORDER];
   let mainLayerEnabled  = makeInitialMainLayerEnabled();
   let mainLayerLoading: Record<string, boolean> = {};
@@ -835,9 +883,21 @@
     return undefined;
   }
 
-  function colorForGroupId(gid: string): string {
-    const mainId = groupIdToMainId.get(gid);
-    return MAIN_LAYER_META[mainId ?? '']?.color ?? '#888888';
+  // Per-layer colors are dropped in the v2 model: hover outlines / group dots use a single blue
+  // sourced from theme.css. Resolved once to a concrete hex because it feeds MapLibre paint
+  // (`line-color`), which can't take a CSS `var()`. Falls back if resolution isn't available (SSR).
+  let _themeBlue = '#2f6f99';
+  function themeBlue(): string {
+    if (typeof getComputedStyle !== 'function' || typeof document === 'undefined') return _themeBlue;
+    const resolved = getComputedStyle(document.documentElement)
+      .getPropertyValue('--timeline-layer-active-color')
+      .trim();
+    if (resolved) _themeBlue = resolved;
+    return _themeBlue;
+  }
+
+  function colorForGroupId(_gid: string): string {
+    return themeBlue();
   }
 
   function sameViewerItem(a: IiifMapInfo, b: IiifMapInfo): boolean {
@@ -951,6 +1011,11 @@
           geomapsPath: resolveIiifGeomapsPath(layerMapId, (layer as any).geomapsPath),
           spritesPath: layer.spritesPath,
           grSpritesPath: (layer as any).grSpritesPath,
+          // Data-build-v2 artifact paths (deploy-relative), passed through to the loader/renderer.
+          masksPath: (layer as any).masksPath,
+          rasterPmtilesPath: (layer as any).rasterPmtilesPath,
+          spritesImagePath: (layer as any).spritesImagePath,
+          spritesIndexPath: (layer as any).spritesIndexPath,
           renderLayerKey: String(layer.renderLayerKey ?? 'default'),
           renderLayerLabel: cleanLayerLabel(String(layer.renderLayerLabel ?? 'Map')),
           hidden: Boolean(layer.hidden),
@@ -1224,8 +1289,14 @@
   async function fetchIndex() {
     resetCompiledIndexCache();
     try {
-      const index = await loadCompiledIndex(cfg());
+      // Dual loader: v2 `layers.yaml` → `v2-layers`, else legacy `index.json` → `legacy-index`.
+      // `index` is a CompiledIndex either way (a bridge in v2), so downstream code is uniform.
+      const resolved = await loadNormalizedDataset(cfg());
+      datasetV2Model = resolved.dataset;
+      const index = resolved.index;
+      console.log(`[Artemis] dataset mode: ${resolved.mode}`);
       layers = normalizeSourceLayers(index);
+      if (resolved.mode === 'v2-layers' && resolved.dataset) applyDatasetV2(resolved.dataset);
       await loadRuntimeMetadata();
       groupIdToMainId.clear();
       for (const [mainId, subs] of Object.entries(MAIN_LAYER_SUBS)) {
@@ -1234,13 +1305,21 @@
           if (info) groupIdToMainId.set(info.uiLayerId, mainId);
         }
       }
-      manifestSearchIndex = buildManifestSearchIndexData({
-        index,
-        visibleLayers: layers,
-        cleanLayerLabel,
-        normalizeSearchText,
-        asFiniteNumber,
-      });
+      manifestSearchIndex =
+        resolved.mode === 'v2-layers' && resolved.dataset
+          ? await buildV2ManifestSearchIndex({
+              datasetBaseUrl: normalizeDatasetBaseUrl(datasetBaseUrl.trim()),
+              searchArtifacts: resolved.dataset.iiifSearchArtifacts,
+              normalizeSearchText,
+              asFiniteNumber,
+            })
+          : buildManifestSearchIndexData({
+              index,
+              visibleLayers: layers,
+              cleanLayerLabel,
+              normalizeSearchText,
+              asFiniteNumber,
+            });
 
       // Re-trigger load for any main layers that were marked enabled before the index was
       // ready (e.g. set by Timeslider's onMount firing before layers were populated).
@@ -1263,6 +1342,7 @@
         datasetBaseUrl: normalizeDatasetBaseUrl(datasetBaseUrl.trim()),
         normalizeRawToponym,
         log,
+        toponymArtifacts: resolved.dataset?.toponymArtifacts,
         setToponymIndex: (items) => {
           toponymIndex = items;
         },
@@ -1412,15 +1492,19 @@
         map.easeTo({ center, zoom: nextZoom, essential: true, duration: 900 });
       } catch (e: any) { log('ERROR', `Fly-to failed: ${e?.message ?? String(e)}`); }
     };
-    if (map.isStyleLoaded()) {
+    // Once the map has loaded once, fly right away — `isStyleLoaded()` transiently returns false
+    // while IIIF/raster sources stream in, and waiting for `idle` there can stall the fly for
+    // seconds. Only the very first fly (before initial load) is deferred to the `load` event.
+    if (mapEverReady || map.isStyleLoaded()) {
+      mapEverReady = true;
       fly();
     } else {
       const onReady = () => {
-        map.off('styledata', onReady);
+        map.off('load', onReady);
         map.off('idle', onReady);
         fly();
       };
-      map.once('styledata', onReady);
+      map.once('load', onReady);
       map.once('idle', onReady);
     }
   }
@@ -1936,6 +2020,7 @@
     }
 
 	    map.on('load', () => {
+	      mapEverReady = true;
 	      updateScaleIndicator(map);
 	      logViewLevel(map, 'left');
 	      // Re-apply WMTS/WMS visibility that may have been set before the style finished loading.

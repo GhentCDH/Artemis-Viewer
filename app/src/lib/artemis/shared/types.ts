@@ -68,6 +68,9 @@ export type ManifestSearchItem = {
   compiledManifestPath: string;
   centerLon?: number;
   centerLat?: number;
+  // Data-build-v2 search items carry a geographic bbox [minLon, minLat, maxLon, maxLat] for
+  // fit-bounds fly-to; absent for legacy index-derived items (which fall back to centerLon/Lat).
+  bounds?: [number, number, number, number];
 };
 
 // --- UI panel types ---

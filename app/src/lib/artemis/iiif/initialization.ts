@@ -2,7 +2,7 @@ import { WarpedMapLayer } from "@allmaps/maplibre";
 import type maplibregl from "maplibre-gl";
 import type { RunResult, StepTiming, SpriteRef } from "$lib/artemis/shared/types";
 import { fetchJson, joinUrl, nowMs } from "$lib/artemis/shared/utils";
-import { getAllmapsDebugMapOptions } from "$lib/artemis/config/allmapsDebug";
+import { getAllmapsDebugMapOptions, partitionAllmapsMapOptions } from "$lib/artemis/config/allmapsDebug";
 import {
   loadNewIiifEntries,
   resolveTilesConfig,
@@ -186,7 +186,13 @@ export async function initializeLayerGroup(opts: {
   const chunkCount = 1;
   const layerIds = Array.from({ length: chunkCount }, (_, i) => `warped-layer-${groupId.replace(/\//g, "-")}${chunkCount > 1 ? `-${i}` : ""}`);
   const layers: WarpedMapLayer[] = [];
-  const allmapsMapOptions = getAllmapsDebugMapOptions(layerInfo);
+  const resolvedAllmapsOptions = getAllmapsDebugMapOptions(layerInfo);
+  // `distortionMeasure` (and any other post-add-only option) can't be honored by
+  // addGeoreferencedMap()'s init path; it has to be applied via setMapsOptions() after
+  // the maps are added. Split it out here.
+  const { create: allmapsCreateOptions, afterAdd: allmapsAfterAddOptions } = resolvedAllmapsOptions
+    ? partitionAllmapsMapOptions(resolvedAllmapsOptions)
+    : { create: undefined, afterAdd: {} };
   for (let i = 0; i < chunkCount; i++) {
     await removeMaplibreLayer(map, layerIds[i]);
     const l = new WarpedMapLayer({ layerId: layerIds[i] } as any);
@@ -252,63 +258,75 @@ export async function initializeLayerGroup(opts: {
   // MapLibre requests only the visible {z}/{x}/{y} tiles on demand. Its id joins `layerIds` (at the
   // bottom) so reorder/teardown track it like any other group layer.
   const warpedBaseLayerId = layerIds[0]; // bottom WarpedMapLayer; raster goes directly beneath it
-  const tilesConfig = resolveTilesConfig(layerInfo);
+  // Data-build-v2 publishes the raster preview as a single `raster.pmtiles` archive; the legacy
+  // build used a gdal2tiles XYZ pyramid. Prefer the PMTiles form when the registry supplied it.
+  const rasterPmtilesPath = layerInfo.rasterPmtilesPath?.trim();
+  const tilesConfig = rasterPmtilesPath ? undefined : resolveTilesConfig(layerInfo);
   const tilesSourceId = `iiif-tiles-source-${groupId.replace(/\//g, "-")}`;
   const tilesLayerId = `iiif-tiles-layer-${groupId.replace(/\//g, "-")}`;
   // One-shot listener that logs when the first preview tile actually paints (raster sources over
   // irregular coverage 404 on tiles outside the surveyed extent — expected and harmless — so we
   // report the first tile that loads, not source metadata). Detached on teardown or after firing.
   let detachTilesProbe: (() => void) | null = null;
-  if (tilesConfig) {
+  // Insert the raster base beneath the WarpedMapLayer (beforeId), above the base map. `beforeId`
+  // only when the warped layer exists. Shared by both the XYZ and PMTiles source shapes below.
+  const rasterBeforeId = map.getLayer(warpedBaseLayerId) ? warpedBaseLayerId : undefined;
+  const addRasterLayer = (source: maplibregl.SourceSpecification) => {
+    if (!map.getSource(tilesSourceId)) map.addSource(tilesSourceId, source as any);
+    if (!map.getLayer(tilesLayerId)) {
+      map.addLayer({ id: tilesLayerId, type: "raster", source: tilesSourceId, paint: { "raster-opacity": 0.85 } }, rasterBeforeId);
+      // Front of layerIds = bottom of the group's stack, so reorderLayerGroups keeps it below warp.
+      layerIds.unshift(tilesLayerId);
+    }
+  };
+  // The raster pyramid is the group's permanent base (NOT removed when Allmaps loads — Allmaps loads
+  // viewport-driven on top of it), so this cleanup lives for the whole group lifetime and only runs
+  // on full teardown. Its persistent presence is also what makes `parkLayerGroup` always fully
+  // remove an IIIF group on toggle-off (see runtime.ts).
+  const registerRasterCleanup = (tilesT0: number) => {
+    const onTilesData = (e: any) => {
+      if (e?.sourceId !== tilesSourceId || !e?.tile) return;
+      log(`tiles: first tile painted ${(nowMs() - tilesT0).toFixed(0)}ms`);
+      detachTilesProbe?.();
+    };
+    detachTilesProbe = () => {
+      try { map.off("sourcedata", onTilesData); } catch { /* map torn down */ }
+      detachTilesProbe = null;
+    };
+    map.on("sourcedata", onTilesData);
+    runtime.activeLayerCleanup.set(groupId, () => {
+      detachZoomTrigger();
+      detachMoveReconcile?.();
+      detachTilesProbe?.();
+      if (map.getLayer(tilesLayerId)) map.removeLayer(tilesLayerId);
+      if (map.getSource(tilesSourceId)) map.removeSource(tilesSourceId);
+    });
+  };
+  if (rasterPmtilesPath) {
+    try {
+      const tilesT0 = nowMs();
+      addRasterLayer({ type: "raster", url: `pmtiles://${joinUrl(cfg.datasetBaseUrl, rasterPmtilesPath)}`, tileSize: 256 } as any);
+      log(`tiles: raster PMTiles base added beneath warp +${(nowMs() - activationT0).toFixed(0)}ms`);
+      registerRasterCleanup(tilesT0);
+    } catch {
+      // non-fatal — continue to normal Allmaps loading without placeholders
+    }
+  } else if (tilesConfig) {
     try {
       const tilesT0 = nowMs();
       // Warm the pyramid's tiles_manifest.json so the `iiiftiles://` protocol can gate the very
       // first tile requests (missing tiles answered transparently → no 404s in the console).
       const tilesHttpTemplate = joinUrl(cfg.datasetBaseUrl, tilesConfig.template);
       prefetchIiifTileManifest(tilesHttpTemplate.replace(/\{z\}\/\{x\}\/\{y\}\.webp.*$/, "tiles_manifest.json"));
-      if (!map.getSource(tilesSourceId)) {
-        map.addSource(tilesSourceId, {
-          type: "raster",
-          tiles: [toIiifTileTemplate(tilesHttpTemplate)],
-          tileSize: 256,
-          minzoom: tilesConfig.minZoom,
-          maxzoom: tilesConfig.maxZoom,
-        });
-      }
-      if (!map.getLayer(tilesLayerId)) {
-        // beforeId = the WarpedMapLayer → raster is inserted directly beneath it (above the base map).
-        map.addLayer({
-          id: tilesLayerId,
-          type: "raster",
-          source: tilesSourceId,
-          paint: { "raster-opacity": 0.85 },
-        }, map.getLayer(warpedBaseLayerId) ? warpedBaseLayerId : undefined);
-        // Front of layerIds = bottom of the group's stack, so reorderLayerGroups keeps it below warp.
-        layerIds.unshift(tilesLayerId);
-      }
+      addRasterLayer({
+        type: "raster",
+        tiles: [toIiifTileTemplate(tilesHttpTemplate)],
+        tileSize: 256,
+        minzoom: tilesConfig.minZoom,
+        maxzoom: tilesConfig.maxZoom,
+      } as any);
       log(`tiles: raster base added beneath warp (z${tilesConfig.minZoom}-${tilesConfig.maxZoom}) +${(nowMs() - activationT0).toFixed(0)}ms`);
-      const onTilesData = (e: any) => {
-        if (e?.sourceId !== tilesSourceId || !e?.tile) return;
-        log(`tiles: first tile painted ${(nowMs() - tilesT0).toFixed(0)}ms`);
-        detachTilesProbe?.();
-      };
-      detachTilesProbe = () => {
-        try { map.off("sourcedata", onTilesData); } catch { /* map torn down */ }
-        detachTilesProbe = null;
-      };
-      map.on("sourcedata", onTilesData);
-      // The raster pyramid is now the group's permanent base (it is NOT removed when Allmaps loads —
-      // Allmaps loads viewport-driven on top of it), so this cleanup entry lives for the whole group
-      // lifetime and only runs on full teardown. Its persistent presence is also what makes
-      // `parkLayerGroup` always fully remove an IIIF group on toggle-off (see runtime.ts) — correct
-      // now, since re-showing re-inits cheaply and only re-triangulates the viewport.
-      runtime.activeLayerCleanup.set(groupId, () => {
-        detachZoomTrigger();
-        detachMoveReconcile?.();
-        detachTilesProbe?.();
-        if (map.getLayer(tilesLayerId)) map.removeLayer(tilesLayerId);
-        if (map.getSource(tilesSourceId)) map.removeSource(tilesSourceId);
-      });
+      registerRasterCleanup(tilesT0);
     } catch {
       // non-fatal — continue to normal Allmaps loading without placeholders
     }
@@ -479,13 +497,10 @@ export async function initializeLayerGroup(opts: {
           };
         }
 
-        const allmapsManifestUrl = item.entry.manifestAllmapsUrl;
-        if (!allmapsManifestUrl) {
-          throw new Error(
-            `Missing manifestAllmapsUrl for "${item.entry.label}" (${item.entry.sourceManifestUrl}). ` +
-              `This should come from the geomaps JSON (resource.partOf…id).`
-          );
-        }
+        // Optional in Data-build-v2: the compact geomaps format has no manifest/`partOf` concept,
+        // so this may be undefined. It only feeds the "open in Allmaps" button and manifest-info
+        // bookkeeping below — both tolerate an absent value — so no longer a hard requirement.
+        const allmapsManifestUrl: string | undefined = item.entry.manifestAllmapsUrl;
 
         const okMaps = item.maps.filter((a): a is { url: string; raw: unknown; fetchMs: number; canvasAllmapsId?: string; spriteRef?: SpriteRef; placeholderWidth?: number; placeholderHeight?: number } => "raw" in a);
         const failedMaps = item.maps.filter((a): a is { url: string; error: string } => "error" in a);
@@ -514,7 +529,7 @@ export async function initializeLayerGroup(opts: {
 
         try {
           const ts2 = nowMs();
-          const mapResults = await Promise.allSettled(okMaps.map((a) => targetLayer.addGeoreferencedMap(a.raw, allmapsMapOptions)));
+          const mapResults = await Promise.allSettled(okMaps.map((a) => targetLayer.addGeoreferencedMap(a.raw, allmapsCreateOptions)));
           const allmapsResults: Array<string | Error> = [];
           for (const result of mapResults) {
             if (result.status === "fulfilled") allmapsResults.push(result.value);
@@ -524,6 +539,18 @@ export async function initializeLayerGroup(opts: {
           const failedMessages = failed.map((err) => err.message);
           if (!allmapsResults.some((r) => typeof r === "string")) throw new Error("No maps loaded from georeferenced maps.");
           const succeeded = allmapsResults.filter((r): r is string => typeof r === "string");
+
+          // Apply post-add-only options (e.g. distortionMeasure) through the option-change
+          // path, which is the only way Allmaps runs setDistortionMeasure() and actually
+          // renders the distortion overlay. addGeoreferencedMap()'s init path skips it.
+          if (succeeded.length > 0 && Object.keys(allmapsAfterAddOptions).length > 0) {
+            try {
+              targetLayer.setMapsOptions(succeeded, allmapsAfterAddOptions as any);
+            } catch (e: any) {
+              log(`setMapsOptions (post-add) failed: ${e?.message ?? e}`);
+            }
+          }
+
           const applyMs = nowMs() - ts2;
           for (let resultIndex = 0; resultIndex < allmapsResults.length; resultIndex++) {
             const mapId = allmapsResults[resultIndex];

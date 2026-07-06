@@ -1,6 +1,5 @@
 // Layer configuration for the historical map era tree.
 // Defines all main layers (eras), their sub-layers, labels, and visual metadata.
-import { ngiTileUrl } from './ngi';
 
 export type MainLayerId =
   | 'NGI1904'
@@ -37,19 +36,6 @@ export const MAIN_LAYER_LABELS: Record<string, string> = {
   HanddrawnCollection:    'Hand drawn collection',
 };
 
-export const MAIN_LAYER_SHORT_LABELS: Record<string, string> = {
-  NGI1904:      'N4',
-  NGI1873:      'N7',
-  Popp:         'PK',
-  Ferraris:     'FE',
-  Villaret:     'VI',
-  Frickx:       'FX',
-  Vandermaelen: 'VM',
-  PrimitiefKadaster:    'PR',
-  GereduceerdeKadaster:  'GR',
-  HanddrawnCollection:    'HD',
-};
-
 export const MAIN_LAYER_META: Record<string, { date: string; color: string }> = {
   NGI1904:      { date: '1904',      color: '#506b8f' },
   NGI1873:      { date: '1873',      color: '#4f7b66' },
@@ -74,49 +60,6 @@ export const MAIN_LAYER_INFO: Record<string, string> = {
   PrimitiefKadaster:    'Primitief kadaster layer with warped IIIF sheets plus cadastral overlays.',
   GereduceerdeKadaster:  'Gereduceerd kadaster layer with warped IIIF sheets plus cadastral overlays.',
   HanddrawnCollection:    'Hand-drawn historical map collection with warped IIIF sheets and related overlays.',
-};
-
-export const MAIN_LAYER_SOURCE: Record<string, { label: string; url: string }> = {
-  NGI1904: {
-    label: 'NGI raster tiles',
-    url: ngiTileUrl('/arcgis/rest/services/seamless_carto__default__3857__450/MapServer'),
-  },
-  NGI1873: {
-    label: 'NGI raster tiles',
-    url: ngiTileUrl('/arcgis/rest/services/seamless_carto__default__3857__140/MapServer'),
-  },
-  Popp: {
-    label: 'Geopunt WMTS',
-    url: 'https://geo.api.vlaanderen.be/HISTCART/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=popp&STYLE=&FORMAT=image/png&TILEMATRIXSET=GoogleMapsVL&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
-  },
-  Ferraris: {
-    label: 'Geopunt WMTS',
-    url: 'https://geo.api.vlaanderen.be/HISTCART/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ferraris&STYLE=&FORMAT=image/png&TILEMATRIXSET=GoogleMapsVL&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
-  },
-  Villaret: {
-    label: 'Geopunt WMS',
-    url: 'https://geo.api.vlaanderen.be/HISTCART/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=Villaret&STYLES=&FORMAT=image%2Fpng&TRANSPARENT=TRUE&CRS=EPSG%3A3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256',
-  },
-  Frickx: {
-    label: 'Geopunt WMTS',
-    url: 'https://geo.api.vlaanderen.be/HISTCART/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=frickx&STYLE=&FORMAT=image/png&TILEMATRIXSET=GoogleMapsVL&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
-  },
-  Vandermaelen: {
-    label: 'Geopunt WMTS',
-    url: 'https://geo.api.vlaanderen.be/HISTCART/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vandermaelen&STYLE=&FORMAT=image/png&TILEMATRIXSET=GoogleMapsVL&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
-  },
-  PrimitiefKadaster: {
-    label: 'Compiled IIIF dataset',
-    url: 'https://ghentcdh.github.io/Artemis-RnD-Data/build/index.json',
-  },
-  GereduceerdeKadaster: {
-    label: 'Compiled IIIF dataset',
-    url: 'https://ghentcdh.github.io/Artemis-RnD-Data/build/index.json',
-  },
-  HanddrawnCollection: {
-    label: 'Compiled IIIF dataset',
-    url: 'https://ghentcdh.github.io/Artemis-RnD-Data/build/index.json',
-  },
 };
 
 export const SUB_LAYER_DEFS: Record<string, { label: string; kind: SubLayerKind }> = {

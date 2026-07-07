@@ -1,10 +1,10 @@
-# Artemis-RnD (Viewer)
+# Artemis-Viewer
 
 SvelteKit web viewer for the Artemis project — historical Belgian maps of the Scheldt region, spanning 1700 to 1912.
 
 The app loads precompiled data from [`Artemis-Data`](https://github.com/GhentCDH/Artemis-Data), renders georeferenced IIIF map layers via Allmaps + MapLibre, and provides search across historical place names (toponyms) and IIIF manifests.
 
-**Live site:** `https://ghentcdh.github.io/Artemis-RND`
+**Live site:** `https://ghentcdh.github.io/Artemis-Viewer`
 
 ---
 
@@ -152,12 +152,12 @@ The app deploys to GitHub Pages via GitHub Actions.
 **Branch workflow:**
 - `main` — stable source; pushing here triggers a deploy
 - `meander` — active development branch
-- `gh-pages` — compiled static output managed by CI; never commit here manually
+- `live` — compiled static output managed by CI; never commit here manually
 
 **Deploy process** (`.github/workflows/deploy.yml`):
 1. Install dependencies with pnpm
-2. Build with `BASE_PATH=/Artemis-RND`
-3. Push `app/build` output to `gh-pages`
+2. Build with `BASE_PATH` derived automatically: `/<repo-name>` (from `GITHUB_REPOSITORY`), or empty if `app/static/CNAME` exists (custom domain)
+3. Push `app/build` output to `live`
 
 Uses `@sveltejs/adapter-static` with SPA fallback (`index.html`), so no server is required at runtime.
 

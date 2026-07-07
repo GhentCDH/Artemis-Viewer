@@ -2,7 +2,7 @@
 
 SvelteKit web viewer for the Artemis project — historical Belgian maps of the Scheldt region, spanning 1700 to 1912.
 
-The app loads precompiled data from [`Artemis-RnD-Data`](https://github.com/GhentCDH/Artemis-RnD-Data), renders georeferenced IIIF map layers via Allmaps + MapLibre, and provides search across historical place names (toponyms) and IIIF manifests.
+The app loads precompiled data from [`Artemis-Data`](https://github.com/GhentCDH/Artemis-Data), renders georeferenced IIIF map layers via Allmaps + MapLibre, and provides search across historical place names (toponyms) and IIIF manifests.
 
 **Live site:** `https://ghentcdh.github.io/Artemis-RND`
 
@@ -99,7 +99,7 @@ IIIF layers are georeferenced client-side via Allmaps. WMTS layers are served fr
 The viewer reads compiled output from the data pipeline. Default base URL:
 
 ```
-https://ghentcdh.github.io/Artemis-RnD-Data/build
+https://ghentcdh.github.io/Artemis-Data/build
 ```
 
 Files consumed at runtime:
@@ -191,4 +191,4 @@ app/src/
 
 ## Related Repos
 
-- **Data pipeline:** [GhentCDH/Artemis-RnD-Data](https://github.com/GhentCDH/Artemis-RnD-Data) — preprocessing pipeline and GitHub Pages publisher
+- **Data pipeline:** [GhentCDH/Artemis-Data](https://github.com/GhentCDH/Artemis-Data) — preprocessing pipeline and GitHub Pages publisher

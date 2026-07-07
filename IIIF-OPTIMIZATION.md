@@ -17,7 +17,7 @@ The stack:
 
 ## How it works today — high-level overview
 
-When a user activates an IIIF layer the app shows a **pre-warped raster tile pyramid** almost instantly, and only loads the expensive **Allmaps mesh-warping** once the user zooms in far enough to need it. Three independent, statically-served data products back this — all produced by the data pipeline (`Artemis-RnD-Data`) and consumed in the browser with no server at runtime:
+When a user activates an IIIF layer the app shows a **pre-warped raster tile pyramid** almost instantly, and only loads the expensive **Allmaps mesh-warping** once the user zooms in far enough to need it. Three independent, statically-served data products back this — all produced by the data pipeline (`Artemis-Data`) and consumed in the browser with no server at runtime:
 
 1. **Raster tile pyramid** (`{z}/{x}/{y}.webp`, z8–12) — the whole collection mosaicked and pre-rectified into Web Mercator tiles. This is the **base renderer**: a native MapLibre `raster` source, visible the moment the layer is toggled on. Visually indistinguishable from Allmaps at overview/mid zoom.
 2. **Geomaps bundle** (`<Collection>_geomaps.json`) — the georeferencing annotations (GCPs) + sprite-atlas refs for every canvas. Drives Allmaps' high-fidelity warped rendering. Fetched **eagerly** (it doubles as the click index), but the triangulation it feeds is **deferred**.
@@ -158,7 +158,7 @@ For the Gereduceerd Kadaster specifically (19th-century Belgian cadastral maps, 
 
 The gr_sprites/WebGL-atlas approach above (Attempts 1 & 2) has been fully replaced. The data pipeline now produces a conventional `gdal2tiles.py`-style XYZ/WebMercator tile pyramid per collection (mosaic all warped canvases into one georeferenced raster, then cut it into `{z}/{x}/{y}.webp` tiles, zoom 8–12), and the app consumes it with a **native MapLibre `raster` source** instead of any custom placeholder layer. `GrSpriteWebGLLayer` and `grSpritePlaceholder.ts` were deleted (no longer referenced anywhere).
 
-### Data layout (data repo, `Artemis-RnD-Data`)
+### Data layout (data repo, `Artemis-Data`)
 
 For each collection: `IIIF/<CollectionDir>/<tiles-dir>/{z}/{x}/{y}.webp` plus a `tiles_manifest.json` alongside it — a flat JSON array of every tile's relative path (e.g. `"10/522/341.webp"`), generated from the actual files on disk. This exists because coverage is an **irregular shape** (the real surveyed extent of Belgium, not a rectangle), so there's no way to derive the exact tile set from a bounding box without guessing and eating many spurious 404s.
 

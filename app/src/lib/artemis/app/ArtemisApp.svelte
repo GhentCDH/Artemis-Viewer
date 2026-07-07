@@ -93,7 +93,7 @@
   // Decode URL state before anything renders. DEFAULT_BASE_URL is the only safe
   // value here because datasetBaseUrl isn't declared yet.
   const _initialUrlState: UrlAppState = typeof window !== 'undefined'
-    ? decodeAppState(window.location.hash, 'https://ghentcdh.github.io/Artemis-RnD-Data/build')
+    ? decodeAppState(window.location.hash, 'https://ghentcdh.github.io/Artemis-Data/build')
     : {};
 
   let _urlUpdateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -244,7 +244,7 @@
 
   // ─── Config ────────────────────────────────────────────────────────────────
 
-  const DEFAULT_BASE_URL = 'https://ghentcdh.github.io/Artemis-RnD-Data/build';
+  const DEFAULT_BASE_URL = 'https://ghentcdh.github.io/Artemis-Data/build';
   const FEATURE_FLAGS: { parallelIiifLoading: boolean; spriteDebugMode: boolean } = {
     // Load all IIIF maps in parallel vs phased (bootstrap → background). Flip to test performance.
     parallelIiifLoading: false,

@@ -27,11 +27,32 @@ jobs:
         run: pnpm install
         working-directory: app
 
+      - name: Determine base path
+        id: basepath
+        working-directory: app
+        run: |
+          set -euo pipefail
+
+          # GitHub Pages project sites serve from /<repo-name>/ unless a custom
+          # domain is configured via a CNAME file at the site root, in which case
+          # they serve from /. Deriving both from that convention (instead of a
+          # hardcoded name) means this self-corrects on repo renames and on the
+          # eventual move to a custom domain (just drop app/static/CNAME), with
+          # no workflow edit ever needed again.
+          if [ -f static/CNAME ]; then
+            echo "Custom domain (app/static/CNAME) present — deploying at site root."
+            echo "value=" >> "$GITHUB_OUTPUT"
+          else
+            REPO_NAME="${GITHUB_REPOSITORY#*/}"
+            echo "No custom domain — deploying under /$REPO_NAME (derived from repo name)."
+            echo "value=/$REPO_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build
         run: pnpm build
         working-directory: app
         env:
-          BASE_PATH: /Artemis-RND
+          BASE_PATH: ${{ steps.basepath.outputs.value }}
 
       - name: Deploy to live branch
         uses: peaceiris/actions-gh-pages@v4

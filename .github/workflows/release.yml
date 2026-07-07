@@ -15,26 +15,20 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: app/pnpm-lock.yaml
-
-      - name: Get current version
+      - name: Determine next version
         id: version
         run: |
-          VERSION=$(jq -r '.version' app/package.json)
-          echo "current=$VERSION" >> $GITHUB_OUTPUT
+          # Derive the next version from the latest git tag, not app/package.json.
+          # package.json's version can't be bumped back onto main (main is PR-only,
+          # so this workflow has no way to push a bump commit), so basing it on the
+          # tag this same job creates keeps numbering self-consistent and unique.
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          VERSION=${LAST_TAG#v}
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
           NEW_PATCH=$((PATCH + 1))
           echo "next=$MAJOR.$MINOR.$NEW_PATCH" >> $GITHUB_OUTPUT
@@ -68,12 +62,11 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create Release
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.version.outputs.next }}
-          release_name: v${{ steps.version.outputs.next }}
-          body: ${{ steps.changelog.outputs.body }}
-          draft: false
-          prerelease: false
+          RELEASE_TAG: v${{ steps.version.outputs.next }}
+          RELEASE_BODY: ${{ steps.changelog.outputs.body }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            --title "$RELEASE_TAG" \
+            --notes "$RELEASE_BODY"

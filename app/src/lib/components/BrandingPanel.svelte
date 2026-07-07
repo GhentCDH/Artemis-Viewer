@@ -112,7 +112,7 @@
             <div class="tab-content">
               <h3>Data Pipeline</h3>
               <p>Information about the data pipeline will be displayed here.</p>
-              <p><a href="https://github.com/GhentCDH/Artemis-RnD-Data" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
+              <p><a href="https://github.com/GhentCDH/Artemis-Data" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
             </div>
           {/if}
         </div>

@@ -65,7 +65,7 @@
   import { resolveIiifGeomapsPath } from '$lib/artemis/config/iiifGeomaps';
   import {
     MAIN_LAYER_ORDER, MAIN_LAYER_META, MAIN_LAYER_LABELS, MAIN_LAYER_INFO,
-    MAIN_LAYER_SUBS, SUB_LAYER_DEFS,
+    MAIN_LAYER_SUBS as STATIC_MAIN_LAYER_SUBS, SUB_LAYER_DEFS as STATIC_SUB_LAYER_DEFS,
     makeInitialMainLayerEnabled, makeInitialSubLayerEnabled,
     type MainLayerId,
   } from '$lib/artemis/config/layers';
@@ -294,8 +294,8 @@
   }
 
 	  function getLayerMetadataCandidates(mainId: string): string[] {
-	    const subIds = MAIN_LAYER_SUBS[mainId] ?? [];
-	    const iiifSubId = subIds.find((subId) => SUB_LAYER_DEFS[subId]?.kind === 'iiif');
+	    const subIds = mainLayerSubs[mainId] ?? [];
+	    const iiifSubId = subIds.find((subId) => subLayerDefs[subId]?.kind === 'iiif');
 	    const iiifLayer = iiifSubId ? getIiifInfoForSub(iiifSubId) : undefined;
 	    const compiledTail = iiifLayer?.compiledCollectionPath?.split('/').filter(Boolean).pop() ?? '';
 	    const iiifMap = typeof (iiifLayer as any)?.map === 'string' ? String((iiifLayer as any).map).trim() : '';
@@ -562,9 +562,9 @@
     const visibleSubs = paneId === 'right' ? rightSubLayerVisible : subLayerEnabled;
 
     for (const mainId of mainLayerOrder) {
-      for (const subId of MAIN_LAYER_SUBS[mainId] ?? []) {
+      for (const subId of mainLayerSubs[mainId] ?? []) {
         if (!visibleSubs[subId]) continue;
-        const subDef = SUB_LAYER_DEFS[subId];
+        const subDef = subLayerDefs[subId];
         const opacity = mainLayerOpacity[mainId] ?? 1;
         if (subDef?.kind === 'wmts') {
           const wmtsKey = getMainWmtsKey(mainId);
@@ -595,7 +595,7 @@
 
     for (const mainId of mainLayerOrder) {
       if (!visibleMain[mainId]) continue;
-      const hasIiif = (MAIN_LAYER_SUBS[mainId] ?? []).some((subId) => SUB_LAYER_DEFS[subId]?.kind === 'iiif');
+      const hasIiif = (mainLayerSubs[mainId] ?? []).some((subId) => subLayerDefs[subId]?.kind === 'iiif');
       if (!hasIiif) continue;
       if (paneId === 'right') await scheduleRightIiifMainLayerSync(mainId);
       else await scheduleIiifMainLayerSync(mainId);
@@ -722,6 +722,8 @@
 
   type UILayerInfo = LayerInfo & { uiLayerId: string };
   let layers: UILayerInfo[] = [];
+  let mainLayerSubs: Record<string, string[]> = { ...STATIC_MAIN_LAYER_SUBS };
+  let subLayerDefs: Record<string, { label: string; kind: 'iiif' | 'geojson' | 'wmts' | 'wms' | 'wfs' | 'searchable' }> = { ...STATIC_SUB_LAYER_DEFS };
 
   // Data-build-v2 normalized registry (null in legacy `index.json` mode). Drives remote layer
   // URLs, artifact-backed search/toponyms/parcels, and image collections.
@@ -734,8 +736,18 @@
   function applyDatasetV2(dataset: NormalizedDataset): void {
     const histcart: Record<string, string> = {};
     const landusage: Record<string, string> = {};
+    const nextMainLayerSubs: Record<string, string[]> = { ...STATIC_MAIN_LAYER_SUBS };
+    const nextSubLayerDefs: typeof subLayerDefs = { ...STATIC_SUB_LAYER_DEFS };
+    const nextSubLayerEnabled: Record<string, boolean> = { ...subLayerEnabled };
+    const nextRightSubLayerVisible: Record<string, boolean> = { ...rightSubLayerVisible };
     for (const main of dataset.layers) {
-      for (const sub of main.sublayers) {
+      const visualSublayers = main.sublayers.filter((sub) => sub.kind !== 'searchable');
+      const registrySubIds = visualSublayers.map((sub) => sub.id);
+      nextMainLayerSubs[main.id] = registrySubIds;
+      for (const sub of visualSublayers) {
+        nextSubLayerDefs[sub.id] = { label: sub.name, kind: sub.kind as any };
+        if (nextSubLayerEnabled[sub.id] == null) nextSubLayerEnabled[sub.id] = false;
+        if (nextRightSubLayerVisible[sub.id] == null) nextRightSubLayerVisible[sub.id] = false;
         if (!sub.remoteUrl) continue;
         if (sub.id.endsWith('-wmts')) {
           const key = getMainWmtsKey(main.id);
@@ -746,6 +758,10 @@
         }
       }
     }
+    mainLayerSubs = nextMainLayerSubs;
+    subLayerDefs = nextSubLayerDefs;
+    subLayerEnabled = nextSubLayerEnabled;
+    rightSubLayerVisible = nextRightSubLayerVisible;
     setRemoteLayerSources({ histcart: histcart as any, landusage: landusage as any });
   }
 
@@ -859,6 +875,9 @@
 
   function getIiifInfoForSub(subId: string): UILayerInfo | undefined {
     let result: UILayerInfo | undefined;
+    result = layers.find((layer) => layer.subLayerId === subId);
+    if (result) return result;
+
     if (subId === 'PrimitiefKadaster-iiif') result = findIiifLayer('PrimitiefKadaster', 'default');
     else if (subId === 'GereduceerdeKadaster-iiif') result = findIiifLayer('GereduceerdeKadaster', 'default');
     else if (subId === 'HanddrawnCollection-iiif') result = findIiifLayer('HanddrawnCollection', 'default');
@@ -1007,6 +1026,7 @@
           sourceCollectionUrl: String(layer.sourceCollectionUrl ?? ''),
           sourceCollectionLabel,
           compiledCollectionPath: layer.compiledCollectionPath,
+          subLayerId: typeof layer.subLayerId === 'string' ? layer.subLayerId : undefined,
           map: layerMapId ?? layer.map,
           geomapsPath: resolveIiifGeomapsPath(layerMapId, (layer as any).geomapsPath),
           spritesPath: layer.spritesPath,
@@ -1072,8 +1092,8 @@
       targetMap: map,
       paneId: 'main',
       mainLayerOrder,
-      mainLayerSubs: MAIN_LAYER_SUBS,
-      subLayerDefs: SUB_LAYER_DEFS,
+      mainLayerSubs: mainLayerSubs,
+      subLayerDefs: subLayerDefs,
       getMainWmtsKey,
       getLandUsageKey,
       getLandUsageLayerId,
@@ -1088,8 +1108,8 @@
       targetMap,
       paneId,
       mainLayerOrder,
-      mainLayerSubs: MAIN_LAYER_SUBS,
-      subLayerDefs: SUB_LAYER_DEFS,
+      mainLayerSubs: mainLayerSubs,
+      subLayerDefs: subLayerDefs,
       getMainWmtsKey,
       getLandUsageKey,
       getLandUsageLayerId,
@@ -1114,8 +1134,8 @@
   function getIiifMainLayerIds(): string[] {
     return getIiifMainLayerIdsData({
       mainLayerOrder,
-      mainLayerSubs: MAIN_LAYER_SUBS,
-      subLayerDefs: SUB_LAYER_DEFS,
+      mainLayerSubs: mainLayerSubs,
+      subLayerDefs: subLayerDefs,
     });
   }
 
@@ -1124,42 +1144,48 @@
   }
 
   async function syncIiifMainLayer(mainId: string) {
-    const iiifSubId = MAIN_LAYER_SUBS[mainId]?.find(s => SUB_LAYER_DEFS[s]?.kind === 'iiif');
-    if (!iiifSubId) { log('WARN', `[syncIiif] ${mainId} no iiif sublayer`); return; }
-    const info = getIiifInfoForSub(iiifSubId);
-    if (!info) { log('WARN', `[syncIiif] ${mainId} getIiifInfoForSub returned undefined (layers.length=${layers.length})`); return; }
+    const iiifSubIds = (mainLayerSubs[mainId] ?? []).filter(s => subLayerDefs[s]?.kind === 'iiif');
+    if (iiifSubIds.length === 0) { log('WARN', `[syncIiif] ${mainId} no iiif sublayer`); return; }
 
-    const gid = info.uiLayerId;
-    const shouldShow = shouldShowIiifGroup(mainId, iiifSubId);
-    const parked = isLayerGroupParked(gid);
-    const knownLayerIds = getLayerGroupLayerIds(gid);
-    const hasLoadedGroup = knownLayerIds.length > 0;
-
-    if (!shouldShow) {
-      if (!parked && hasLoadedGroup) {
-        await parkLayerGroup(map, gid);
-      }
-      applyZOrder();
-      return;
-    }
-
-    if (hasLoadedGroup && !parked) {
-      setLayerGroupOpacity(map, gid, mainLayerOpacity[mainId] ?? 1);
-      applyZOrder();
-      return;
-    }
-
+    let foundInfo = false;
     mainLayerLoading = { ...mainLayerLoading, [mainId]: true };
     try {
-      await loadIiifLayer(info);
-      const shouldStillShow = shouldShowIiifGroup(mainId, iiifSubId);
-      if (!shouldStillShow) {
-        await parkLayerGroup(map, gid);
-        applyZOrder();
-        return;
+      for (const iiifSubId of iiifSubIds) {
+        const info = getIiifInfoForSub(iiifSubId);
+        if (!info) {
+          log('WARN', `[syncIiif] ${mainId}/${iiifSubId} getIiifInfoForSub returned undefined (layers.length=${layers.length})`);
+          continue;
+        }
+        foundInfo = true;
+
+        const gid = info.uiLayerId;
+        const shouldShow = shouldShowIiifGroup(mainId, iiifSubId);
+        const parked = isLayerGroupParked(gid);
+        const knownLayerIds = getLayerGroupLayerIds(gid);
+        const hasLoadedGroup = knownLayerIds.length > 0;
+
+        if (!shouldShow) {
+          if (!parked && hasLoadedGroup) {
+            await parkLayerGroup(map, gid);
+          }
+          continue;
+        }
+
+        if (hasLoadedGroup && !parked) {
+          setLayerGroupOpacity(map, gid, mainLayerOpacity[mainId] ?? 1);
+          continue;
+        }
+
+        await loadIiifLayer(info);
+        const shouldStillShow = shouldShowIiifGroup(mainId, iiifSubId);
+        if (!shouldStillShow) {
+          await parkLayerGroup(map, gid);
+          continue;
+        }
+        setLayerGroupOpacity(map, gid, mainLayerOpacity[mainId] ?? 1);
       }
-      setLayerGroupOpacity(map, gid, mainLayerOpacity[mainId] ?? 1);
       applyZOrder();
+      if (!foundInfo) log('WARN', `[syncIiif] ${mainId} no IIIF layer info matched (layers.length=${layers.length})`);
     } catch (e: any) {
       log('ERROR', `[syncIiif] ${mainId} load failed: ${e?.message ?? String(e)}`);
     } finally {
@@ -1194,39 +1220,39 @@
 
   async function syncRightIiifMainLayer(mainId: string) {
     if (!rightMap) return;
-    const iiifSubId = MAIN_LAYER_SUBS[mainId]?.find(s => SUB_LAYER_DEFS[s]?.kind === 'iiif');
-    if (!iiifSubId) return;
-    const info = getIiifInfoForSub(iiifSubId);
-    if (!info) return;
-
-    const gid = info.uiLayerId;
-    const shouldShow = shouldShowRightIiifGroup(mainId, iiifSubId);
-    const parked = isLayerGroupParked(gid, 'right');
-    const hasLoadedGroup = getLayerGroupLayerIds(gid, 'right').length > 0;
-
-    if (!shouldShow) {
-      if (!parked && hasLoadedGroup) {
-        await parkLayerGroup(rightMap, gid, 'right');
-      }
-      applyZOrderForPane(rightMap, 'right');
-      return;
-    }
-
-    if (hasLoadedGroup && !parked) {
-      setLayerGroupOpacity(rightMap, gid, mainLayerOpacity[mainId] ?? 1, 'right');
-      applyZOrderForPane(rightMap, 'right');
-      return;
-    }
+    const iiifSubIds = (mainLayerSubs[mainId] ?? []).filter(s => subLayerDefs[s]?.kind === 'iiif');
+    if (iiifSubIds.length === 0) return;
 
     rightMainLayerLoading = { ...rightMainLayerLoading, [mainId]: true };
     try {
-      await loadIiifLayerForRight(info);
-      if (!shouldShowRightIiifGroup(mainId, iiifSubId)) {
-        await parkLayerGroup(rightMap, gid, 'right');
-        applyZOrderForPane(rightMap, 'right');
-        return;
+      for (const iiifSubId of iiifSubIds) {
+        const info = getIiifInfoForSub(iiifSubId);
+        if (!info) continue;
+
+        const gid = info.uiLayerId;
+        const shouldShow = shouldShowRightIiifGroup(mainId, iiifSubId);
+        const parked = isLayerGroupParked(gid, 'right');
+        const hasLoadedGroup = getLayerGroupLayerIds(gid, 'right').length > 0;
+
+        if (!shouldShow) {
+          if (!parked && hasLoadedGroup) {
+            await parkLayerGroup(rightMap, gid, 'right');
+          }
+          continue;
+        }
+
+        if (hasLoadedGroup && !parked) {
+          setLayerGroupOpacity(rightMap, gid, mainLayerOpacity[mainId] ?? 1, 'right');
+          continue;
+        }
+
+        await loadIiifLayerForRight(info);
+        if (!shouldShowRightIiifGroup(mainId, iiifSubId)) {
+          await parkLayerGroup(rightMap, gid, 'right');
+          continue;
+        }
+        setLayerGroupOpacity(rightMap, gid, mainLayerOpacity[mainId] ?? 1, 'right');
       }
-      setLayerGroupOpacity(rightMap, gid, mainLayerOpacity[mainId] ?? 1, 'right');
       applyZOrderForPane(rightMap, 'right');
     } finally {
       rightMainLayerLoading = { ...rightMainLayerLoading, [mainId]: false };
@@ -1250,8 +1276,8 @@
       },
       getMainWmtsKey,
       applyMainPaneOrder: applyZOrder,
-      mainLayerSubs: MAIN_LAYER_SUBS,
-      subLayerDefs: SUB_LAYER_DEFS,
+      mainLayerSubs: mainLayerSubs,
+      subLayerDefs: subLayerDefs,
       scheduleIiifMainLayerSync,
       log,
     });
@@ -1263,8 +1289,8 @@
       setEnabled: (next) => {
         subLayerEnabled = next;
       },
-      subLayerDefs: SUB_LAYER_DEFS,
-      mainLayerSubs: MAIN_LAYER_SUBS,
+      subLayerDefs: subLayerDefs,
+      mainLayerSubs: mainLayerSubs,
       mainLayerOpacity,
       getMainWmtsKey,
       getLandUsageKey,
@@ -1299,7 +1325,7 @@
       if (resolved.mode === 'v2-layers' && resolved.dataset) applyDatasetV2(resolved.dataset);
       await loadRuntimeMetadata();
       groupIdToMainId.clear();
-      for (const [mainId, subs] of Object.entries(MAIN_LAYER_SUBS)) {
+      for (const [mainId, subs] of Object.entries(mainLayerSubs)) {
         for (const subId of subs) {
           const info = getIiifInfoForSub(subId);
           if (info) groupIdToMainId.set(info.uiLayerId, mainId);
@@ -1325,10 +1351,10 @@
       // ready (e.g. set by Timeslider's onMount firing before layers were populated).
       for (const mainId of mainLayerOrder) {
         if (!mainLayerEnabled[mainId]) continue;
-        const iiifSubId = MAIN_LAYER_SUBS[mainId]?.find(s => SUB_LAYER_DEFS[s]?.kind === 'iiif');
-        if (!iiifSubId) continue; // WMTS layers (ferraris, vandermaelen) don't need this
-        const info = getIiifInfoForSub(iiifSubId);
-        if (!info) continue;
+        const hasIiifInfo = (mainLayerSubs[mainId] ?? []).some((subId) =>
+          subLayerDefs[subId]?.kind === 'iiif' && getIiifInfoForSub(subId)
+        );
+        if (!hasIiifInfo) continue; // WMTS layers (ferraris, vandermaelen) don't need this
         mainLayerEnabled = { ...mainLayerEnabled, [mainId]: false };
         await toggleMainLayer(mainId, true);
       }
@@ -1390,11 +1416,8 @@
   // cursor/in-view rather than total canvas count, and works the instant a layer's masks source
   // loads — independent of how far Allmaps has gotten triangulating underneath.
   //
-  // Returns at most one hit: the smallest-footprint feature under the cursor. Overlapping
-  // canvases are common (verzamelblad/index sheets cover many individual sheets, and vector-tile
-  // clipping can duplicate a feature across a tile boundary near the query point) — picking the
-  // smallest match is the "most specific" one, matching what a user actually expects when
-  // pointing at a single sheet rather than lighting up everything underneath it too.
+  // Returns at most one hit. Higher rendered mask layers occlude lower ones; within the winning
+  // layer, choose the smallest footprint to handle duplicate/vector-tile overlap.
   function hitTestIiifMasks(
     targetMap: maplibregl.Map,
     point: { x: number; y: number },
@@ -1410,19 +1433,22 @@
     }
     if (fillLayerIds.length === 0) return [];
 
-    // Rank every raw hit by footprint size and keep only the smallest — NOT deduped by
-    // manifestUrl first, since that property can be shared by multiple distinct canvases (a
-    // manifest with multiple canvases): grouping by it would risk merging two genuinely different
-    // overlapping features and losing one's geometry. `imageId` (the per-canvas key) is what
-    // downstream click resolution uses to open the exact clicked canvas; `manifestUrl` is fallback.
-    let best: { imageId: string; manifestUrl: string; groupId: string; geometry: any; area: number } | null = null;
+    const styleLayerIndex = new Map<string, number>();
+    targetMap.getStyle().layers?.forEach((layer, index) => {
+      styleLayerIndex.set(layer.id, index);
+    });
+
+    let best: { imageId: string; manifestUrl: string; groupId: string; geometry: any; area: number; z: number } | null = null;
     for (const feature of targetMap.queryRenderedFeatures([point.x, point.y], { layers: fillLayerIds })) {
       const manifestUrl = String(feature.properties?.manifestUrl ?? '').trim();
       const imageId = String(feature.properties?.imageId ?? '').trim();
       const groupId = groupByFillLayerId.get(feature.layer.id);
       if (!manifestUrl || !groupId) continue;
       const area = geometryBboxArea(feature.geometry);
-      if (!best || area < best.area) best = { imageId, manifestUrl, groupId, geometry: feature.geometry, area };
+      const z = styleLayerIndex.get(feature.layer.id) ?? -1;
+      if (!best || z > best.z || (z === best.z && area < best.area)) {
+        best = { imageId, manifestUrl, groupId, geometry: feature.geometry, area, z };
+      }
     }
     return best ? [{ imageId: best.imageId, manifestUrl: best.manifestUrl, groupId: best.groupId, geometry: best.geometry }] : [];
   }
@@ -1719,8 +1745,8 @@
       applyRightPaneOrder: () => {
         if (rightMap) applyZOrderForPane(rightMap, 'right');
       },
-      mainLayerSubs: MAIN_LAYER_SUBS,
-      subLayerDefs: SUB_LAYER_DEFS,
+      mainLayerSubs: mainLayerSubs,
+      subLayerDefs: subLayerDefs,
       scheduleRightIiifMainLayerSync,
     });
     updateUrl();
@@ -1736,8 +1762,8 @@
         rightSubLayerVisible = next;
       },
       rightMap,
-      subLayerDefs: SUB_LAYER_DEFS,
-      mainLayerSubs: MAIN_LAYER_SUBS,
+      subLayerDefs: subLayerDefs,
+      mainLayerSubs: mainLayerSubs,
       mainLayerOpacity,
       getMainWmtsKey,
       getLandUsageKey,
@@ -1860,7 +1886,7 @@
       rightSubLayerVisible,
       rightMainLayerVisible,
       hasIiifSubLayers: (mainId) =>
-        (MAIN_LAYER_SUBS[mainId] ?? []).some((subId) => SUB_LAYER_DEFS[subId]?.kind === 'iiif'),
+        (mainLayerSubs[mainId] ?? []).some((subId) => subLayerDefs[subId]?.kind === 'iiif'),
       onPaneSublayerChange: async (subId, enabled) =>
         onTimesliderPaneSublayerChange(new CustomEvent('paneSublayerChange', {
           detail: { pane: 'right', subId, enabled },
@@ -2028,9 +2054,9 @@
 	      // which throw if the style isn't ready. The Timeslider onMount fires before load, so any
       // sublayer toggle that arrived early is silently lost. Re-applying here closes that gap.
       for (const mainId of mainLayerOrder) {
-        for (const subId of MAIN_LAYER_SUBS[mainId] ?? []) {
+        for (const subId of mainLayerSubs[mainId] ?? []) {
           if (!subLayerEnabled[subId]) continue;
-          const subDef = SUB_LAYER_DEFS[subId];
+          const subDef = subLayerDefs[subId];
           const opacity = mainLayerOpacity[mainId] ?? 1;
           if (subDef?.kind === 'wmts') {
             const wmtsKey = getMainWmtsKey(mainId);
@@ -2387,6 +2413,7 @@
       <Timeslider
         {massartItems}
         {layerMetadataByMainId}
+        registryLayers={datasetV2Model?.layers ?? []}
         dualPaneEnabled={dualPaneEnabled}
         {searchFocusMainId}
         {searchFocusNonce}

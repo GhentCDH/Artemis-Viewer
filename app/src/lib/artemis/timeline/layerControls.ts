@@ -6,7 +6,7 @@ export type LayerGroupInfo = {
 };
 
 type SubLayerDef = {
-  kind: 'iiif' | 'geojson' | 'wmts' | 'wms' | 'searchable';
+  kind: 'iiif' | 'geojson' | 'wmts' | 'wms' | 'wfs' | 'searchable';
 };
 
 type PaneId = 'left' | 'right';

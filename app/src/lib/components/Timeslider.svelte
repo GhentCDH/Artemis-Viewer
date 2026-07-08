@@ -6,6 +6,7 @@
   import { MAIN_LAYER_LABELS, MAIN_LAYER_META, SUB_LAYER_DEFS } from '$lib/artemis/config/layers';
   import SliderLayer from '$lib/components/SliderLayer.svelte';
   import type { LayerMetadata, PaneId, SliderSource, CollectionInfo } from '$lib/components/timeslider/types';
+  import type { SubLayerKind } from '$lib/artemis/config/layers';
 
   export let layerMetadataByMainId: Record<string, LayerMetadata> = {};
   export let massartItems: MassartItem[] = [];
@@ -19,6 +20,11 @@
   export let rightActiveCollection: CollectionInfo | null = null;
   export let clearLeftCollectionNonce = 0;
   export let clearRightCollectionNonce = 0;
+  export let registryLayers: Array<{
+    id: string;
+    label: string;
+    sublayers: Array<{ id: string; name: string; kind: SubLayerKind; disabled?: boolean; remoteUrl?: string }>;
+  }> = [];
 
   const dispatch = createEventDispatcher<{
     mainToggle:     { mainId: string; enabled: boolean };
@@ -108,7 +114,7 @@
   ];
 
   type SourceDef = SliderSource;
-  type SourceKey = SourceDef['key'];
+  type SourceKey = string;
   type BulgeDirection = 'above' | 'below';
   const TIMELINE_AXIS_START = 1690;
   const TIMELINE_AXIS_END = 1930;
@@ -125,6 +131,8 @@
   let trackEl: HTMLDivElement | null = null;
   let trackWidth = 0;
   let lastSearchFocusNonce = 0;
+
+  let sources: SliderSource[] = SOURCES;
 
   let leftEnabledLayers: Record<string, boolean> = Object.fromEntries(
     SOURCES.map(s => [s.key, true])
@@ -156,11 +164,98 @@
   let nextComparePane: PaneId = 'left';
   let lastPublishedLeftCollectionKey: string | null = null;
   let lastPublishedRightCollectionKey: string | null = null;
+  let lastPublishedLeftCollectionSignature = '';
+  let lastPublishedRightCollectionSignature = '';
   let lastClearLeftCollectionNonce = 0;
   let lastClearRightCollectionNonce = 0;
 
   let hoveredSrc: SourceDef | null = null;
   let tooltipFixedStyle = '';
+
+  function localSublayerId(mainId: string, subId: string): string {
+    const prefix = `${mainId}-`;
+    const local = subId.startsWith(prefix) ? subId.slice(prefix.length) : subId;
+    return local.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || subId;
+  }
+
+  function mergeRegistrySources(baseSources: SliderSource[], layers: typeof registryLayers): SliderSource[] {
+    if (!layers.length) return baseSources;
+    return baseSources.map((src) => {
+      const registryLayer = layers.find((layer) => layer.id === src.mainId);
+      if (!registryLayer) return src;
+
+      const visualSublayers = registryLayer.sublayers.filter((sub) => !sub.disabled && sub.kind !== 'searchable');
+      const nextSublayers = visualSublayers.map((sub, index) => ({
+        id: localSublayerId(src.mainId, sub.id),
+        subId: sub.id,
+        label: sub.name,
+        defaultOn: index === 0,
+      }));
+      return {
+        ...src,
+        label: registryLayer.label || src.label,
+        sublayers: nextSublayers.length ? nextSublayers : src.sublayers,
+      };
+    });
+  }
+
+  function ensureSourceState(nextSources: SliderSource[]) {
+    let nextLeftEnabled = leftEnabledLayers;
+    let nextRightEnabled = rightEnabledLayers;
+    let nextLeftSublayers = leftSublayerState;
+    let nextRightSublayers = rightSublayerState;
+    let changedLeftEnabled = false;
+    let changedRightEnabled = false;
+
+    for (const src of nextSources) {
+      if (nextLeftEnabled[src.key] == null) {
+        nextLeftEnabled = { ...nextLeftEnabled, [src.key]: true };
+        changedLeftEnabled = true;
+      }
+      if (nextRightEnabled[src.key] == null) {
+        nextRightEnabled = { ...nextRightEnabled, [src.key]: true };
+        changedRightEnabled = true;
+      }
+
+      const leftState = nextLeftSublayers[src.key] ?? {};
+      const rightState = nextRightSublayers[src.key] ?? {};
+      let changedLeft = nextLeftSublayers[src.key] == null;
+      let changedRight = nextRightSublayers[src.key] == null;
+      const nextLeftState = { ...leftState };
+      const nextRightState = { ...rightState };
+
+      for (const sub of src.sublayers) {
+        if (nextLeftState[sub.id] == null) {
+          nextLeftState[sub.id] = sub.defaultOn;
+          changedLeft = true;
+          if (sub.defaultOn && leftEnabledLayers[src.key] && leftActiveSourceKey === src.key) {
+            dispatch('sublayerChange', { subId: sub.subId, enabled: true });
+            dispatch('paneSublayerChange', { pane: 'left', subId: sub.subId, enabled: true });
+          }
+        }
+        if (nextRightState[sub.id] == null) {
+          nextRightState[sub.id] = sub.defaultOn;
+          changedRight = true;
+          if (sub.defaultOn && dualPaneEnabled && rightEnabledLayers[src.key] && rightActiveSourceKey === src.key) {
+            dispatch('paneSublayerChange', { pane: 'right', subId: sub.subId, enabled: true });
+          }
+        }
+      }
+
+      if (changedLeft) nextLeftSublayers = { ...nextLeftSublayers, [src.key]: nextLeftState };
+      if (changedRight) nextRightSublayers = { ...nextRightSublayers, [src.key]: nextRightState };
+    }
+
+    if (changedLeftEnabled) leftEnabledLayers = nextLeftEnabled;
+    if (changedRightEnabled) rightEnabledLayers = nextRightEnabled;
+    if (nextLeftSublayers !== leftSublayerState) leftSublayerState = nextLeftSublayers;
+    if (nextRightSublayers !== rightSublayerState) rightSublayerState = nextRightSublayers;
+  }
+
+  $: {
+    sources = mergeRegistrySources(SOURCES, registryLayers);
+    ensureSourceState(sources);
+  }
 
   // Hardcoded stable axis bounds:
   // historical map eras start at 1700; current Massart dataset spans 1904-1912.
@@ -297,11 +392,11 @@
   }
 
   function sourceByKey(key: SourceKey): SourceDef {
-    return SOURCES.find((src) => src.key === key)!;
+    return sources.find((src) => src.key === key)!;
   }
 
   function sourceByMainId(mainId: string): SourceDef | undefined {
-    return SOURCES.find((src) => src.mainId === mainId);
+    return sources.find((src) => src.mainId === mainId);
   }
 
   function buildCollectionInfo(src: SourceDef): CollectionInfo {
@@ -318,10 +413,17 @@
         id: sub.id,
         subId: sub.subId,
         label: sub.label,
-        kind: SUB_LAYER_DEFS[sub.subId]?.kind,
+        defaultOn: sub.defaultOn,
+        kind: SUB_LAYER_DEFS[sub.subId]?.kind ?? registryLayers
+          .find((layer) => layer.id === src.mainId)
+          ?.sublayers.find((registrySub) => registrySub.id === sub.subId)?.kind,
         url: undefined,
       })),
     };
+  }
+
+  function collectionSignature(collection: CollectionInfo | null): string {
+    return collection ? `${collection.key}:${collection.sublayers.map((sub) => sub.subId).join(',')}` : '';
   }
 
   function layerInfoKey(pane: PaneId, mainId: string): string {
@@ -549,12 +651,12 @@
     }
 
     // Restore active layers from URL state if provided.
-    const leftInitSrc = initialLeftMainId ? SOURCES.find(s => s.mainId === initialLeftMainId) : null;
+    const leftInitSrc = initialLeftMainId ? sources.find(s => s.mainId === initialLeftMainId) : null;
     if (leftInitSrc) leftActiveSourceKey = leftInitSrc.key;
-    const rightInitSrc = initialRightMainId ? SOURCES.find(s => s.mainId === initialRightMainId) : null;
+    const rightInitSrc = initialRightMainId ? sources.find(s => s.mainId === initialRightMainId) : null;
     if (rightInitSrc) rightActiveSourceKey = rightInitSrc.key;
 
-    for (const src of SOURCES) {
+    for (const src of sources) {
       const visible = leftActiveSourceKey === src.key;
       prevVisible[src.key] = visible;
       dispatch('mainToggle', { mainId: src.mainId, enabled: visible });
@@ -598,16 +700,16 @@
     }
   }
 
-  $: leftActiveVisibility = SOURCES.reduce<Record<SourceKey, boolean>>((acc, src) => {
+  $: leftActiveVisibility = sources.reduce<Record<SourceKey, boolean>>((acc, src) => {
     acc[src.key] = Boolean(leftEnabledLayers[src.key] && leftActiveSourceKey === src.key);
     return acc;
   }, {} as Record<SourceKey, boolean>);
-  $: rightActiveVisibility = SOURCES.reduce<Record<SourceKey, boolean>>((acc, src) => {
+  $: rightActiveVisibility = sources.reduce<Record<SourceKey, boolean>>((acc, src) => {
     acc[src.key] = Boolean(dualPaneEnabled && rightEnabledLayers[src.key] && rightActiveSourceKey === src.key);
     return acc;
   }, {} as Record<SourceKey, boolean>);
 
-  $: timelineSources = assignTimelineLanes(SOURCES);
+  $: timelineSources = assignTimelineLanes(sources);
   $: lanes = [1, 2, 3, 4].map((lane) => ({
     lane,
     sources: timelineSources.filter((source) => source.lane === lane),
@@ -645,9 +747,11 @@
       ? buildCollectionInfo(sourceByKey(leftActiveSourceKey))
       : null;
     const nextKey = nextCollection?.key ?? null;
-    if (nextKey !== lastPublishedLeftCollectionKey) {
+    const nextSignature = collectionSignature(nextCollection);
+    if (nextKey !== lastPublishedLeftCollectionKey || nextSignature !== lastPublishedLeftCollectionSignature) {
       activeCollection = nextCollection;
       lastPublishedLeftCollectionKey = nextKey;
+      lastPublishedLeftCollectionSignature = nextSignature;
       dispatch('active-collection-change', { key: nextKey, pane: 'left' });
     }
   }
@@ -657,15 +761,17 @@
       ? buildCollectionInfo(sourceByKey(rightActiveSourceKey))
       : null;
     const nextKey = nextCollection?.key ?? null;
-    if (nextKey !== lastPublishedRightCollectionKey) {
+    const nextSignature = collectionSignature(nextCollection);
+    if (nextKey !== lastPublishedRightCollectionKey || nextSignature !== lastPublishedRightCollectionSignature) {
       rightActiveCollection = nextCollection;
       lastPublishedRightCollectionKey = nextKey;
+      lastPublishedRightCollectionSignature = nextSignature;
       dispatch('active-collection-change', { key: nextKey, pane: 'right' });
     }
   }
 
   $: {
-    for (const src of SOURCES) {
+    for (const src of sources) {
       const nowVisible = leftActiveVisibility[src.key];
       if (prevVisible[src.key] !== undefined && prevVisible[src.key] !== nowVisible) {
         dispatch('mainToggle', { mainId: src.mainId, enabled: nowVisible });

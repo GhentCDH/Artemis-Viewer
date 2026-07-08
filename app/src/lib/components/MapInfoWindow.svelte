@@ -11,7 +11,7 @@
   export let collectionColor: string = '';
   export let collectionDate: string = '';
   export let collectionInfo: string = '';
-  export let sublayers: Array<{ id: string; subId: string; label: string; kind?: SubLayerKind; url?: string }> = [];
+  export let sublayers: Array<{ id: string; subId: string; label: string; defaultOn?: boolean; kind?: SubLayerKind; url?: string }> = [];
   export let pane: 'left' | 'right' = 'left';
 
   const dispatch = createEventDispatcher<{
@@ -22,22 +22,27 @@
   let sublayerState: Record<string, Record<string, boolean>> = {};
   let copiedSubId: string | null = null;
   let previousCollectionKey: string | null = null;
+  let previousSublayerSignature = '';
   let openInfoSubId: string | null = null;
   $: currentSublayerState = collectionKey
     ? (sublayerState[collectionKey] ?? defaultSublayerState())
     : {};
 
-  $: if (collectionKey !== previousCollectionKey) {
-    previousCollectionKey = collectionKey;
-    openInfoSubId = null;
-    if (collectionKey) {
-      resetSublayersToDefaults(collectionKey);
+  $: {
+    const sublayerSignature = sublayers.map((sub) => `${sub.id}:${sub.defaultOn ? '1' : '0'}`).join('|');
+    if (collectionKey !== previousCollectionKey || sublayerSignature !== previousSublayerSignature) {
+      previousCollectionKey = collectionKey;
+      previousSublayerSignature = sublayerSignature;
+      openInfoSubId = null;
+      if (collectionKey) {
+        resetSublayersToDefaults(collectionKey);
+      }
     }
   }
 
   function defaultSublayerState() {
     return Object.fromEntries(
-      sublayers.map((sub) => [sub.id, sub.id === 'iiif' || sub.id === 'wmts'])
+      sublayers.map((sub) => [sub.id, Boolean(sub.defaultOn)])
     );
   }
 

@@ -5,6 +5,7 @@ export type LayerInfo = {
   sourceCollectionUrl: string;
   sourceCollectionLabel: string;
   compiledCollectionPath?: string;
+  subLayerId?: string;
   map?: string;
   geomapsPath?: string;
   spritesPath?: string;
@@ -450,7 +451,7 @@ export async function loadNewIiifEntries(
         label,
         sourceManifestUrl,
         compiledManifestPath: sourceManifestUrl || `${layerInfo.geomapsPath}#${encodeURIComponent(label)}`,
-        isVerzamelblad: map.isVerzamelblad ?? false,
+        isVerzamelblad: typeof map.isVerzamelblad === "boolean" ? map.isVerzamelblad : undefined,
         inlineMaps,
         inlineSprites,
         manifestAllmapsUrl,

@@ -114,32 +114,34 @@ function normalizeSubLayer(raw: any): NormalizedSubLayer | null {
       if (p) artifacts[role] = p;
     }
   }
+  const hasArtifacts = Object.keys(artifacts).length > 0;
   return {
     id,
     name: readString(raw?.name) ?? id,
     kind: (readString(raw?.kind) ?? "geojson") as SubLayerKindV2,
     sourceType,
     remoteUrl: readString(raw?.source?.url),
-    artifacts: Object.keys(artifacts).length ? artifacts : undefined,
-    disabled: sourceType === "planned",
+    artifacts: hasArtifacts ? artifacts : undefined,
+    disabled: sourceType === "planned" && !hasArtifacts,
     description: readString(raw?.description),
   };
 }
 
 /** Build the app `LayerInfo` for a live (non-planned) IIIF sublayer with a geomaps artifact. */
-function iiifLayerInfo(main: NormalizedMainLayer, sub: NormalizedSubLayer): LayerInfo | null {
+function iiifLayerInfo(main: NormalizedMainLayer, sub: NormalizedSubLayer, fallbackSourceUrl?: string): LayerInfo | null {
   const geomapsPath = sub.artifacts?.geomaps;
   if (!geomapsPath) return null; // planned / not-yet-generated IIIF layer
   return {
-    sourceCollectionUrl: sub.remoteUrl ?? "",
+    sourceCollectionUrl: sub.remoteUrl ?? fallbackSourceUrl ?? "",
     sourceCollectionLabel: main.label,
+    subLayerId: sub.id,
     map: main.id,
     geomapsPath,
     masksPath: sub.artifacts?.masks,
     rasterPmtilesPath: sub.artifacts?.raster,
     spritesImagePath: sub.artifacts?.sprites,
     spritesIndexPath: sub.artifacts?.spritesIndex,
-    renderLayerKey: "default",
+    renderLayerKey: sub.id,
     renderLayerLabel: sub.name,
   };
 }
@@ -160,13 +162,18 @@ function normalizeLayersRegistry(raw: any, datasetBaseUrl: string): NormalizedDa
       timeframe: normalizeTimeframe(rawLayer?.timeframe),
       sublayers: [],
     };
-    for (const rawSub of Array.isArray(rawLayer?.sublayers) ? rawLayer.sublayers : []) {
+    const rawSublayers = Array.isArray(rawLayer?.sublayers) ? rawLayer.sublayers : [];
+    const mainIiifSourceUrl = rawSublayers
+      .map((rawSub: any) => normalizeSubLayer(rawSub))
+      .find((sub): sub is NormalizedSubLayer => Boolean(sub && sub.kind === "iiif" && sub.remoteUrl))
+      ?.remoteUrl;
+    for (const rawSub of rawSublayers) {
       const sub = normalizeSubLayer(rawSub);
       if (!sub) continue;
       main.sublayers.push(sub);
 
       if (sub.kind === "iiif") {
-        const info = iiifLayerInfo(main, sub);
+        const info = iiifLayerInfo(main, sub, mainIiifSourceUrl);
         if (info) iiifLayers.push(info);
       }
       const topo = sub.artifacts?.toponyms;

@@ -375,7 +375,10 @@ export async function initializeLayerGroup(opts: {
   const loaded = await loadedPromise;
   const infoByServiceUrl = loaded.infoByServiceUrl;
   const entriesUnfiltered = loaded.entries;
+  const hasVerzamelbladFlags = entriesUnfiltered.some((entry) => typeof entry.isVerzamelblad === "boolean");
   const entries = entriesUnfiltered.filter((entry) => {
+    if (layerInfo.subLayerId) return true;
+    if (!hasVerzamelbladFlags) return true;
     if (layerInfo.renderLayerKey === "verzamelblad") return entry.isVerzamelblad === true;
     if (layerInfo.renderLayerKey === "default") return entry.isVerzamelblad !== true;
     return true;

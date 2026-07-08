@@ -33,5 +33,5 @@ export type CollectionInfo = {
   color: string;
   dateRange: string;
   info?: string;
-  sublayers: Array<{ id: string; subId: string; label: string; kind?: SubLayerKind; url?: string }>;
+  sublayers: Array<{ id: string; subId: string; label: string; defaultOn?: boolean; kind?: SubLayerKind; url?: string }>;
 };

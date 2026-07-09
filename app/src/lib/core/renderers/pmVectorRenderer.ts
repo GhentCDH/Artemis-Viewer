@@ -94,6 +94,11 @@ export function renderPmVectorSublayer(context: SublayerRenderContext, target: S
   }
 }
 
+/** Maplibre layer ids this renderer may create for a sublayer, bottom-to-top. */
+export function pmVectorSublayerLayerIds(paneId: string, sublayerId: string): string[] {
+  return [rendererId(paneId, sublayerId, 'fill'), rendererId(paneId, sublayerId, 'line')];
+}
+
 export function removePmVectorSublayer(context: SublayerRenderContext, sublayerId: string): void {
   const sourceId = rendererId(context.paneId, sublayerId, 'source');
   const fillLayerId = rendererId(context.paneId, sublayerId, 'fill');

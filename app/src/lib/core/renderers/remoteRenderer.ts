@@ -70,6 +70,11 @@ export function renderRemoteSublayer(context: SublayerRenderContext, target: Sub
   }
 }
 
+/** Maplibre layer ids this renderer may create for a sublayer, bottom-to-top. */
+export function remoteSublayerLayerIds(paneId: string, sublayerId: string): string[] {
+  return [rendererId(paneId, sublayerId, 'layer')];
+}
+
 export function removeRemoteSublayer(context: SublayerRenderContext, sublayerId: string): void {
   const sourceId = rendererId(context.paneId, sublayerId, 'source');
   const layerId = rendererId(context.paneId, sublayerId, 'layer');

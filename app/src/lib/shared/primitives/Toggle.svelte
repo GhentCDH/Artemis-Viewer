@@ -45,6 +45,8 @@
     --toggle-border-width: 1px;
     /* -- end exposed -- */
 
+    appearance: none;
+    -webkit-appearance: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;

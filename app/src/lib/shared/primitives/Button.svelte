@@ -52,9 +52,12 @@
     --button-font-size: var(--text-xs);
     /* -- end exposed -- */
 
+    appearance: none;
+    -webkit-appearance: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    pointer-events: auto;
     gap: var(--button-gap);
     min-height: var(--button-height);
     padding-inline: var(--button-padding-inline);

@@ -1,101 +1,91 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import type maplibregl from 'maplibre-gl';
   import { DATASET_BASE_URL, datasetUrl } from '$lib/core/dataset/dataSource';
   import { loadLayerRegistry, type LayerSummary } from '$lib/core/dataset/layerRegistry';
-  import { initializeMapLibre } from '$lib/core/map/maplibreInit';
-  import { BASELAYER_BOUNDS } from '$lib/core/map/basemap';
-  import { SublayerRendererManager } from '$lib/core/renderers/sublayerRendererManager';
+  import { syncPaneCameras } from '$lib/core/map/paneSync';
   import Timeline from '$lib/features/timeline/Timeline.svelte';
-  import SublayerMenu from '$lib/features/timeline/SublayerMenu.svelte';
+  import PaneSublayerMenu from '$lib/features/timeline/PaneSublayerMenu.svelte';
   import { timelineSelection } from '$lib/features/timeline/timelineSelection.svelte';
+  import Button from '$lib/shared/primitives/Button.svelte';
   import Tooltip from '$lib/shared/primitives/Tooltip.svelte';
+  import MapPane from './MapPane.svelte';
 
-  let workspacePane: HTMLElement;
   let layers = $state<LayerSummary[]>([]);
-  let sublayerRendererManager = $state<SublayerRendererManager | null>(null);
-  let dismissedSublayerMenuLayerId = $state<string | null>(null);
+  let leftMap = $state<maplibregl.Map | null>(null);
+  let rightMap = $state<maplibregl.Map | null>(null);
   const staticAssetBase = import.meta.env.BASE_URL.replace(/\/$/, '');
-  const menuLayerId = $derived(timelineSelection.leftLayerId ?? timelineSelection.rightLayerId);
-  const selectedMenuLayer = $derived(layers.find((layer) => layer.id === menuLayerId) ?? null);
-  const menuLayer = $derived(selectedMenuLayer?.id === dismissedSublayerMenuLayerId ? null : selectedMenuLayer);
-  const menuSublayerState = $derived(menuLayer ? (timelineSelection.sublayersByLayerId[menuLayer.id] ?? {}) : {});
+  const pmtilesUrl = `${staticAssetBase}/baselayer.pmtiles`;
+  const isCompare = $derived(timelineSelection.mode === 'compare');
+  const leftMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.leftLayerId) ?? null);
+  const rightMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.rightLayerId) ?? null);
 
+  // Hard camera lock only makes sense with both panes on screen; dropping either
+  // reference (pane closed, or compare mode exited below) tears the sync down.
   $effect(() => {
-    if (!selectedMenuLayer) {
-      dismissedSublayerMenuLayerId = null;
-      return;
-    }
-
-    if (menuLayer) {
-      timelineSelection.ensureSublayerDefaults(menuLayer.id, menuLayer.sublayers);
-    }
+    if (!leftMap || !rightMap) return;
+    return syncPaneCameras(leftMap, rightMap);
   });
 
   $effect(() => {
-    sublayerRendererManager?.reconcile(layers, {
-      activeLayerIds: timelineSelection.activeLayerIds,
-      sublayersByLayerId: timelineSelection.sublayersByLayerId,
-    });
+    if (!isCompare) {
+      rightMap = null;
+    }
   });
 
-  onMount(() => {
-    const mapLibre = initializeMapLibre('left', {
-      container: workspacePane,
-      pmtilesUrl: `${staticAssetBase}/baselayer.pmtiles`,
-      initialBounds: BASELAYER_BOUNDS,
-    });
-    const rendererManager = new SublayerRendererManager({
-      map: mapLibre.map,
-      paneId: mapLibre.paneId,
-      datasetBaseUrl: DATASET_BASE_URL,
-    });
-    const reconcileOnStyleLoad = () => {
-      rendererManager.reconcile(layers, {
-        activeLayerIds: timelineSelection.activeLayerIds,
-        sublayersByLayerId: timelineSelection.sublayersByLayerId,
-      });
-    };
-
-    sublayerRendererManager = rendererManager;
-    mapLibre.map.on('load', reconcileOnStyleLoad);
-    mapLibre.map.on('styledata', reconcileOnStyleLoad);
-    mapLibre.map.on('idle', reconcileOnStyleLoad);
-
-    void loadLayerRegistry(datasetUrl('layers.yaml')).then((nextLayers) => {
-      layers = nextLayers;
-    });
-
-    return () => {
-      mapLibre.map.off('load', reconcileOnStyleLoad);
-      mapLibre.map.off('styledata', reconcileOnStyleLoad);
-      mapLibre.map.off('idle', reconcileOnStyleLoad);
-      rendererManager.destroy();
-      sublayerRendererManager = null;
-      mapLibre.destroy();
-    };
+  void loadLayerRegistry(datasetUrl('layers.yaml')).then((nextLayers) => {
+    layers = nextLayers;
   });
 </script>
 
 <main class="canvas">
   <div class="workspace-layer">
-    <section class="workspace-pane" aria-label="Map workspace" bind:this={workspacePane}></section>
+    <MapPane
+      paneId="left"
+      {pmtilesUrl}
+      datasetBaseUrl={DATASET_BASE_URL}
+      {layers}
+      activeLayerId={timelineSelection.leftLayerId}
+      sublayersByLayerId={timelineSelection.sublayersByLayerId}
+      onMapReady={(map) => (leftMap = map)}
+    />
+    {#if isCompare}
+      <MapPane
+        paneId="right"
+        {pmtilesUrl}
+        datasetBaseUrl={DATASET_BASE_URL}
+        {layers}
+        activeLayerId={timelineSelection.rightLayerId}
+        sublayersByLayerId={timelineSelection.sublayersByLayerId}
+        initialCamera={leftMap
+          ? { center: leftMap.getCenter(), zoom: leftMap.getZoom(), bearing: leftMap.getBearing(), pitch: leftMap.getPitch() }
+          : undefined}
+        onMapReady={(map) => (rightMap = map)}
+      />
+    {/if}
   </div>
 
   <div class="overlay-layer">
-    <div class="window-slot sublayer-menu-slot">
-      <SublayerMenu
-        layer={menuLayer}
-        sublayerState={menuSublayerState}
-        onclose={() => {
-          dismissedSublayerMenuLayerId = menuLayer?.id ?? null;
-        }}
-        ontoggle={(sublayerId) => {
-          if (menuLayer) {
-            timelineSelection.toggleSublayer(menuLayer.id, sublayerId);
-          }
-        }}
-      />
+    <div class="window-slot compare-control-slot">
+      <div class="compare-control">
+        <Button
+          active={isCompare}
+          aria-label="Toggle compare mode"
+          onclick={() => timelineSelection.toggleCompareMode()}
+          style="--button-height: calc(1.75rem * 1.3); --button-padding-inline: calc(var(--space-3) * 1.3); --button-font-size: calc(var(--text-xs) * 1.3);"
+        >
+          {isCompare ? 'Exit Compare' : 'Compare'}
+        </Button>
+      </div>
     </div>
+
+    <div class="window-slot sublayer-menu-slot sublayer-menu-slot--left" class:sublayer-menu-slot--split={isCompare}>
+      <PaneSublayerMenu layer={leftMenuLayer} />
+    </div>
+    {#if isCompare}
+      <div class="window-slot sublayer-menu-slot sublayer-menu-slot--right">
+        <PaneSublayerMenu layer={rightMenuLayer} />
+      </div>
+    {/if}
 
     <div class="window-slot timeline-slot">
       <Timeline {layers} />
@@ -121,19 +111,13 @@
 
   .workspace-layer {
     z-index: var(--z-map);
+    display: flex;
     overflow: hidden;
   }
 
   .overlay-layer {
     z-index: var(--z-overlay);
     pointer-events: none;
-  }
-
-  .workspace-pane {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    background: var(--color-surface-raised);
   }
 
   .window-slot {
@@ -154,7 +138,31 @@
 
   .sublayer-menu-slot {
     top: var(--space-4);
+  }
+
+  .sublayer-menu-slot--left {
     left: var(--space-4);
     right: var(--space-4);
+  }
+
+  /* In compare mode each pane owns half the width, so its sublayer menu doesn't
+     drift into the other pane. */
+  .sublayer-menu-slot--left.sublayer-menu-slot--split {
+    right: 50%;
+  }
+
+  .sublayer-menu-slot--right {
+    left: calc(50% + var(--space-4));
+    right: var(--space-4);
+  }
+
+  .compare-control-slot {
+    left: var(--space-4);
+    bottom: calc(4% + 9rem + var(--space-2));
+    display: flex;
+  }
+
+  .compare-control {
+    display: flex;
   }
 </style>

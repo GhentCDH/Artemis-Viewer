@@ -11,7 +11,8 @@ class TimelineSelectionStore {
   sublayersByLayerId = $state<Record<string, Record<string, boolean>>>({});
 
   get activeLayerIds(): string[] {
-    return [this.leftLayerId, this.rightLayerId].filter((layerId): layerId is string => layerId !== null);
+    const ids = this.mode === 'compare' ? [this.leftLayerId, this.rightLayerId] : [this.leftLayerId];
+    return ids.filter((layerId): layerId is string => layerId !== null);
   }
 
   isLayerActive(layerId: string): boolean {
@@ -51,9 +52,12 @@ class TimelineSelectionStore {
   setMode(mode: TimelineMode): void {
     this.mode = mode;
     if (mode === 'single') {
-      this.rightLayerId = null;
       this.nextComparePane = 'left';
     }
+  }
+
+  toggleCompareMode(): void {
+    this.setMode(this.mode === 'compare' ? 'single' : 'compare');
   }
 
   clearPane(paneId: PaneId): void {

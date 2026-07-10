@@ -45,12 +45,34 @@ interface LayersYamlDocument {
   }>;
 }
 
-export async function loadLayerRegistry(layersUrl: string): Promise<LayerSummary[]> {
-  const response = await fetch(layersUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch layer registry: ${response.status} ${layersUrl}`);
+export interface SearchSource {
+  layerId: string;
+  label: string;
+  toponymsUrl: string | null;
+  sheetIndexUrls: string[];
+}
+
+// Shared across loadLayerRegistry and loadSearchSources so opening the search menu
+// after the app has already loaded the registry doesn't re-fetch layers.yaml.
+const documentCache = new Map<string, Promise<LayersYamlDocument>>();
+
+function fetchLayersDocument(layersUrl: string): Promise<LayersYamlDocument> {
+  let pending = documentCache.get(layersUrl);
+  if (!pending) {
+    pending = fetch(layersUrl).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to fetch layer registry: ${response.status} ${layersUrl}`);
+      }
+      return parse(await response.text()) as LayersYamlDocument;
+    });
+    documentCache.set(layersUrl, pending);
+    void pending.catch(() => documentCache.delete(layersUrl));
   }
-  const doc = parse(await response.text()) as LayersYamlDocument;
+  return pending;
+}
+
+export async function loadLayerRegistry(layersUrl: string): Promise<LayerSummary[]> {
+  const doc = await fetchLayersDocument(layersUrl);
   return doc.layers.map((layer) => ({
     id: layer.id,
     label: layer.label,
@@ -69,4 +91,29 @@ export async function loadLayerRegistry(layersUrl: string): Promise<LayerSummary
         artifacts: sublayer.artifacts ?? {},
       })),
   }));
+}
+
+/**
+ * Search-relevant artifact URLs per layer, read from the sublayers loadLayerRegistry
+ * deliberately excludes from the visual registry (`kind: 'searchable'` toponym
+ * sublayers render nothing — they exist only to carry a toponyms.json path).
+ */
+export async function loadSearchSources(layersUrl: string): Promise<SearchSource[]> {
+  const doc = await fetchLayersDocument(layersUrl);
+  return doc.layers
+    .map((layer) => {
+      const activeSublayers = (layer.sublayers ?? []).filter((sublayer) => !sublayer.disabled);
+      const toponymsUrl = activeSublayers.find((sublayer) => sublayer.kind === 'searchable')?.artifacts?.toponyms ?? null;
+      const sheetIndexUrls = activeSublayers
+        .map((sublayer) => sublayer.artifacts?.search)
+        .filter((url): url is string => Boolean(url));
+
+      return {
+        layerId: layer.id,
+        label: layer.label,
+        toponymsUrl,
+        sheetIndexUrls,
+      };
+    })
+    .filter((source) => source.toponymsUrl !== null || source.sheetIndexUrls.length > 0);
 }

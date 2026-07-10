@@ -2,15 +2,19 @@
   import type maplibregl from 'maplibre-gl';
   import { DATASET_BASE_URL, datasetUrl } from '$lib/core/dataset/dataSource';
   import { loadLayerRegistry, type LayerSummary } from '$lib/core/dataset/layerRegistry';
+  import { loadSiteMetadata, type SiteMetadata } from '$lib/core/dataset/siteMetadata';
   import { syncPaneCameras } from '$lib/core/map/paneSync';
   import Timeline from '$lib/features/timeline/Timeline.svelte';
   import PaneSublayerMenu from '$lib/features/timeline/PaneSublayerMenu.svelte';
   import { timelineSelection } from '$lib/features/timeline/timelineSelection.svelte';
+  import SearchMenu from '$lib/features/search/SearchMenu.svelte';
+  import BrandingPanel from '$lib/features/branding/BrandingPanel.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Tooltip from '$lib/shared/primitives/Tooltip.svelte';
   import MapPane from './MapPane.svelte';
 
   let layers = $state<LayerSummary[]>([]);
+  let siteMetadata = $state<SiteMetadata>({ title: 'About Artemis', info: [], attribution: '', team: [], logos: [] });
   let leftMap = $state<maplibregl.Map | null>(null);
   let rightMap = $state<maplibregl.Map | null>(null);
   const staticAssetBase = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -34,6 +38,10 @@
 
   void loadLayerRegistry(datasetUrl('layers.yaml')).then((nextLayers) => {
     layers = nextLayers;
+  });
+
+  void loadSiteMetadata(datasetUrl).then((nextSiteMetadata) => {
+    siteMetadata = nextSiteMetadata;
   });
 </script>
 
@@ -65,6 +73,12 @@
   </div>
 
   <div class="overlay-layer">
+    <div class="window-slot branding-slot">
+      <div class="branding-slot-inner">
+        <BrandingPanel {siteMetadata} style="--branding-scale: 1.6;" />
+      </div>
+    </div>
+
     <div class="window-slot compare-control-slot">
       <div class="compare-control">
         <Button
@@ -75,6 +89,7 @@
         >
           {isCompare ? 'Exit Compare' : 'Compare'}
         </Button>
+        <SearchMenu {leftMap} {rightMap} />
       </div>
     </div>
 
@@ -136,6 +151,15 @@
     display: flex;
   }
 
+  .branding-slot {
+    top: var(--space-4);
+    left: var(--space-4);
+  }
+
+  .branding-slot-inner {
+    display: flex;
+  }
+
   .sublayer-menu-slot {
     top: var(--space-4);
   }
@@ -164,5 +188,6 @@
 
   .compare-control {
     display: flex;
+    gap: var(--space-2);
   }
 </style>

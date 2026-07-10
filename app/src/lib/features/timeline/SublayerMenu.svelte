@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import Button from '$lib/shared/primitives/Button.svelte';
+  import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
   import Toggle from '$lib/shared/primitives/Toggle.svelte';
 
@@ -77,9 +78,7 @@
       {/snippet}
 
       <div class="sublayer-menu" aria-label={`${layer.label} sublayers`}>
-        <svg class="sublayer-wave" viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M 0 10 C 20 10, 20 4, 40 4 S 60 10, 80 10 S 100 4, 120 4"></path>
-        </svg>
+        <WaveSeparator />
         {#each layer.sublayers as sublayer (sublayer.id)}
           {@const enabled = sublayerState[sublayer.id] ?? false}
           {@const infoOpen = openInfoSublayerId === sublayer.id}
@@ -124,9 +123,7 @@
         }}
       >
         <div class="sublayer-detail">
-          <svg class="detail-wave" viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M 0 10 C 20 10, 20 4, 40 4 S 60 10, 80 10 S 100 4, 120 4"></path>
-          </svg>
+          <WaveSeparator />
           {#if openInfoSublayer.description}
             {#each openInfoSublayer.description.split(/\n\s*\n/).filter(Boolean) as paragraph}
               <p>{paragraph}</p>
@@ -134,9 +131,7 @@
           {/if}
           {#if openInfoSublayer.downloadUrl}
             <section class="download-section" aria-label={`${openInfoSublayer.name} download`}>
-              <svg class="download-wave" viewBox="0 0 100 16" preserveAspectRatio="none" aria-hidden="true">
-                <path d="M 0 10 C 20 10, 20 4, 40 4 S 60 10, 80 10 S 100 4, 120 4"></path>
-              </svg>
+              <WaveSeparator />
               <h3>Download</h3>
               <div class="download-row">
                 <a href={openInfoSublayer.downloadUrl} target="_blank" rel="noreferrer">
@@ -251,23 +246,6 @@
     padding: var(--space-3) var(--space-4) var(--space-3);
   }
 
-  .sublayer-wave {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 1rem;
-    overflow: visible;
-    pointer-events: none;
-  }
-
-  .sublayer-wave path {
-    fill: none;
-    stroke: color-mix(in srgb, var(--color-timeline-axis) 34%, transparent);
-    stroke-width: 1px;
-    vector-effect: non-scaling-stroke;
-  }
-
   .sublayer-row {
     position: relative;
     display: flex;
@@ -318,23 +296,6 @@
     padding: var(--space-3);
   }
 
-  .detail-wave {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 1rem;
-    overflow: visible;
-    pointer-events: none;
-  }
-
-  .detail-wave path {
-    fill: none;
-    stroke: color-mix(in srgb, var(--color-timeline-axis) 34%, transparent);
-    stroke-width: 1px;
-    vector-effect: non-scaling-stroke;
-  }
-
   .sublayer-detail p {
     margin: 0;
     color: var(--color-text-secondary);
@@ -353,23 +314,6 @@
     position: relative;
     margin-top: var(--space-4);
     padding-top: var(--space-3);
-  }
-
-  .download-wave {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 1rem;
-    overflow: visible;
-    pointer-events: none;
-  }
-
-  .download-wave path {
-    fill: none;
-    stroke: color-mix(in srgb, var(--color-timeline-axis) 34%, transparent);
-    stroke-width: 1px;
-    vector-effect: non-scaling-stroke;
   }
 
   .download-section h3 {

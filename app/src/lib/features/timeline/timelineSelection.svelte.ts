@@ -19,6 +19,20 @@ class TimelineSelectionStore {
     return this.leftLayerId === layerId || this.rightLayerId === layerId;
   }
 
+  private nextTargetPane(): PaneId {
+    return this.leftLayerId === null ? 'left' : this.rightLayerId === null ? 'right' : this.nextComparePane;
+  }
+
+  private activateInPane(layerId: string, pane: PaneId): void {
+    if (pane === 'left') {
+      this.leftLayerId = layerId;
+      this.nextComparePane = 'right';
+    } else {
+      this.rightLayerId = layerId;
+      this.nextComparePane = 'left';
+    }
+  }
+
   toggleLayer(layerId: string): void {
     if (this.mode === 'single') {
       this.leftLayerId = this.leftLayerId === layerId ? null : layerId;
@@ -39,14 +53,27 @@ class TimelineSelectionStore {
       return;
     }
 
-    const targetPane = this.leftLayerId === null ? 'left' : this.rightLayerId === null ? 'right' : this.nextComparePane;
-    if (targetPane === 'left') {
+    this.activateInPane(layerId, this.nextTargetPane());
+  }
+
+  /**
+   * Activates a layer without deactivating it if it's already on (unlike toggleLayer),
+   * and reports which pane it ended up in — used by search to fly the matching pane's
+   * camera to the selected result.
+   */
+  focusLayer(layerId: string): PaneId {
+    if (this.leftLayerId === layerId) return 'left';
+    if (this.rightLayerId === layerId) return 'right';
+
+    if (this.mode === 'single') {
       this.leftLayerId = layerId;
-      this.nextComparePane = 'right';
-    } else {
-      this.rightLayerId = layerId;
       this.nextComparePane = 'left';
+      return 'left';
     }
+
+    const pane = this.nextTargetPane();
+    this.activateInPane(layerId, pane);
+    return pane;
   }
 
   setMode(mode: TimelineMode): void {

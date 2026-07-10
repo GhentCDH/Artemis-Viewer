@@ -72,7 +72,7 @@
   --space-8: 3rem;
 
   /* --- Radius: a ratio, not per-component fixed px ----------------------- */
-  --control-corner-ratio: 10;
+  --control-corner-ratio: 15;
   --radius-xs: calc(var(--space-3) / var(--control-corner-ratio));
   --radius-sm: calc(var(--space-4) / var(--control-corner-ratio));
   --radius-md: calc(var(--space-6) / var(--control-corner-ratio));

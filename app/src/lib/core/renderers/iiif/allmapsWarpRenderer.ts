@@ -1,6 +1,7 @@
 import { WarpedMapLayer } from '@allmaps/maplibre';
 import type { SublayerRenderContext, SublayerRenderTarget } from '../types';
 import { loadGeomaps } from './geomapsLoader';
+import { attachAllmapsDiagnostics } from './iiifAllmapsDiagnostics';
 import type { NormalizedGeomapsCanvas } from './geomapsTypes';
 import { buildAllmapsImageInfos } from './iiifImageInfo';
 import { iiifLayerId, isCurrentIiifRender, registerIiifCleanup } from './iiifLayerRuntime';
@@ -10,10 +11,15 @@ import { loadSpriteAtlas, type IiifSprite, type IiifSpriteAtlas } from './iiifSp
 // zoom, but free of Allmaps' per-canvas triangulation cost.
 const ALLMAPS_TRIGGER_ZOOM = 12.5;
 // Viewport-driven loading: only canvases whose footprint intersects the viewport, padded by this
-// fraction on each side, are triangulated.
-const ALLMAPS_VIEWPORT_MARGIN = 0.5;
-// Canvases triangulated per animation frame while draining the load queue, so a big reconcile
-// never blocks a frame.
+// fraction on each side, are triangulated. Quick experiment: dropped from 0.5 (main's value) to
+// cut how many canvases a single pan reveal queues — at 0.5 the padded load area is ~4x the
+// visible viewport; at 0.15 it's ~1.7x, much closer to what's actually on screen.
+const ALLMAPS_VIEWPORT_MARGIN = 0.15;
+// Triangulation is a one-time, cached cost per canvas (paid inside `addGeoreferencedMap`, not
+// repeated on later frames) — this just caps how many *newly revealed* canvases get that one-time
+// cost paid per frame while draining the queue, so a reconcile that reveals a big batch at once
+// (e.g. a large pan, or first crossing ALLMAPS_TRIGGER_ZOOM) spreads it across frames instead of
+// doing it all synchronously and dropping one.
 const RECONCILE_CHUNK = 6;
 
 function nextFrame(): Promise<void> {
@@ -46,7 +52,26 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
   if (!geomapsPath) return false;
 
   const layerId = iiifLayerId(context.paneId, target.sublayer.id, 'allmaps-warp');
-  const layer = new WarpedMapLayer({ layerId });
+  // Renderer options tuned for pan-at-high-zoom performance (measured 2026-07, see the
+  // iiifAllmapsDiagnostics module). Allmaps' fragment shader linearly scans a map's *entire*
+  // cached-tile texture array per pixel, and every loaded tile triggers a repack of that whole
+  // array — so per-frame cost is driven by cached tiles per map, and the defaults let that grow
+  // huge: tiles were pruned only outside a 17×-linear-viewport region (`pruneViewportBufferRatio`
+  // buffers per side: 8 → 17× linear, ~290× area), producing texture arrays 100–180 tiles deep and
+  // multi-hundred-ms frames on a Retina fullscreen canvas.
+  const layer = new WarpedMapLayer({
+    layerId,
+    // Fetch tiles at the nearest IIIF scale factor instead of the default half-step finer
+    // (log2 correction -0.5 ≈ 2× the tiles for sharpness that barely registers at map scale).
+    log2ScaleFactorCorrection: 0,
+    // Keep viewport tiles for a 5×-linear-viewport pan-back region instead of 17× (1 measured too
+    // aggressive: panning back triggered thousands of refetches).
+    pruneViewportBufferRatio: 2,
+    // Overview tiles (whole-image low-res fallbacks): request within 5×, keep within 9× linear
+    // viewport instead of 17×/33×.
+    overviewRequestViewportBufferRatio: 2,
+    overviewPruneViewportBufferRatio: 4,
+  });
   try {
     context.map.addLayer(layer);
   } catch {
@@ -75,11 +100,20 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
 
   try {
     layer.addImageInfos(buildAllmapsImageInfos(geomaps.imageInfos));
-  } catch {
-    // non-fatal — Allmaps falls back to fetching info.json itself per canvas
+  } catch (error) {
+    // non-fatal — Allmaps falls back to fetching info.json itself per canvas, but that is a
+    // per-canvas network fetch (retried every rendered frame if it fails), so make it visible.
+    console.warn(`[allmaps ${layerId}] addImageInfos failed — per-canvas info.json fetches will happen instead`, error);
   }
 
   const loadedCanvasIds = new Set<string>();
+  const detachDiagnostics = attachAllmapsDiagnostics({
+    label: layerId,
+    map: context.map,
+    layer,
+    getLoadedCount: () => loadedCanvasIds.size,
+  });
+  registerIiifCleanup(context.paneId, target.sublayer.id, detachDiagnostics);
   const pendingQueue: NormalizedGeomapsCanvas[] = [];
   let draining = false;
   let started = false;
@@ -95,31 +129,49 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     return atlasPromise;
   }
 
-  // `WarpedMapLayer.addSprites` internally walks the renderer's *entire* accumulated warped-map
-  // list every call, not just the sprites passed in (see `BaseRenderer.addSprites`), so calling it
-  // once per newly-revealed viewport chunk means every subsequent pan pays a cost proportional to
-  // everything loaded across the whole session so far — the longer you pan around a collection, the
-  // more each new reveal costs. Matching main's original implementation: call it exactly once per
-  // group, up front, before any canvas has been triangulated. Sprites are an optimization: any
-  // failure here is non-fatal — canvases still triangulate and Allmaps fetches full-resolution tiles
-  // directly.
-  let spritesUploaded = false;
-  async function ensureSpritesUploaded(): Promise<void> {
-    if (spritesUploaded) return;
-    spritesUploaded = true;
+  // Sprites must be uploaded AFTER the maps they cover exist in the warped-map list:
+  // `BaseRenderer.addSprites` binds sprites to maps via `warpedMapsByResourceId` built from the
+  // *current* list, and `spritesDataToCachedTiles` `break`s on the first sprite without a matching
+  // map — uploading before any canvas is triangulated silently produces zero sprite tiles (every
+  // canvas then fetches full-res IIIF tiles at all zooms; this was the branch's high-zoom pan-lag
+  // regression vs main, which uploaded sprites after its addGeoreferencedMap batches). So: upload
+  // once per drain, only the sprites for canvases added in that drain. The atlas URL gets a unique
+  // fragment per batch because the sprites tile cache dedupes by tile URL and would ignore repeat
+  // calls; fragments are stripped from the HTTP request, so the image bytes come from browser cache.
+  // Sprites are an optimization: any failure is non-fatal — Allmaps fetches full-res tiles directly.
+  let spriteBatchCounter = 0;
+  let warnedSpritesUnavailable = false;
+  async function uploadSpritesForCanvases(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
+    if (canvases.length === 0) return;
+
+    if (!spritesImagePath || !spritesIndexPath) {
+      if (!warnedSpritesUnavailable) {
+        warnedSpritesUnavailable = true;
+        console.warn(`[allmaps ${layerId}] no sprite artifacts on sublayer — full-res IIIF tiles will be fetched for every canvas`);
+      }
+      return;
+    }
 
     const atlas = await getSpriteAtlas();
-    if (!atlas || !isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return;
+    if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return;
+    if (!atlas) {
+      if (!warnedSpritesUnavailable) {
+        warnedSpritesUnavailable = true;
+        console.warn(`[allmaps ${layerId}] sprite atlas failed to load (${spritesImagePath} / ${spritesIndexPath})`);
+      }
+      return;
+    }
 
-    const sprites = geomaps.canvases
+    const sprites = canvases
       .map((canvas) => atlas.spritesByImageServiceUrl.get(canvas.imageServiceUrl))
       .filter((sprite): sprite is IiifSprite => Boolean(sprite));
     if (sprites.length === 0) return;
 
+    spriteBatchCounter += 1;
     try {
-      await layer.addSprites(sprites, atlas.imageUrl, atlas.imageSize);
-    } catch {
-      // non-fatal
+      await layer.addSprites(sprites, `${atlas.imageUrl}#batch-${spriteBatchCounter}`, atlas.imageSize);
+    } catch (error) {
+      console.warn(`[allmaps ${layerId}] addSprites failed for batch of ${sprites.length}`, error);
     }
   }
 
@@ -145,11 +197,13 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
 
   // Single drainer: triangulates the queue RECONCILE_CHUNK entries per frame, re-prioritising by the
   // current viewport centre between chunks so the nearest maps always load first even mid-pan.
+  // Each chunk's `addGeoreferencedMap` promises are awaited so the drain's sprite upload (see
+  // `uploadSpritesForCanvases`) only runs once its canvases actually exist in the warped-map list.
   async function drainQueue(): Promise<void> {
     if (draining) return;
     draining = true;
+    const addedThisDrain: NormalizedGeomapsCanvas[] = [];
     try {
-      await ensureSpritesUploaded();
       while (pendingQueue.length > 0) {
         if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return;
         const center = currentCenter();
@@ -157,16 +211,19 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
           pendingQueue.sort((a, b) => squaredDistance(a.geoCenter, center) - squaredDistance(b.geoCenter, center));
         }
         const chunk = pendingQueue.splice(0, RECONCILE_CHUNK);
-        for (const canvas of chunk) {
-          try {
-            layer.addGeoreferencedMap(canvas.georeferencedMap);
-          } catch {
+        const results = await Promise.allSettled(chunk.map((canvas) => layer.addGeoreferencedMap(canvas.georeferencedMap)));
+        for (const [index, result] of results.entries()) {
+          if (result.status === 'fulfilled') {
+            addedThisDrain.push(chunk[index]);
+          } else {
             // skip this canvas — its georeferencing data is likely malformed
+            console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${chunk[index].imageId}`, result.reason);
           }
         }
         layer.nativeUpdate();
         if (pendingQueue.length > 0) await nextFrame();
       }
+      await uploadSpritesForCanvases(addedThisDrain);
     } finally {
       draining = false;
     }

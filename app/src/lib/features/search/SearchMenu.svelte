@@ -286,7 +286,7 @@
   .search-modal-layer {
     position: fixed;
     inset: 0;
-    z-index: var(--z-popover);
+    z-index: var(--z-modal);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -368,8 +368,8 @@
   @media (max-width: 40rem) {
     .search-form input {
       /* iOS zooms focused inputs whose computed text size is below 16 CSS px.
-         The mobile root scale bottoms out at 0.875rem, so 1.143rem clears it. */
-      font-size: max(var(--text-base), 1.143rem);
+         The root token accounts for the minimum fluid root scale. */
+      font-size: max(var(--text-base), var(--text-mobile-input-min));
     }
 
     .search-body {

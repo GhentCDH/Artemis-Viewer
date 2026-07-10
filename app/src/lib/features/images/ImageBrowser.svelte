@@ -401,6 +401,29 @@
     .image-browser-trigger-text {
       display: none;
     }
+
+    :global(.image-browser-panel-layer .window-heading) {
+      display: none;
+    }
+
+    :global(.image-browser-panel-layer .window-header) {
+      justify-content: flex-end;
+      padding: var(--space-2);
+    }
+
+    .image-meta {
+      display: none;
+    }
+
+    .image-row {
+      justify-content: center;
+    }
+  }
+
+  @media (orientation: landscape) {
+    .image-browser {
+      --image-browser-max-height: 50dvh;
+    }
   }
 
   @media (max-width: 40rem) {

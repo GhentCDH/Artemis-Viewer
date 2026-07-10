@@ -8,6 +8,7 @@
   let {
     manifestUrl,
     imageId = '',
+    forceExpanded = false,
     onclose,
     onExpandedChange,
     onCanvasHost,
@@ -15,6 +16,7 @@
   }: {
     manifestUrl: string;
     imageId?: string;
+    forceExpanded?: boolean;
     onclose: () => void;
     onExpandedChange?: (expanded: boolean) => void;
     /** Reports the element hosting the OpenSeadragon canvases (null on teardown) — the screenshot feature composites them from there. */
@@ -109,29 +111,31 @@
   });
 </script>
 
-<section class="iiif-viewer" class:iiif-viewer--expanded={expanded} aria-label="IIIF document viewer">
+<section class="iiif-viewer" class:iiif-viewer--expanded={expanded || forceExpanded} aria-label="IIIF document viewer">
   <header class="iiif-viewer__header">
     <div class="iiif-viewer__header-left">
-      <Button
-        iconOnly
-        active={expanded}
-        aria-label={expanded ? 'Exit fullscreen' : 'Fullscreen'}
-        onmouseenter={(event) => showHeaderTooltip(expanded ? 'Exit fullscreen' : 'Fullscreen', event)}
-        onmouseleave={hideTooltip}
-        onfocus={(event) => showHeaderTooltip(expanded ? 'Exit fullscreen' : 'Fullscreen', event)}
-        onblur={hideTooltip}
-        onclick={toggleExpanded}
-      >
-        {#if expanded}
-          <svg class="iiif-viewer__header-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"></path>
-          </svg>
-        {:else}
-          <svg class="iiif-viewer__header-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"></path>
-          </svg>
-        {/if}
-      </Button>
+      {#if !forceExpanded}
+        <Button
+          iconOnly
+          active={expanded}
+          aria-label={expanded ? 'Exit fullscreen' : 'Fullscreen'}
+          onmouseenter={(event) => showHeaderTooltip(expanded ? 'Exit fullscreen' : 'Fullscreen', event)}
+          onmouseleave={hideTooltip}
+          onfocus={(event) => showHeaderTooltip(expanded ? 'Exit fullscreen' : 'Fullscreen', event)}
+          onblur={hideTooltip}
+          onclick={toggleExpanded}
+        >
+          {#if expanded}
+            <svg class="iiif-viewer__header-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"></path>
+            </svg>
+          {:else}
+            <svg class="iiif-viewer__header-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"></path>
+            </svg>
+          {/if}
+        </Button>
+      {/if}
     </div>
     <div class="iiif-viewer__title" title={title}>{title}</div>
     <div class="iiif-viewer__header-right">

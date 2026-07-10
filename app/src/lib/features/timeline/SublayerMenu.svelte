@@ -397,4 +397,32 @@
       width: 100%;
     }
   }
+
+  @media (orientation: portrait) {
+    :global(.sublayer-menu-window) {
+      max-height: min(14rem, calc(50dvh - (2 * var(--space-3))));
+    }
+
+    :global(.sublayer-menu-window .window-header) {
+      padding: var(--space-2) var(--space-3) var(--space-1);
+    }
+
+    .collection-heading p {
+      display: none;
+    }
+
+    .sublayer-menu {
+      padding: var(--space-1) var(--space-3) var(--space-2);
+    }
+
+    .sublayer-row {
+      min-height: 1.75rem;
+    }
+
+    :global(.sublayer-menu-window .toggle) {
+      --toggle-width: 2.25rem;
+      --toggle-height: 1.25rem;
+      --toggle-padding: 0.125rem;
+    }
+  }
 </style>

@@ -160,7 +160,15 @@
 
   {#if expanded}
     <div class="search-modal-layer">
-      <Window class="search-window" variant="modal" placement="center" backdrop closeOnEscape onclose={close}>
+      <Window
+        class="search-window"
+        variant="modal"
+        placement="center"
+        backdrop
+        closeOnEscape
+        onclose={close}
+        style="--window-width: min(44rem, calc(100vw - (2 * var(--space-3)))); --window-height: min(54rem, calc(100dvh - (2 * var(--space-3))));"
+      >
         {#snippet header()}
       <form class="search-form" onsubmit={(event) => { event.preventDefault(); selectTopMatch(); }}>
         <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -328,11 +336,9 @@
     stroke-linejoin: round;
   }
 
-  :global(.search-window) {
-    width: min(44rem, 92vw);
-    height: min(54rem, 82vh);
-  }
-
+  /* Fixed modal size is set via --window-width/--window-height on the Window's
+     inline style: a :global(.search-window) rule ties with (or loses to)
+     Window's own scoped rule and is unreliable. */
   :global(.search-window .window-body) {
     display: flex;
     flex-direction: column;
@@ -357,6 +363,32 @@
     color: var(--color-text-primary);
     font-family: var(--font-ui);
     font-size: var(--text-base);
+  }
+
+  @media (max-width: 40rem) {
+    .search-form input {
+      /* iOS zooms focused inputs whose computed text size is below 16 CSS px.
+         The mobile root scale bottoms out at 0.875rem, so 1.143rem clears it. */
+      font-size: max(var(--text-base), 1.143rem);
+    }
+
+    .search-body {
+      padding: var(--space-2) var(--space-3) var(--space-3);
+    }
+
+    .search-toolbar {
+      align-items: stretch;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .search-tabs {
+      overflow-x: auto;
+    }
+
+    .active-only-toggle {
+      justify-content: flex-end;
+    }
   }
 
   .search-form input:focus {

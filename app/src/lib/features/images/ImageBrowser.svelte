@@ -157,26 +157,42 @@
           <WaveSeparator />
           {#if hasYearRange}
             <div class="year-filter" aria-label="Filter images by year">
-              <label>
+              <div class="year-control">
                 <span>From</span>
-                <input
-                  type="number"
-                  min={yearMin}
-                  max={filterEnd}
-                  value={filterStart}
-                  onchange={(event) => setFilterStart(event.currentTarget.valueAsNumber)}
-                />
-              </label>
-              <label>
+                <div class="year-input-row">
+                  <output aria-live="polite">{filterStart}</output>
+                  <Button
+                    iconOnly
+                    aria-label="Increase start year"
+                    disabled={filterStart >= filterEnd}
+                    onclick={() => setFilterStart(filterStart + 1)}
+                  >↑</Button>
+                  <Button
+                    iconOnly
+                    aria-label="Decrease start year"
+                    disabled={filterStart <= yearMin}
+                    onclick={() => setFilterStart(filterStart - 1)}
+                  >↓</Button>
+                </div>
+              </div>
+              <div class="year-control">
                 <span>To</span>
-                <input
-                  type="number"
-                  min={filterStart}
-                  max={yearMax}
-                  value={filterEnd}
-                  onchange={(event) => setFilterEnd(event.currentTarget.valueAsNumber)}
-                />
-              </label>
+                <div class="year-input-row">
+                  <output aria-live="polite">{filterEnd}</output>
+                  <Button
+                    iconOnly
+                    aria-label="Increase end year"
+                    disabled={filterEnd >= yearMax}
+                    onclick={() => setFilterEnd(filterEnd + 1)}
+                  >↑</Button>
+                  <Button
+                    iconOnly
+                    aria-label="Decrease end year"
+                    disabled={filterEnd <= filterStart}
+                    onclick={() => setFilterEnd(filterEnd - 1)}
+                  >↓</Button>
+                </div>
+              </div>
             </div>
             <div class="section-separator"><WaveSeparator /></div>
           {/if}
@@ -218,10 +234,10 @@
 <style>
   .image-browser {
     /* -- exposed -- */
-    --image-browser-width: 22rem;
+    --image-browser-width: min(22rem, calc(100vw - (2 * var(--space-3))));
     --image-browser-trigger-height: var(--canvas-primary-control-height);
     --image-browser-max-height: calc(
-      100vh - var(--canvas-timeline-bottom) - var(--canvas-timeline-height) - var(--space-4) -
+      100dvh - var(--canvas-timeline-bottom) - var(--canvas-timeline-height) - var(--space-4) -
         var(--image-browser-trigger-height) - var(--space-4)
     );
     --image-thumbnail-width: 3rem;
@@ -278,7 +294,7 @@
     height: 1rem;
   }
 
-  .year-filter label {
+  .year-control {
     display: flex;
     flex: 1 1 0;
     flex-direction: column;
@@ -287,15 +303,35 @@
     font-size: var(--text-2xs);
   }
 
-  .year-filter input {
-    width: 100%;
-    min-height: 1.75rem;
+  .year-control output {
+    display: flex;
+    align-items: center;
+    min-height: 2rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
-    padding: 0 var(--space-2);
+    padding-inline: var(--space-2);
     background: var(--color-surface-control);
     color: var(--color-text-primary);
-    font: inherit;
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+  }
+
+  .year-input-row {
+    display: flex;
+    gap: var(--space-1);
+  }
+
+  .year-input-row output {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .year-input-row :global(.button) {
+    --button-width: 2.5rem;
+    --button-height: 2.5rem;
+
+    flex: 0 0 auto;
+    font-size: var(--text-md);
   }
 
   .image-list {
@@ -364,6 +400,19 @@
 
     .image-browser-trigger-text {
       display: none;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .image-browser-panel-layer {
+      position: fixed;
+      top: calc(var(--space-3) + var(--image-browser-trigger-height) + var(--space-2));
+      right: var(--space-3);
+    }
+
+    .year-filter {
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
     }
   }
 </style>

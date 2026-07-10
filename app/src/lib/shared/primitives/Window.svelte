@@ -127,6 +127,7 @@
     --window-padding-inline: var(--space-4);
     --window-gap: var(--space-2);
     --window-width: auto;
+    --window-height: auto;
     --window-max-height: none;
     /* -- end exposed -- */
 
@@ -137,6 +138,7 @@
     pointer-events: auto;
     overflow: hidden;
     width: var(--window-width);
+    height: var(--window-height);
     max-height: var(--window-max-height);
     background: var(--window-bg);
     border: 1px solid var(--window-border);

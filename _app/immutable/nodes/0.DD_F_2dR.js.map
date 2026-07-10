@@ -1,0 +1,1 @@
+{"version":3,"file":"0.DD_F_2dR.js","sources":["../../../../../../src/routes/+layout.svelte"],"sourcesContent":["<script lang=\"ts\">\n  import type { Snippet } from 'svelte';\n  import '../app.css';\n  let { children }: { children: Snippet } = $props();\n</script>\n\n{@render children()}\n"],"names":[],"mappings":"oJAAA,4CAIQ"}

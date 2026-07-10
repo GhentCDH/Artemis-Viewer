@@ -10,8 +10,6 @@ import type maplibregl from 'maplibre-gl';
  * and `tiles max/map` climbing while jank frames spike — and the same numbers with a smaller
  * window should show similar tile counts but no jank. Delete this module once resolved.
  */
-const ALLMAPS_DIAGNOSTICS = true;
-
 const REPORT_INTERVAL_MS = 2000;
 // rAF gaps above this count as a janky frame (~2 missed 60Hz frames).
 const JANK_FRAME_MS = 33;
@@ -35,8 +33,9 @@ export function attachAllmapsDiagnostics(args: {
   map: maplibregl.Map;
   layer: WarpedMapLayer;
   getLoadedCount: () => number;
+  enabled: boolean;
 }): () => void {
-  if (!ALLMAPS_DIAGNOSTICS) return () => {};
+  if (!args.enabled) return () => {};
   const { label, map, layer, getLoadedCount } = args;
 
   let detached = false;

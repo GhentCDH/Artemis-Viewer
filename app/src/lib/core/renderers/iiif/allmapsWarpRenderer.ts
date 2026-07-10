@@ -43,9 +43,9 @@ export function canRenderIiifAllmapsWarp(target: SublayerRenderTarget): boolean 
 
 /**
  * Adds the Allmaps `WarpedMapLayer` for a group immediately, then defers actually populating it
- * until the map reaches `ALLMAPS_TRIGGER_ZOOM` — the raster preview underneath is the renderer
- * until then. Once triggered, canvases intersecting the (padded) viewport are triangulated
- * nearest-first in small chunks, and stay loaded across pans.
+ * until the map reaches `ALLMAPS_TRIGGER_ZOOM` in sequential mode — the raster preview underneath
+ * is the renderer until then. Eager mode submits every canvas as soon as the geomaps bundle is
+ * available, matching the original full-layer render path.
  */
 export async function renderIiifAllmapsWarp(context: SublayerRenderContext, target: SublayerRenderTarget, token: number): Promise<boolean> {
   const geomapsPath = target.sublayer.artifacts.geomaps;
@@ -95,6 +95,7 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     }
   });
 
+  const geomapsStartedAt = performance.now();
   const geomaps = await loadGeomaps(context.datasetBaseUrl, geomapsPath);
   if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return false;
 
@@ -112,6 +113,7 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     map: context.map,
     layer,
     getLoadedCount: () => loadedCanvasIds.size,
+    enabled: context.allmapsOptions.diagnostics,
   });
   registerIiifCleanup(context.paneId, target.sublayer.id, detachDiagnostics);
   const pendingQueue: NormalizedGeomapsCanvas[] = [];
@@ -260,6 +262,49 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     if (queued) void drainQueue();
   }
 
+  async function loadAllEagerly(): Promise<void> {
+    const eagerStartedAt = performance.now();
+    for (const canvas of geomaps.canvases) loadedCanvasIds.add(canvas.imageId);
+    const results = await Promise.allSettled(
+      geomaps.canvases.map((canvas) =>
+        layer.addGeoreferencedMap(canvas.georeferencedMap, {
+          transformationType: context.allmapsOptions.transformationType,
+          debugTriangles: context.allmapsOptions.debugTriangles,
+        })
+      )
+    );
+    const mapsFinishedAt = performance.now();
+    if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return;
+
+    const addedCanvases: NormalizedGeomapsCanvas[] = [];
+    const addedMapIds: string[] = [];
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'fulfilled') {
+        addedCanvases.push(geomaps.canvases[index]);
+        addedMapIds.push(result.value);
+      } else {
+        console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${geomaps.canvases[index].imageId}`, result.reason);
+      }
+    }
+    if (context.allmapsOptions.showHighStretch && addedMapIds.length > 0) {
+      layer.setMapsOptions(addedMapIds, { distortionMeasure: 'log2sigma' });
+    }
+    layer.nativeUpdate();
+    await uploadSpritesForCanvases(addedCanvases);
+    const finishedAt = performance.now();
+    if (context.allmapsOptions.diagnostics && isCurrentIiifRender(context.paneId, target.sublayer.id, token)) {
+      console.info(`[allmaps-eager ${layerId}] complete`, {
+        totalMs: Math.round(finishedAt - geomapsStartedAt),
+        loadGeomapsMs: Math.round(eagerStartedAt - geomapsStartedAt),
+        addMapsMs: Math.round(mapsFinishedAt - eagerStartedAt),
+        addSpritesMs: Math.round(finishedAt - mapsFinishedAt),
+        canvases: geomaps.canvases.length,
+        succeeded: addedCanvases.length,
+        failed: geomaps.canvases.length - addedCanvases.length,
+      });
+    }
+  }
+
   function startAllmaps(): void {
     if (started) return;
     started = true;
@@ -272,7 +317,9 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     reconcileViewport();
   }
 
-  if (context.map.getZoom() >= ALLMAPS_TRIGGER_ZOOM) {
+  if (context.allmapsOptions.loadingMode === 'eager') {
+    void loadAllEagerly();
+  } else if (context.map.getZoom() >= ALLMAPS_TRIGGER_ZOOM) {
     startAllmaps();
   } else {
     zoomHandler = () => {

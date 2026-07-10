@@ -5,7 +5,7 @@
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import type { DatasetSource } from '$lib/core/dataset/dataSource';
   import type { SiteMetadata } from '$lib/core/dataset/siteMetadata';
-  import type { AllmapsTransformation } from '$lib/core/renderers/types';
+  import type { AllmapsTransformation, IiifLoadingMode } from '$lib/core/renderers/types';
   import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
 
   let { siteMetadata, style = '' }: { siteMetadata: SiteMetadata; style?: string } = $props();
@@ -149,6 +149,26 @@
                       label="Show high-stretch regions"
                       checked={developerSettings.showHighStretch}
                       onclick={() => developerSettings.setShowHighStretch(!developerSettings.showHighStretch)}
+                    />
+                  </div>
+
+                  <label class="developer-control developer-control--stacked">
+                    <span>IIIF loading mode</span>
+                    <select
+                      value={developerSettings.iiifLoadingMode}
+                      onchange={(event) => developerSettings.setIiifLoadingMode(event.currentTarget.value as IiifLoadingMode)}
+                    >
+                      <option value="sequential">Sequential (viewport)</option>
+                      <option value="eager">Eager (all maps)</option>
+                    </select>
+                  </label>
+
+                  <div class="developer-control">
+                    <span>Allmaps performance diagnostics</span>
+                    <Toggle
+                      label="Allmaps performance diagnostics"
+                      checked={developerSettings.allmapsDiagnostics}
+                      onclick={() => developerSettings.setAllmapsDiagnostics(!developerSettings.allmapsDiagnostics)}
                     />
                   </div>
 

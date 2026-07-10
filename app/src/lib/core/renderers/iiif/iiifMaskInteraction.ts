@@ -1,12 +1,10 @@
 import type maplibregl from 'maplibre-gl';
-import { readThemeColor } from '$lib/core/map/mapColors';
 import { iiifLayerId } from './iiifLayerRuntime';
 
 export interface IiifMaskHit {
   imageId: string;
   manifestUrl: string;
   sublayerId: string;
-  geometry: maplibregl.MapGeoJSONFeature['geometry'];
 }
 
 function geometryBboxArea(geometry: maplibregl.MapGeoJSONFeature['geometry']): number {
@@ -61,7 +59,7 @@ export function hitTestIiifMasks(
     const area = geometryBboxArea(feature.geometry);
     const z = styleLayerIndex.get(feature.layer.id) ?? -1;
     if (!best || z > best.z || (z === best.z && area < best.area)) {
-      best = { manifestUrl, imageId, sublayerId, geometry: feature.geometry, area, z };
+      best = { manifestUrl, imageId, sublayerId, area, z };
     }
   }
 
@@ -70,7 +68,6 @@ export function hitTestIiifMasks(
     manifestUrl: best.manifestUrl,
     imageId: best.imageId,
     sublayerId: best.sublayerId,
-    geometry: best.geometry,
   };
 }
 
@@ -79,15 +76,11 @@ export class IiifMaskInteraction {
   private readonly paneId: string;
   private sublayerIds: string[] = [];
   private frame: number | null = null;
-  private readonly hoverSourceId: string;
-  private readonly hoverLayerId: string;
   private readonly onSelect?: (hit: IiifMaskHit) => void;
 
   constructor(map: maplibregl.Map, paneId: string, onSelect?: (hit: IiifMaskHit) => void) {
     this.map = map;
     this.paneId = paneId;
-    this.hoverSourceId = `iiif-mask-hover-source-${paneId}`;
-    this.hoverLayerId = `iiif-mask-hover-layer-${paneId}`;
     this.onSelect = onSelect;
     map.on('mousemove', this.onMouseMove);
     map.on('mouseout', this.onMouseOut);
@@ -101,9 +94,11 @@ export class IiifMaskInteraction {
 
   /** Renderer reconciliation moves its own layers; keep the visible hover outline above them. */
   moveOutlineToFront(): void {
-    if (!this.map.getLayer(this.hoverLayerId)) return;
     try {
-      this.map.moveLayer(this.hoverLayerId);
+      for (const sublayerId of this.sublayerIds) {
+        const outlineLayerId = iiifLayerId(this.paneId, sublayerId, 'mask-outline');
+        if (this.map.getLayer(outlineLayerId)) this.map.moveLayer(outlineLayerId);
+      }
     } catch {
       // The style may be changing; the next reconciliation retries.
     }
@@ -130,36 +125,23 @@ export class IiifMaskInteraction {
     this.map.getCanvas().style.cursor = '';
   };
 
-  private ensureHoverLayer(): void {
-    if (!this.map.getSource(this.hoverSourceId)) {
-      this.map.addSource(this.hoverSourceId, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-    }
-    if (!this.map.getLayer(this.hoverLayerId)) {
-      this.map.addLayer({
-        id: this.hoverLayerId,
-        type: 'line',
-        source: this.hoverSourceId,
-        paint: {
-          'line-color': readThemeColor('--color-accent', '#2f6f99'),
-          'line-width': 1.5,
-          'line-opacity': 0.9,
-        },
-      });
-    }
-  }
-
   private setHover(hit: IiifMaskHit | null): void {
     try {
-      if (!hit && !this.map.getSource(this.hoverSourceId)) return;
-      this.ensureHoverLayer();
-      const source = this.map.getSource(this.hoverSourceId) as maplibregl.GeoJSONSource;
-      source.setData({
-        type: 'FeatureCollection',
-        features: hit ? [{ type: 'Feature', properties: {}, geometry: hit.geometry }] : [],
-      });
+      for (const sublayerId of this.sublayerIds) {
+        const outlineLayerId = iiifLayerId(this.paneId, sublayerId, 'mask-outline');
+        if (!this.map.getLayer(outlineLayerId)) continue;
+        const selected = hit?.sublayerId === sublayerId;
+        this.map.setFilter(
+          outlineLayerId,
+          selected
+            ? [
+                'all',
+                ['==', ['get', 'manifestUrl'], hit.manifestUrl],
+                ['==', ['get', 'imageId'], hit.imageId],
+              ]
+            : ['==', ['get', 'manifestUrl'], '']
+        );
+      }
       this.moveOutlineToFront();
     } catch {
       // The style may be swapping or tearing down; the next pointer move retries.
@@ -172,7 +154,5 @@ export class IiifMaskInteraction {
     this.map.off('mouseout', this.onMouseOut);
     this.map.off('click', this.onClick);
     this.map.getCanvas().style.cursor = '';
-    if (this.map.getLayer(this.hoverLayerId)) this.map.removeLayer(this.hoverLayerId);
-    if (this.map.getSource(this.hoverSourceId)) this.map.removeSource(this.hoverSourceId);
   }
 }

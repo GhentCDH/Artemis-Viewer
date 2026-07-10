@@ -19,6 +19,7 @@ export class SublayerRendererManager {
   // a failed attempt removes itself so the next reconcile pass (on style readiness) retries.
   private readonly activeIiifSublayerIds = new Set<string>();
   private allmapsRenderRevision: number;
+  private appliedLayerOrderSignature = '';
   private readonly iiifMaskInteraction: IiifMaskInteraction;
 
   constructor(context: SublayerRenderContext, allmapsRenderRevision = 0, onIiifMaskSelect?: (hit: IiifMaskHit) => void) {
@@ -31,6 +32,7 @@ export class SublayerRendererManager {
     this.context.allmapsOptions = options;
     if (this.allmapsRenderRevision === revision) return;
     this.allmapsRenderRevision = revision;
+    this.appliedLayerOrderSignature = '';
     for (const sublayerId of this.activeIiifSublayerIds) {
       removeIiifSublayer(this.context, sublayerId);
     }
@@ -118,19 +120,21 @@ export class SublayerRendererManager {
    * of ids, and it's what makes stacking deterministic regardless of renderer completion order.
    */
   private applyLayerOrder(enabledSublayerIds: string[]): void {
-    for (const sublayerId of enabledSublayerIds) {
-      const layerIds = [
-        ...remoteSublayerLayerIds(this.context.paneId, sublayerId),
-        ...pmVectorSublayerLayerIds(this.context.paneId, sublayerId),
-        ...iiifSublayerLayerIds(this.context.paneId, sublayerId),
-      ];
-      for (const id of layerIds) {
-        if (!this.context.map.getLayer(id)) continue;
-        try {
-          this.context.map.moveLayer(id);
-        } catch {
-          // ignore — style may be mid-transition
-        }
+    const existingLayerIds = enabledSublayerIds.flatMap((sublayerId) => [
+      ...remoteSublayerLayerIds(this.context.paneId, sublayerId),
+      ...pmVectorSublayerLayerIds(this.context.paneId, sublayerId),
+      ...iiifSublayerLayerIds(this.context.paneId, sublayerId),
+    ]).filter((id) => Boolean(this.context.map.getLayer(id)));
+    const signature = existingLayerIds.join('\u0000');
+    if (signature === this.appliedLayerOrderSignature) return;
+    this.appliedLayerOrderSignature = signature;
+
+    for (const id of existingLayerIds) {
+      try {
+        this.context.map.moveLayer(id);
+      } catch {
+        // The style may be mid-transition. Clear the signature so the next reconcile retries.
+        this.appliedLayerOrderSignature = '';
       }
     }
   }
@@ -148,6 +152,7 @@ export class SublayerRendererManager {
     this.renderedRemoteSublayerIds.clear();
     this.renderedPmVectorSublayerIds.clear();
     this.activeIiifSublayerIds.clear();
+    this.appliedLayerOrderSignature = '';
     this.iiifMaskInteraction.destroy();
   }
 }

@@ -150,7 +150,7 @@
 <div class="search-menu">
   <div class="search-trigger-layer">
     <Button class="search-trigger" aria-label="Search" aria-expanded={expanded} onclick={toggle}>
-      <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
+      <svg class="search-icon search-trigger-icon" viewBox="0 0 16 16" aria-hidden="true">
         <circle cx="6.8" cy="6.8" r="4.3"></circle>
         <path d="M10.2 10.2 14 14"></path>
       </svg>
@@ -283,6 +283,12 @@
     display: flex;
   }
 
+  .search-menu {
+    /* -- exposed -- */
+    --search-trigger-icon-size: 1.5rem;
+    /* -- end exposed -- */
+  }
+
   .search-modal-layer {
     position: fixed;
     inset: 0;
@@ -323,6 +329,10 @@
     .search-trigger-text {
       display: none;
     }
+
+    .search-menu {
+      --search-trigger-icon-size: 1.75rem;
+    }
   }
 
   .search-icon {
@@ -334,6 +344,11 @@
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+
+  .search-trigger-icon {
+    width: var(--search-trigger-icon-size);
+    height: var(--search-trigger-icon-size);
   }
 
   /* Fixed modal size is set via --window-width/--window-height on the Window's

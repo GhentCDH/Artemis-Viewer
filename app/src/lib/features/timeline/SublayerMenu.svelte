@@ -176,8 +176,9 @@
   :global(.sublayer-menu-window) {
     --window-radius: var(--radius-lg);
 
-    flex: 0 0 19.8rem;
-    max-height: 19.8rem;
+    flex: 0 1 min(19.8rem, calc(100vw - (2 * var(--space-3))));
+    max-width: 100%;
+    max-height: min(19.8rem, calc(100dvh - (2 * var(--space-3))));
   }
 
   :global(.sublayer-detail-window) {
@@ -333,6 +334,29 @@
     align-items: center;
     gap: var(--space-2);
     margin-top: var(--space-2);
+  }
+
+  @media (max-width: 40rem) {
+    .sublayer-menu-stack {
+      width: 100%;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    :global(.sublayer-menu-window),
+    :global(.sublayer-detail-window) {
+      width: 100%;
+      max-height: min(16rem, calc(50dvh - (2 * var(--space-3))));
+      flex-basis: auto;
+    }
+
+    :global(.sublayer-menu-window .window-header) {
+      padding: var(--space-3) var(--space-3) var(--space-2);
+    }
+
+    .sublayer-menu {
+      padding: var(--space-2) var(--space-3);
+    }
   }
 
   .download-row a {

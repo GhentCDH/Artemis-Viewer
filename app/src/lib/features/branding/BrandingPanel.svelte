@@ -55,7 +55,7 @@
         showClose
         closeLabel="Close panel"
         onclose={close}
-        style="--window-width: var(--branding-modal-width);"
+        style="--window-width: var(--branding-modal-width); --window-height: var(--branding-modal-height);"
       >
         {#snippet header()}
           <div class="branding-tabs">
@@ -253,7 +253,6 @@
   :global(.branding-window) {
     min-width: 0;
     max-width: 92vw;
-    height: var(--branding-modal-height);
   }
 
   :global(.branding-window .window-body) {

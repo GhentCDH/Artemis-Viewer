@@ -303,6 +303,20 @@
     white-space: nowrap;
   }
 
+  /* Portrait windows are too narrow for labelled controls: collapse the trigger
+     to a square icon-only button (the compare toggle in Canvas.svelte does the
+     same). The descendant selector outranks the Button defaults outright. */
+  @media (orientation: portrait) {
+    .search-trigger-layer :global(.search-trigger) {
+      --button-width: var(--canvas-primary-control-height);
+      --button-padding-inline: 0rem;
+    }
+
+    .search-trigger-text {
+      display: none;
+    }
+  }
+
   .search-icon {
     flex: 0 0 auto;
     width: 1.5rem;

@@ -10,11 +10,16 @@
     imageId = '',
     onclose,
     onExpandedChange,
+    onCanvasHost,
+    onTitleChange,
   }: {
     manifestUrl: string;
     imageId?: string;
     onclose: () => void;
     onExpandedChange?: (expanded: boolean) => void;
+    /** Reports the element hosting the OpenSeadragon canvases (null on teardown) — the screenshot feature composites them from there. */
+    onCanvasHost?: (host: HTMLElement | null) => void;
+    onTitleChange?: (title: string) => void;
   } = $props();
   let container: HTMLElement;
   let title = $state('Historical document');
@@ -64,12 +69,14 @@
       }
     };
     window.addEventListener('keydown', onKeyDown);
+    onCanvasHost?.(container);
 
     void (async () => {
       try {
         const source = await loadIiifViewerSource(manifestUrl, imageId);
         if (cancelled) return;
         title = source.title;
+        onTitleChange?.(source.title);
         metadata = source.metadata;
         const OpenSeadragon = (await import('openseadragon')).default;
         if (cancelled) return;
@@ -95,6 +102,7 @@
       cancelled = true;
       window.removeEventListener('keydown', onKeyDown);
       clearTimeout(copyStatusTimer);
+      onCanvasHost?.(null);
       onExpandedChange?.(false);
       viewer?.destroy();
     };

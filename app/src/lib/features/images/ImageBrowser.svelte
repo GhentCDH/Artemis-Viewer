@@ -129,11 +129,17 @@
 
 <div class="image-browser">
   <Button
+    class="image-browser-trigger"
+    aria-label="Images in view ({imagesInView.length})"
     aria-expanded={open}
     onclick={() => setOpen(!open)}
-    style="--button-height: var(--image-browser-trigger-height); --button-padding-inline: var(--canvas-primary-control-padding-inline); --button-gap: var(--canvas-primary-control-gap); --button-font-size: var(--canvas-primary-control-font-size);"
   >
-    Images ({imagesInView.length})
+    <svg class="image-browser-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
+      <circle cx="8.2" cy="9.3" r="1.7"></circle>
+      <path d="m5.5 16.5 4.2-4.2 3.2 3 2.3-2.2 3.3 3.4"></path>
+    </svg>
+    <span class="image-browser-trigger-text">Images ({imagesInView.length})</span>
   </Button>
 
   {#if open}
@@ -225,6 +231,26 @@
     position: relative;
     display: flex;
     pointer-events: auto;
+  }
+
+  /* Descendant selector (not inline style) so the portrait media query below can
+     override these; the extra specificity beats the Button defaults outright. */
+  .image-browser :global(.image-browser-trigger) {
+    --button-height: var(--image-browser-trigger-height);
+    --button-padding-inline: var(--canvas-primary-control-padding-inline);
+    --button-gap: var(--canvas-primary-control-gap);
+    --button-font-size: var(--canvas-primary-control-font-size);
+  }
+
+  .image-browser-icon {
+    display: none;
+    width: calc(1rem * 1.5);
+    height: calc(1rem * 1.5);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .image-browser-panel-layer {
@@ -321,5 +347,23 @@
     color: var(--color-text-muted);
     font-size: var(--text-sm);
     text-align: center;
+  }
+
+  /* Portrait windows are too narrow for labelled controls: collapse the trigger
+     to a square icon-only button, matching the compare/search/branding controls.
+     Last in the stylesheet so it outranks the base rules above. */
+  @media (orientation: portrait) {
+    .image-browser :global(.image-browser-trigger) {
+      --button-width: var(--image-browser-trigger-height);
+      --button-padding-inline: 0rem;
+    }
+
+    .image-browser-icon {
+      display: block;
+    }
+
+    .image-browser-trigger-text {
+      display: none;
+    }
   }
 </style>

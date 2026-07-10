@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import Button from '$lib/shared/primitives/Button.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
@@ -21,7 +22,9 @@
 
   let copiedSublayerId = $state<string | null>(null);
   let openInfoSublayerId = $state<string | null>(null);
-  const detailCloseDistance = 6 * 16;
+  /* 6rem in px; the root font-size is fluid, so read it instead of assuming 16px */
+  const detailCloseDistance =
+    6 * (browser ? parseFloat(getComputedStyle(document.documentElement).fontSize) : 16);
   const dateLabel = $derived(layer ? `${layer.startYear}-${layer.endYear}` : '');
   const openInfoSublayer = $derived(layer?.sublayers.find((sublayer) => sublayer.id === openInfoSublayerId) ?? null);
 

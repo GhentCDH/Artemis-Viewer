@@ -436,4 +436,18 @@
     font-size: var(--text-xs);
     font-style: italic;
   }
+
+  /* Portrait windows are too narrow for the full lockup: collapse the trigger
+     to just the logo, matching the compare/search controls. --button-width is
+     not in the trigger's inline style, so this rule can win; last in the
+     stylesheet so it also outranks the base rules above. */
+  @media (orientation: portrait) {
+    .branding-trigger-scale :global(.branding-trigger) {
+      --button-width: var(--branding-button-height);
+    }
+
+    .branding-text {
+      display: none;
+    }
+  }
 </style>

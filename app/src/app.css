@@ -90,6 +90,10 @@
 }
 
 html {
+  /* Fluid root scale: the whole rem-based UI tracks viewport width.
+     rem-based bounds keep user font-size preferences in effect.
+     ~14px at narrow widths → ~18px on large displays. */
+  font-size: clamp(0.875rem, 0.66rem + 0.45vw, 1.125rem);
   box-sizing: border-box;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;

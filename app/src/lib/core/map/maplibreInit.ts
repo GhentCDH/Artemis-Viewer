@@ -63,6 +63,13 @@ export function initializeMapLibre(paneId: PaneId, options: MapLibreInitOptions)
     // from trying to pitch at all.
     maxPitch: 0,
     pitchWithRotate: false,
+    // Screenshot-export contract (1 of 3): the drawing buffer must survive past the render
+    // frame so `features/screenshot` can composite `map.getCanvas()`. The other two parts
+    // live in the capture's render-event timing and the IIIF viewer's Anonymous CORS policy.
+    canvasContextAttributes: { preserveDrawingBuffer: true },
+    // Lift MapLibre's default 4096px canvas cap so the drawing buffer is never silently
+    // downscaled on large/high-DPR displays (suggested fix for a rendering bug).
+    maxCanvasSize: [Infinity, Infinity],
     ...(options.initialCamera
       ? {
           center: options.initialCamera.center,

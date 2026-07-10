@@ -272,4 +272,12 @@
   .meander-pill--below .meander-label {
     transform: translate(-50%, var(--space-1));
   }
+
+  /* Portrait windows are too narrow for the labels not to collide; the hover
+     tooltip still names each meander. */
+  @media (orientation: portrait) {
+    .meander-label {
+      display: none;
+    }
+  }
 </style>

@@ -105,7 +105,7 @@
     position: relative;
     flex: 1 1 0;
     min-width: 0;
-    height: 100%;
+    min-height: 0;
     overflow: hidden;
     background: var(--color-surface-raised);
   }
@@ -114,5 +114,14 @@
      component's own template for Svelte's unused-selector analysis. */
   :global(.workspace-pane + .workspace-pane) {
     border-left: 1px solid var(--color-border);
+  }
+
+  /* Portrait compare stacks the panes vertically, so the divider between them
+     runs horizontally instead. */
+  @media (orientation: portrait) {
+    :global(.workspace-pane + .workspace-pane) {
+      border-left: none;
+      border-top: 1px solid var(--color-border);
+    }
   }
 </style>

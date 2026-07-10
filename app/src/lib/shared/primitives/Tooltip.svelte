@@ -1,14 +1,49 @@
 <script lang="ts">
   import { tooltipStore } from '../tooltip.svelte';
+
+  const VIEWPORT_MARGIN = 4;
+
+  let element = $state<HTMLElement | null>(null);
+  let shift = $state(0);
+  let flipped = $state(false);
+
+  // Callers anchor the tooltip to their control and pick a preferred side; the tooltip
+  // itself is responsible for staying inside the viewport. Runs post-render so the
+  // rendered box can be measured: shift horizontally to stay in view, flip to the other
+  // side when the preferred one would overflow. Neither correction changes the box size,
+  // so one measured pass settles it.
+  $effect(() => {
+    const tip = tooltipStore.content;
+    if (!tip || !element) {
+      shift = 0;
+      flipped = false;
+      return;
+    }
+    const { offsetWidth: width, offsetHeight: height } = element;
+    const desiredLeft = tip.x - width / 2;
+    const clampedLeft = Math.min(Math.max(desiredLeft, VIEWPORT_MARGIN), window.innerWidth - VIEWPORT_MARGIN - width);
+    shift = clampedLeft - desiredLeft;
+    flipped =
+      tip.placement === 'above'
+        ? tip.y - height < VIEWPORT_MARGIN
+        : tip.y + height > window.innerHeight - VIEWPORT_MARGIN;
+  });
+
+  const placement = $derived.by(() => {
+    const preferred = tooltipStore.content?.placement ?? 'below';
+    if (!flipped) return preferred;
+    return preferred === 'above' ? 'below' : 'above';
+  });
 </script>
 
 {#if tooltipStore.content}
   {@const tip = tooltipStore.content}
   <div
+    bind:this={element}
     class="tooltip"
-    class:tooltip--above={tip.placement === 'above'}
-    class:tooltip--below={tip.placement === 'below'}
-    style="left: {tip.x}px; top: {tip.y}px;"
+    class:tooltip--above={placement === 'above'}
+    class:tooltip--below={placement === 'below'}
+    style="left: {tip.x}px; top: {tip.y}px; --tooltip-shift: {shift}px;"
   >
     {tip.text}
   </div>
@@ -39,10 +74,10 @@
   }
 
   .tooltip--above {
-    transform: translate(-50%, calc(-100% - var(--tooltip-gap)));
+    transform: translate(calc(-50% + var(--tooltip-shift, 0px)), calc(-100% - var(--tooltip-gap)));
   }
 
   .tooltip--below {
-    transform: translate(-50%, var(--tooltip-gap));
+    transform: translate(calc(-50% + var(--tooltip-shift, 0px)), var(--tooltip-gap));
   }
 </style>

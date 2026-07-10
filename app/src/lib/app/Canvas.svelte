@@ -12,18 +12,24 @@
   import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
   import ImageBrowser from '$lib/features/images/ImageBrowser.svelte';
   import IiifViewer from '$lib/features/viewer/IiifViewer.svelte';
+  import { buildScreenshotFilename, captureViewScreenshot } from '$lib/features/screenshot/screenshot';
   import type { IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
   import type { PaneId } from '$lib/core/map/maplibreInit';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Tooltip from '$lib/shared/primitives/Tooltip.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
   import MapPane from './MapPane.svelte';
 
   let layers = $state<LayerSummary[]>([]);
   let siteMetadata = $state<SiteMetadata>({ title: 'About Artemis', info: [], attribution: '', team: [], logos: [] });
+  let workspaceElement = $state<HTMLElement | null>(null);
   let leftMap = $state<maplibregl.Map | null>(null);
   let rightMap = $state<maplibregl.Map | null>(null);
   let openDocument = $state<{ manifestUrl: string; imageId: string; pane: PaneId } | null>(null);
+  let openDocumentTitle = $state('');
+  let viewerCanvasHost = $state<HTMLElement | null>(null);
   let isViewerExpanded = $state(false);
+  let isCapturingScreenshot = $state(false);
   let isImageBrowserOpen = $state(false);
   const staticAssetBase = import.meta.env.BASE_URL.replace(/\/$/, '');
   const pmtilesUrl = `${staticAssetBase}/baselayer.pmtiles`;
@@ -41,11 +47,39 @@
       imageId: hit.imageId,
       pane: viewerPane,
     };
+    openDocumentTitle = '';
   }
 
   function closeIiifDocument(): void {
     isViewerExpanded = false;
     openDocument = null;
+    openDocumentTitle = '';
+  }
+
+  async function captureScreenshot(): Promise<void> {
+    if (!workspaceElement || isCapturingScreenshot) return;
+    const maps = [leftMap, rightMap].filter((map): map is maplibregl.Map => map !== null);
+    if (maps.length === 0 && !viewerCanvasHost) return;
+    isCapturingScreenshot = true;
+    try {
+      const filename = buildScreenshotFilename({
+        center: maps[0]?.getCenter(),
+        layerLabels: timelineSelection.activeLayerIds.map(
+          (layerId) => layers.find((layer) => layer.id === layerId)?.label ?? layerId
+        ),
+        documentTitle: openDocument ? openDocumentTitle : '',
+      });
+      await captureViewScreenshot({ stage: workspaceElement, maps, viewerHost: viewerCanvasHost }, filename);
+    } catch (error) {
+      console.error('Screenshot export failed', error);
+    } finally {
+      isCapturingScreenshot = false;
+    }
+  }
+
+  function showControlTooltip(text: string, event: MouseEvent | FocusEvent): void {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    showTooltip({ text, x: rect.left + rect.width / 2, y: rect.top, placement: 'above' });
   }
 
   // Hard camera lock only makes sense with both panes on screen; dropping either
@@ -73,8 +107,26 @@
   });
 </script>
 
+{#snippet documentViewer(doc: NonNullable<typeof openDocument>)}
+  {#key `${doc.manifestUrl}|${doc.imageId}`}
+    <IiifViewer
+      manifestUrl={doc.manifestUrl}
+      imageId={doc.imageId}
+      onclose={closeIiifDocument}
+      onExpandedChange={(expanded) => (isViewerExpanded = expanded)}
+      onCanvasHost={(host) => (viewerCanvasHost = host)}
+      onTitleChange={(title) => (openDocumentTitle = title)}
+    />
+  {/key}
+{/snippet}
+
 <main class="canvas">
-  <div class="workspace-layer" class:workspace-layer--viewer-expanded={isViewerExpanded}>
+  <div
+    class="workspace-layer"
+    class:workspace-layer--viewer-expanded={isViewerExpanded}
+    class:workspace-layer--compare={isCompare}
+    bind:this={workspaceElement}
+  >
     {#if openDocument?.pane !== 'left'}
     <MapPane
       paneId="left"
@@ -89,9 +141,7 @@
       onIiifMaskSelect={(hit) => openIiifDocument('left', hit)}
     />
     {:else}
-      {#key `${openDocument.manifestUrl}|${openDocument.imageId}`}
-        <IiifViewer manifestUrl={openDocument.manifestUrl} imageId={openDocument.imageId} onclose={closeIiifDocument} onExpandedChange={(expanded) => (isViewerExpanded = expanded)} />
-      {/key}
+      {@render documentViewer(openDocument)}
     {/if}
     {#if isCompare}
       {#if openDocument?.pane !== 'right'}
@@ -111,14 +161,10 @@
         onIiifMaskSelect={(hit) => openIiifDocument('right', hit)}
       />
       {:else}
-        {#key `${openDocument.manifestUrl}|${openDocument.imageId}`}
-          <IiifViewer manifestUrl={openDocument.manifestUrl} imageId={openDocument.imageId} onclose={closeIiifDocument} onExpandedChange={(expanded) => (isViewerExpanded = expanded)} />
-        {/key}
+        {@render documentViewer(openDocument)}
       {/if}
     {:else if openDocument?.pane === 'right'}
-      {#key `${openDocument.manifestUrl}|${openDocument.imageId}`}
-        <IiifViewer manifestUrl={openDocument.manifestUrl} imageId={openDocument.imageId} onclose={closeIiifDocument} onExpandedChange={(expanded) => (isViewerExpanded = expanded)} />
-      {/key}
+      {@render documentViewer(openDocument)}
     {/if}
   </div>
 
@@ -133,13 +179,38 @@
       <div class="compare-control">
         <Button
           active={isCompare}
+          class="compare-toggle"
           aria-label="Toggle compare mode"
           onclick={() => timelineSelection.toggleCompareMode()}
-          style="--button-height: var(--canvas-primary-control-height); --button-padding-inline: var(--canvas-primary-control-padding-inline); --button-gap: var(--canvas-primary-control-gap); --button-font-size: var(--canvas-primary-control-font-size);"
         >
-          {isCompare ? 'Exit Compare' : 'Compare'}
+          <svg class="compare-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span class="compare-toggle-text">{isCompare ? 'Exit Compare' : 'Compare'}</span>
         </Button>
         <SearchMenu {leftMap} {rightMap} />
+      </div>
+    </div>
+
+    <div class="window-slot screenshot-slot">
+      <div class="screenshot-control">
+        <Button
+          iconOnly
+          disabled={isCapturingScreenshot}
+          aria-label="Screenshot without UI"
+          onmouseenter={(event) => showControlTooltip('Screenshot without UI', event)}
+          onmouseleave={hideTooltip}
+          onfocus={(event) => showControlTooltip('Screenshot without UI', event)}
+          onblur={hideTooltip}
+          onclick={captureScreenshot}
+          style="--button-height: var(--canvas-primary-control-height);"
+        >
+          <svg class="screenshot-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"></path>
+            <path d="M12 8v6M9 11.5l3 3 3-3"></path>
+          </svg>
+        </Button>
       </div>
     </div>
 
@@ -260,8 +331,82 @@
     right: var(--space-4);
   }
 
+  /* Same row as the compare/search controls (just above the timeline), right edge. */
+  .screenshot-slot {
+    right: var(--space-4);
+    bottom: calc(var(--canvas-timeline-bottom) + var(--canvas-timeline-height) + var(--space-4));
+    display: flex;
+  }
+
+  .screenshot-control {
+    display: flex;
+  }
+
   .compare-control {
     display: flex;
     gap: var(--space-2);
+  }
+
+  /* Descendant selector (not inline style) so the portrait media query below can
+     override these; the extra specificity beats the Button defaults outright. */
+  .compare-control :global(.compare-toggle) {
+    --button-height: var(--canvas-primary-control-height);
+    --button-padding-inline: var(--canvas-primary-control-padding-inline);
+    --button-gap: var(--canvas-primary-control-gap);
+    --button-font-size: var(--canvas-primary-control-font-size);
+  }
+
+  .compare-icon {
+    display: none;
+    width: calc(1rem * 1.5);
+    height: calc(1rem * 1.5);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .screenshot-icon {
+    /* Matches the 1.5x scale of the primary-control sizing vars above. */
+    width: calc(1rem * 1.5);
+    height: calc(1rem * 1.5);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Portrait windows stack the compare panes vertically (left pane on top), pin
+     each sublayer menu to the top edge of its own half, and collapse the compare
+     toggle to a square icon-only button (the search trigger does the same in
+     SearchMenu.svelte). Last in the stylesheet so it outranks the base rules. */
+  @media (orientation: portrait) {
+    .workspace-layer--compare {
+      flex-direction: column;
+    }
+
+    .sublayer-menu-slot--left.sublayer-menu-slot--split {
+      right: var(--space-4);
+    }
+
+    .sublayer-menu-slot--right {
+      top: calc(50% + var(--space-4));
+      left: var(--space-4);
+    }
+
+    .compare-control :global(.compare-toggle) {
+      --button-width: var(--canvas-primary-control-height);
+      --button-padding-inline: 0rem;
+    }
+
+    .compare-icon {
+      display: block;
+    }
+
+    .compare-toggle-text {
+      display: none;
+    }
   }
 </style>

@@ -1,4 +1,5 @@
 import type maplibregl from 'maplibre-gl';
+import { readThemeColor } from '$lib/core/map/mapColors';
 import type { SublayerRenderContext, SublayerRenderTarget } from '../types';
 import { iiifLayerId, iiifSourceId, registerIiifCleanup } from './iiifLayerRuntime';
 
@@ -34,6 +35,7 @@ export function renderIiifMasks(context: SublayerRenderContext, target: Sublayer
 
   const sourceId = iiifSourceId(context.paneId, target.sublayer.id, 'masks');
   const layerId = iiifLayerId(context.paneId, target.sublayer.id, 'masks');
+  const outlineLayerId = iiifLayerId(context.paneId, target.sublayer.id, 'mask-outline');
   const usesPmtiles = isPmtilesUrl(url);
 
   try {
@@ -60,12 +62,29 @@ export function renderIiifMasks(context: SublayerRenderContext, target: Sublayer
       });
     }
 
+    if (!context.map.getLayer(outlineLayerId)) {
+      context.map.addLayer({
+        id: outlineLayerId,
+        type: 'line',
+        source: sourceId,
+        ...(usesPmtiles ? { 'source-layer': PMTILES_SOURCE_LAYER } : {}),
+        filter: ['==', ['get', 'manifestUrl'], ''],
+        paint: {
+          'line-color': readThemeColor('--color-accent', '#2f6f99'),
+          'line-width': 1.5,
+          'line-opacity': 0.9,
+        },
+      });
+    }
+
     registerIiifCleanup(context.paneId, target.sublayer.id, () => {
+      if (context.map.getLayer(outlineLayerId)) context.map.removeLayer(outlineLayerId);
       if (context.map.getLayer(layerId)) context.map.removeLayer(layerId);
       if (context.map.getSource(sourceId)) context.map.removeSource(sourceId);
     });
     return true;
   } catch {
+    if (context.map.getLayer(outlineLayerId)) context.map.removeLayer(outlineLayerId);
     if (context.map.getLayer(layerId)) context.map.removeLayer(layerId);
     if (context.map.getSource(sourceId)) context.map.removeSource(sourceId);
     return false;

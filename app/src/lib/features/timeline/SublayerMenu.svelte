@@ -170,7 +170,6 @@
     align-items: flex-start;
     gap: var(--space-3);
     user-select: none;
-    -webkit-user-select: none;
   }
 
   :global(.sublayer-menu-window) {
@@ -307,7 +306,6 @@
     font-size: var(--text-xs);
     line-height: 1.6;
     user-select: text;
-    -webkit-user-select: text;
   }
 
   .sublayer-detail p + p {
@@ -366,7 +364,6 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     user-select: text;
-    -webkit-user-select: text;
   }
 
   .copy-icon {

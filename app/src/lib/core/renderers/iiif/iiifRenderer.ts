@@ -14,7 +14,7 @@ function canMutateStyle(map: maplibregl.Map): boolean {
 }
 
 export function canRenderIiifSublayer(target: SublayerRenderTarget): boolean {
-  return target.sublayer.kind === 'iiif' && canRenderIiifRasterPreview(target);
+  return target.sublayer.kind === 'iiif' && (canRenderIiifRasterPreview(target) || canRenderIiifAllmapsWarp(target));
 }
 
 /**
@@ -28,13 +28,21 @@ export async function renderIiifSublayer(context: SublayerRenderContext, target:
   const token = beginIiifRender(context.paneId, target.sublayer.id);
   if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return false;
 
-  let renderedRasterPreview = false;
-  try {
-    renderedRasterPreview = renderIiifRasterPreview(context, target);
-  } catch {
-    renderedRasterPreview = false;
+  console.info(
+    `[iiif ${context.paneId}] render ${target.layerId}/${target.sublayer.id} layer using ${context.allmapsOptions.loadingMode} rendering path`,
+  );
+
+  if (context.allmapsOptions.loadingMode === 'sequential') {
+    let renderedRasterPreview = false;
+    try {
+      renderedRasterPreview = renderIiifRasterPreview(context, target);
+    } catch {
+      renderedRasterPreview = false;
+    }
+    if (!renderedRasterPreview) return false;
+  } else if (!canRenderIiifAllmapsWarp(target)) {
+    return false;
   }
-  if (!renderedRasterPreview) return false;
 
   if (canRenderIiifMasks(target)) {
     renderIiifMasks(context, target);
@@ -54,6 +62,7 @@ export function iiifSublayerLayerIds(paneId: string, sublayerId: string): string
     iiifLayerId(paneId, sublayerId, 'allmaps-warp'),
     // Keep the transparent interaction surface above every visible representation.
     iiifLayerId(paneId, sublayerId, 'masks'),
+    iiifLayerId(paneId, sublayerId, 'mask-outline'),
   ];
 }
 

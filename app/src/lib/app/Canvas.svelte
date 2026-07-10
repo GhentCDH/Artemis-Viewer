@@ -33,9 +33,8 @@
   let isCapturingScreenshot = $state(false);
   let isImageBrowserOpen = $state(false);
   let isMobile = $state(false);
-  const staticAssetBase = import.meta.env.BASE_URL.replace(/\/$/, '');
-  const pmtilesUrl = `${staticAssetBase}/baselayer.pmtiles`;
   const selectedDatasetBaseUrl = datasetBaseUrl(developerSettings.dataSource);
+  const pmtilesUrl = datasetUrl('baselayer.pmtiles', selectedDatasetBaseUrl);
   const isCompare = $derived(timelineSelection.mode === 'compare');
   const leftMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.leftLayerId) ?? null);
   const rightMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.rightLayerId) ?? null);

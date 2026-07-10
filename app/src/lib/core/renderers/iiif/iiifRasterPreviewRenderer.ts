@@ -32,8 +32,9 @@ export function canRenderIiifRasterPreview(target: SublayerRenderTarget): boolea
 }
 
 /**
- * The raster preview is a permanent base layer for the IIIF group's lifetime, not a
- * loading placeholder: it stays visible below the Allmaps warp layer once that exists.
+ * In sequential mode the raster preview is a permanent base layer for the IIIF group's lifetime,
+ * not a loading placeholder: it stays visible below the incrementally populated Allmaps layer.
+ * Eager mode does not call this renderer and displays the Allmaps warp by itself.
  */
 export function renderIiifRasterPreview(context: SublayerRenderContext, target: SublayerRenderTarget): boolean {
   const url = rasterPmtilesUrl(context, target);

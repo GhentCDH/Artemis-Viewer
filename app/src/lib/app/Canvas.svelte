@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type maplibregl from 'maplibre-gl';
   import { datasetBaseUrl, datasetUrl } from '$lib/core/dataset/dataSource';
   import { loadLayerRegistry, type LayerSummary } from '$lib/core/dataset/layerRegistry';
@@ -31,6 +32,7 @@
   let isViewerExpanded = $state(false);
   let isCapturingScreenshot = $state(false);
   let isImageBrowserOpen = $state(false);
+  let isMobile = $state(false);
   const staticAssetBase = import.meta.env.BASE_URL.replace(/\/$/, '');
   const pmtilesUrl = `${staticAssetBase}/baselayer.pmtiles`;
   const selectedDatasetBaseUrl = datasetBaseUrl(developerSettings.dataSource);
@@ -48,6 +50,7 @@
       pane: viewerPane,
     };
     openDocumentTitle = '';
+    isViewerExpanded = isMobile;
   }
 
   function closeIiifDocument(): void {
@@ -89,6 +92,18 @@
     return syncPaneCameras(leftMap, rightMap);
   });
 
+  onMount(() => {
+    const mobileQuery = window.matchMedia('(max-width: 40rem)');
+    const syncMobileMode = () => {
+      isMobile = mobileQuery.matches;
+      if (isMobile) timelineSelection.setMode('single');
+      if (openDocument) isViewerExpanded = isMobile;
+    };
+    syncMobileMode();
+    mobileQuery.addEventListener('change', syncMobileMode);
+    return () => mobileQuery.removeEventListener('change', syncMobileMode);
+  });
+
   $effect(() => {
     if (!isCompare) {
       rightMap = null;
@@ -112,6 +127,7 @@
     <IiifViewer
       manifestUrl={doc.manifestUrl}
       imageId={doc.imageId}
+      forceExpanded={isMobile}
       onclose={closeIiifDocument}
       onExpandedChange={(expanded) => (isViewerExpanded = expanded)}
       onCanvasHost={(host) => (viewerCanvasHost = host)}
@@ -181,7 +197,10 @@
           active={isCompare}
           class="compare-toggle"
           aria-label="Toggle compare mode"
-          onclick={() => timelineSelection.toggleCompareMode()}
+          disabled={isMobile}
+          onclick={() => {
+            if (!isMobile) timelineSelection.toggleCompareMode();
+          }}
         >
           <svg class="compare-icon" viewBox="0 0 24 24" aria-hidden="true">
             <rect x="9" y="9" width="13" height="13" rx="2"></rect>
@@ -406,6 +425,12 @@
     }
 
     .compare-toggle-text {
+      display: none;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .compare-control :global(.compare-toggle) {
       display: none;
     }
   }

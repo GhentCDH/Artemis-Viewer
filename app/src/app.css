@@ -7,6 +7,9 @@
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
   --text-base: 0.875rem;
+  /* Resolves to 16 CSS px at the minimum root scale, preventing iOS Safari
+     from zooming the viewport when a form control receives focus. */
+  --text-mobile-input-min: 1.334rem;
   --text-md: 1rem;
   --text-lg: 1.25rem;
 
@@ -86,14 +89,15 @@
   --z-window-backdrop: 15;
   --z-window: 20;
   --z-popover: 30;
+  --z-modal: 35;
   --z-flash: 40;
 }
 
 html {
   /* Fluid root scale: the whole rem-based UI tracks viewport width.
      rem-based bounds keep user font-size preferences in effect.
-     ~14px at narrow widths → ~18px on large displays. */
-  font-size: clamp(0.875rem, 0.66rem + 0.45vw, 1.125rem);
+     ~12px on phone-sized windows → ~18px on large displays. */
+  font-size: clamp(0.75rem, 0.66rem + 0.45vw, 1.125rem);
   box-sizing: border-box;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;

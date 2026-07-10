@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ArtemisApp from '$lib/artemis/app/ArtemisApp.svelte';
+  import Canvas from '$lib/app/Canvas.svelte';
 </script>
 
-<ArtemisApp />
+<Canvas />

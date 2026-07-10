@@ -2,6 +2,7 @@ import type maplibregl from 'maplibre-gl';
 import type { SublayerRenderContext, SublayerRenderTarget } from '../types';
 import { canRenderIiifAllmapsWarp, renderIiifAllmapsWarp } from './allmapsWarpRenderer';
 import { beginIiifRender, iiifLayerId, isCurrentIiifRender, removeIiifGroup } from './iiifLayerRuntime';
+import { canRenderIiifMasks, renderIiifMasks } from './iiifMaskRenderer';
 import { canRenderIiifRasterPreview, renderIiifRasterPreview } from './iiifRasterPreviewRenderer';
 
 function canMutateStyle(map: maplibregl.Map): boolean {
@@ -35,6 +36,10 @@ export async function renderIiifSublayer(context: SublayerRenderContext, target:
   }
   if (!renderedRasterPreview) return false;
 
+  if (canRenderIiifMasks(target)) {
+    renderIiifMasks(context, target);
+  }
+
   if (canRenderIiifAllmapsWarp(target)) {
     void renderIiifAllmapsWarp(context, target, token).catch(() => {});
   }
@@ -42,9 +47,14 @@ export async function renderIiifSublayer(context: SublayerRenderContext, target:
   return true;
 }
 
-/** Maplibre layer ids this renderer may create for a sublayer, bottom-to-top (raster preview below warp). */
+/** Maplibre layer ids this renderer may create for a sublayer, bottom-to-top. */
 export function iiifSublayerLayerIds(paneId: string, sublayerId: string): string[] {
-  return [iiifLayerId(paneId, sublayerId, 'raster'), iiifLayerId(paneId, sublayerId, 'allmaps-warp')];
+  return [
+    iiifLayerId(paneId, sublayerId, 'raster'),
+    iiifLayerId(paneId, sublayerId, 'allmaps-warp'),
+    // Keep the transparent interaction surface above every visible representation.
+    iiifLayerId(paneId, sublayerId, 'masks'),
+  ];
 }
 
 export function removeIiifSublayer(context: SublayerRenderContext, sublayerId: string): void {

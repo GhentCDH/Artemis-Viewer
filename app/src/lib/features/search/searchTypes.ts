@@ -20,11 +20,36 @@ export interface SheetResult {
   layerLabel: string;
 }
 
-export type SearchResult = ToponymResult | SheetResult;
+export interface ImageResult {
+  kind: 'image';
+  id: string;
+  title: string;
+  year: string;
+  location: string;
+  manifestUrl: string;
+  lon: number | null;
+  lat: number | null;
+  collectionId: string;
+  collectionLabel: string;
+  sprite: ImageSprite | null;
+}
+
+export interface ImageSprite {
+  imageUrl: string;
+  sheetWidth: number;
+  sheetHeight: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type SearchResult = ToponymResult | SheetResult | ImageResult;
 
 export interface SearchIndex {
   toponyms: ToponymResult[];
   sheets: SheetResult[];
+  images: ImageResult[];
 }
 
 export interface ScoredResult<T> {

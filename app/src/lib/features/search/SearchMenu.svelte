@@ -8,7 +8,7 @@
   import { loadSearchIndex } from './searchIndex';
   import { searchByText } from './searchScoring';
   import { focusSearchResult } from './searchSelection';
-  import type { ScoredResult, SearchIndex, SearchResult, SheetResult, ToponymResult } from './searchTypes';
+  import type { ImageResult, ScoredResult, SearchIndex, SearchResult, SheetResult, ToponymResult } from './searchTypes';
 
   let {
     leftMap,
@@ -18,9 +18,9 @@
     rightMap: maplibregl.Map | null;
   } = $props();
 
-  type Tab = 'all' | 'toponyms' | 'sheets';
+  type Tab = 'all' | 'toponyms' | 'sheets' | 'images';
 
-  const PLACEHOLDERS = ['Search for a place…', 'Search for a map sheet…', 'Try "Ferraris"…'];
+  const PLACEHOLDERS = ['Search for a place…', 'Search for a map sheet…', 'Search the Massart photos…'];
   const PLACEHOLDER_INTERVAL_MS = 2600;
 
   let expanded = $state(false);
@@ -45,12 +45,18 @@
 
   const emptyToponymMatches: ScoredResult<ToponymResult>[] = [];
   const emptySheetMatches: ScoredResult<SheetResult>[] = [];
+  const emptyImageMatches: ScoredResult<ImageResult>[] = [];
 
   const toponymMatches = $derived(
     index && trimmedQuery ? searchByText(index.toponyms, trimmedQuery, (item) => item.text) : emptyToponymMatches
   );
   const sheetMatches = $derived(
     index && trimmedQuery ? searchByText(index.sheets, trimmedQuery, (item) => item.label) : emptySheetMatches
+  );
+  const imageMatches = $derived(
+    index && trimmedQuery
+      ? searchByText(index.images, trimmedQuery, (item) => [item.title, item.location, item.year, item.collectionLabel].filter(Boolean).join(' '))
+      : emptyImageMatches
   );
 
   const visibleToponyms = $derived(
@@ -62,9 +68,15 @@
 
   const showToponyms = $derived(activeTab === 'all' || activeTab === 'toponyms');
   const showSheets = $derived(activeTab === 'all' || activeTab === 'sheets');
+  const showImages = $derived(activeTab === 'all' || activeTab === 'images');
   const groupedToponyms = $derived(showToponyms ? groupByLayer(visibleToponyms) : []);
   const groupedSheets = $derived(showSheets ? groupByLayer(visibleSheets) : []);
-  const totalVisible = $derived(visibleToponyms.length + visibleSheets.length);
+  const groupedImages = $derived(showImages ? groupByCollection(imageMatches) : []);
+  const totalVisible = $derived(
+    (showToponyms ? visibleToponyms.length : 0) +
+      (showSheets ? visibleSheets.length : 0) +
+      (showImages ? imageMatches.length : 0)
+  );
 
   function groupByLayer<T extends { item: { layerLabel: string } }>(matches: T[]): [string, T[]][] {
     const groups = new Map<string, T[]>();
@@ -72,6 +84,16 @@
       const list = groups.get(match.item.layerLabel);
       if (list) list.push(match);
       else groups.set(match.item.layerLabel, [match]);
+    }
+    return [...groups.entries()];
+  }
+
+  function groupByCollection<T extends { item: { collectionLabel: string } }>(matches: T[]): [string, T[]][] {
+    const groups = new Map<string, T[]>();
+    for (const match of matches) {
+      const list = groups.get(match.item.collectionLabel);
+      if (list) list.push(match);
+      else groups.set(match.item.collectionLabel, [match]);
     }
     return [...groups.entries()];
   }
@@ -108,12 +130,19 @@
 
   function select(result: SearchResult): void {
     focusSearchResult(result, { leftMap, rightMap });
-    query = result.kind === 'toponym' ? result.text : result.label;
+    query = result.kind === 'toponym' ? result.text : result.kind === 'image' ? result.title : result.label;
     close();
   }
 
   function selectTopMatch(): void {
-    const top = visibleToponyms[0] ?? visibleSheets[0];
+    const top =
+      activeTab === 'toponyms'
+        ? visibleToponyms[0]
+        : activeTab === 'sheets'
+          ? visibleSheets[0]
+          : activeTab === 'images'
+            ? imageMatches[0]
+            : visibleToponyms[0] ?? visibleSheets[0] ?? imageMatches[0];
     if (top) select(top.item);
   }
 </script>
@@ -143,7 +172,7 @@
           bind:value={query}
           type="text"
           placeholder={PLACEHOLDERS[0]}
-          aria-label="Search toponyms and map sheets"
+          aria-label="Search toponyms, map sheets, and images"
         />
       </form>
       <Button iconOnly aria-label="Close search" onclick={close}>×</Button>
@@ -155,6 +184,7 @@
           <Button active={activeTab === 'all'} onclick={() => (activeTab = 'all')}>All</Button>
           <Button active={activeTab === 'toponyms'} onclick={() => (activeTab = 'toponyms')}>Toponyms</Button>
           <Button active={activeTab === 'sheets'} onclick={() => (activeTab = 'sheets')}>Sheets</Button>
+          <Button active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>Images</Button>
         </div>
         <div class="active-only-toggle" class:is-active={activeOnly}>
           <svg class="target-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -169,7 +199,7 @@
       {#if loading}
         <p class="search-status">Loading search index…</p>
       {:else if !trimmedQuery}
-        <p class="search-status">Type to search historical place names and map sheets.</p>
+        <p class="search-status">Type to search historical place names, map sheets, and images.</p>
       {:else if totalVisible === 0}
         <p class="search-status">No results for “{trimmedQuery}”.</p>
       {:else}
@@ -180,13 +210,13 @@
               <section class="result-group">
                 <h4 class="result-group-heading">{layerLabel}</h4>
                 {#each matches as match (match.item.id)}
-                  <button type="button" class="result-row" onclick={() => select(match.item)}>
+                  <Button variant="list" class="result-row" onclick={() => select(match.item)}>
                     <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
                       <path d="M8 1.5c-2.6 0-4.6 2-4.6 4.5 0 3.3 4.6 8.5 4.6 8.5s4.6-5.2 4.6-8.5c0-2.5-2-4.5-4.6-4.5Z"></path>
                       <circle cx="8" cy="6" r="1.5"></circle>
                     </svg>
                     <span class="result-text">{match.item.text}</span>
-                  </button>
+                  </Button>
                 {/each}
               </section>
             {/each}
@@ -198,13 +228,35 @@
               <section class="result-group">
                 <h4 class="result-group-heading">{layerLabel}</h4>
                 {#each matches as match (match.item.id)}
-                  <button type="button" class="result-row" onclick={() => select(match.item)}>
+                  <Button variant="list" class="result-row" onclick={() => select(match.item)}>
                     <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
                       <path d="M4 1.8h6l2.2 2.2v10.2H4Z"></path>
                       <path d="M10 1.8v2.2h2.2"></path>
                     </svg>
                     <span class="result-text">{match.item.label}</span>
-                  </button>
+                  </Button>
+                {/each}
+              </section>
+            {/each}
+          {/if}
+
+          {#if showImages && groupedImages.length > 0}
+            {#if activeTab === 'all'}<h3 class="results-heading">Images</h3>{/if}
+            {#each groupedImages as [collectionLabel, matches] (collectionLabel)}
+              <section class="result-group">
+                <h4 class="result-group-heading">{collectionLabel}</h4>
+                {#each matches as match (match.item.id)}
+                  <Button variant="list" class="result-row" onclick={() => select(match.item)}>
+                    <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
+                      <rect x="2" y="3" width="12" height="10" rx="1"></rect>
+                      <circle cx="5.2" cy="6.2" r="1.2"></circle>
+                      <path d="m3.5 11 3-3 2.2 2 1.5-1.4 2.3 2.4"></path>
+                    </svg>
+                    <span class="result-text-block">
+                      <span class="result-text">{match.item.title}</span>
+                      <span class="result-meta">{[match.item.year, match.item.location].filter(Boolean).join(' · ') || collectionLabel}</span>
+                    </span>
+                  </Button>
                 {/each}
               </section>
             {/each}
@@ -233,22 +285,28 @@
   }
 
   :global(.search-trigger) {
-    --button-height: 2.25rem;
-    --button-padding-inline: var(--space-4);
+    --button-height: var(--canvas-primary-control-height);
+    --button-padding-inline: var(--canvas-primary-control-padding-inline);
+    --button-gap: var(--canvas-primary-control-gap);
+    --button-font-size: var(--canvas-primary-control-font-size);
   }
 
   .search-trigger-text {
     max-width: 13rem;
     overflow: hidden;
-    color: var(--color-text-muted);
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .search-icon {
     flex: 0 0 auto;
-    width: 1rem;
-    height: 1rem;
+    width: 1.5rem;
+    height: 1.5rem;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.5;
@@ -374,26 +432,6 @@
     font-weight: 400;
   }
 
-  .result-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    width: 100%;
-    border: 0;
-    border-radius: var(--radius-sm);
-    padding: var(--space-1) var(--space-2);
-    background: transparent;
-    color: var(--color-text-primary);
-    font-family: var(--font-readable);
-    font-size: var(--text-sm);
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .result-row:hover {
-    background: var(--color-surface-control-hover);
-  }
-
   .result-icon {
     flex: 0 0 auto;
     width: 1rem;
@@ -408,6 +446,22 @@
   .result-text {
     min-width: 0;
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .result-text-block {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .result-meta {
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

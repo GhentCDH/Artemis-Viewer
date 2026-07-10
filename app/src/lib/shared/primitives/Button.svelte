@@ -3,7 +3,7 @@
   import type { HTMLButtonAttributes } from 'svelte/elements';
 
   interface Props extends Omit<HTMLButtonAttributes, 'class' | 'style'> {
-    variant?: 'default' | 'primary';
+    variant?: 'default' | 'primary' | 'list';
     iconOnly?: boolean;
     active?: boolean;
     disabled?: boolean;
@@ -46,28 +46,34 @@
     --button-border: var(--color-border);
     --button-border-hover: var(--color-border-hover);
     --button-height: 1.75rem;
+    --button-width: auto;
     --button-radius: calc(var(--button-height) / var(--control-corner-ratio));
     --button-padding-inline: var(--space-3);
+    --button-padding-block: 0rem;
     --button-gap: var(--space-2);
     --button-font-size: var(--text-xs);
+    --button-font-family: var(--font-ui);
+    --button-font-weight: 400;
+    --button-justify: center;
     /* -- end exposed -- */
 
     appearance: none;
     -webkit-appearance: none;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: var(--button-justify);
     pointer-events: auto;
     gap: var(--button-gap);
     min-height: var(--button-height);
-    padding-inline: var(--button-padding-inline);
+    width: var(--button-width);
+    padding: var(--button-padding-block) var(--button-padding-inline);
     border: 1px solid var(--button-border);
     border-radius: var(--button-radius);
     background: var(--button-bg);
     color: var(--button-text);
-    font-family: var(--font-ui);
+    font-family: var(--button-font-family);
     font-size: var(--button-font-size);
-    font-weight: 400;
+    font-weight: var(--button-font-weight);
     line-height: 1.1;
     cursor: pointer;
     transition:
@@ -99,6 +105,20 @@
     --button-text: var(--color-accent-contrast);
     --button-border: var(--color-accent);
     --button-border-hover: var(--color-accent-hover);
+  }
+
+  .button--list {
+    --button-bg: transparent;
+    --button-bg-hover: var(--color-surface-control-hover);
+    --button-border: transparent;
+    --button-border-hover: transparent;
+    --button-height: auto;
+    --button-width: 100%;
+    --button-padding-inline: var(--space-2);
+    --button-padding-block: var(--space-1);
+    --button-font-size: var(--text-sm);
+    --button-font-family: var(--font-readable);
+    --button-justify: flex-start;
   }
 
   .button.is-active {

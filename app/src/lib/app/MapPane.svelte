@@ -4,33 +4,42 @@
   import { initializeMapLibre, type MapLibreInitCamera, type PaneId } from '$lib/core/map/maplibreInit';
   import { BASELAYER_BOUNDS } from '$lib/core/map/basemap';
   import { SublayerRendererManager } from '$lib/core/renderers/sublayerRendererManager';
+  import type { AllmapsRenderOptions } from '$lib/core/renderers/types';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
+  import type { IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
 
   let {
     paneId,
     pmtilesUrl,
     datasetBaseUrl,
+    allmapsOptions,
+    allmapsRenderRevision,
     layers,
     activeLayerId,
     sublayersByLayerId,
     initialCamera,
     onMapReady,
+    onIiifMaskSelect,
   }: {
     paneId: PaneId;
     pmtilesUrl: string;
     datasetBaseUrl: string;
+    allmapsOptions: AllmapsRenderOptions;
+    allmapsRenderRevision: number;
     layers: LayerSummary[];
     activeLayerId: string | null;
     sublayersByLayerId: Record<string, Record<string, boolean>>;
     /** Frames the pane on this camera instead of BASELAYER_BOUNDS — used to spawn a compare pane matching the other pane's current view. */
     initialCamera?: MapLibreInitCamera;
     onMapReady?: (map: maplibregl.Map) => void;
+    onIiifMaskSelect?: (hit: IiifMaskHit) => void;
   } = $props();
 
   let container: HTMLElement;
   let rendererManager = $state<SublayerRendererManager | null>(null);
 
   function reconcile(): void {
+    rendererManager?.updateAllmapsOptions(allmapsOptions, allmapsRenderRevision);
     rendererManager?.reconcile(layers, {
       activeLayerIds: activeLayerId ? [activeLayerId] : [],
       sublayersByLayerId,
@@ -48,11 +57,16 @@
       initialBounds: BASELAYER_BOUNDS,
       initialCamera,
     });
-    const manager = new SublayerRendererManager({
-      map: mapLibre.map,
-      paneId,
-      datasetBaseUrl,
-    });
+    const manager = new SublayerRendererManager(
+      {
+        map: mapLibre.map,
+        paneId,
+        datasetBaseUrl,
+        allmapsOptions,
+      },
+      allmapsRenderRevision,
+      onIiifMaskSelect
+    );
     const reconcileOnStyleLoad = () => {
       manager.reconcile(layers, {
         activeLayerIds: activeLayerId ? [activeLayerId] : [],

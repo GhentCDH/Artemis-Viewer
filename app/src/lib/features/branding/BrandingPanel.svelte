@@ -1,8 +1,12 @@
 <script lang="ts">
   import Window from '$lib/shared/primitives/Window.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
+  import Toggle from '$lib/shared/primitives/Toggle.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
+  import type { DatasetSource } from '$lib/core/dataset/dataSource';
   import type { SiteMetadata } from '$lib/core/dataset/siteMetadata';
+  import type { AllmapsTransformation } from '$lib/core/renderers/types';
+  import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
 
   let { siteMetadata, style = '' }: { siteMetadata: SiteMetadata; style?: string } = $props();
 
@@ -42,7 +46,17 @@
 
   {#if isOpen}
     <div class="branding-modal-layer">
-      <Window class="branding-window" variant="modal" placement="center" backdrop closeOnEscape showClose closeLabel="Close panel" onclose={close}>
+      <Window
+        class="branding-window"
+        variant="modal"
+        placement="center"
+        backdrop
+        closeOnEscape
+        showClose
+        closeLabel="Close panel"
+        onclose={close}
+        style="--window-width: var(--branding-modal-width);"
+      >
         {#snippet header()}
           <div class="branding-tabs">
             <Button active={activeTab === 'about'} onclick={() => (activeTab = 'about')}>About</Button>
@@ -103,6 +117,56 @@
                 <p>{siteMetadata.attribution}</p>
               </section>
             {/if}
+
+            <section class="branding-section developer-section">
+              <WaveSeparator />
+              <details>
+                <summary>Developer settings</summary>
+                <div class="developer-controls">
+                  <label class="developer-control developer-control--stacked">
+                    <span>Georeferencing transformation</span>
+                    <select
+                      value={developerSettings.transformation}
+                      onchange={(event) => developerSettings.setTransformation(event.currentTarget.value as AllmapsTransformation)}
+                    >
+                      <option value="thinPlateSpline">Thin plate spline</option>
+                      <option value="polynomial1">Polynomial</option>
+                    </select>
+                  </label>
+
+                  <div class="developer-control">
+                    <span>Debug triangulation</span>
+                    <Toggle
+                      label="Debug triangulation"
+                      checked={developerSettings.debugTriangles}
+                      onclick={() => developerSettings.setDebugTriangles(!developerSettings.debugTriangles)}
+                    />
+                  </div>
+
+                  <div class="developer-control">
+                    <span>Show high-stretch regions</span>
+                    <Toggle
+                      label="Show high-stretch regions"
+                      checked={developerSettings.showHighStretch}
+                      onclick={() => developerSettings.setShowHighStretch(!developerSettings.showHighStretch)}
+                    />
+                  </div>
+
+                  <label class="developer-control developer-control--stacked">
+                    <span>Data source</span>
+                    <select
+                      value={developerSettings.dataSource}
+                      onchange={(event) => developerSettings.setDataSource(event.currentTarget.value as DatasetSource)}
+                    >
+                      <option value="published">Published data</option>
+                      <option value="draft">Draft branch</option>
+                    </select>
+                  </label>
+                  <Button onclick={() => developerSettings.resetDefaults()} style="--button-width: 100%;">Reset defaults</Button>
+                  <p class="developer-warning">Warning: curiousity killed the cat</p>
+                </div>
+              </details>
+            </section>
           {:else}
             <h3>Data pipeline</h3>
             <p>
@@ -187,7 +251,8 @@
   }
 
   :global(.branding-window) {
-    width: var(--branding-modal-width);
+    min-width: 0;
+    max-width: 92vw;
     height: var(--branding-modal-height);
   }
 
@@ -301,5 +366,74 @@
     margin: 0;
     color: var(--color-text-muted);
     font-size: var(--text-xs);
+  }
+
+  .developer-section summary {
+    color: var(--color-text-muted);
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .developer-section details,
+  .developer-controls,
+  .developer-control {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .developer-section summary:focus-visible,
+  .developer-section select:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 1px;
+  }
+
+  .developer-controls {
+    display: grid;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+  }
+
+  .developer-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    color: var(--color-text-secondary);
+    font-family: var(--font-readable);
+    font-size: var(--text-sm);
+  }
+
+  .developer-control--stacked {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .developer-control select {
+    width: 100%;
+    max-width: 100%;
+    min-height: 1.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xs);
+    padding: 0 var(--space-2);
+    background: var(--color-surface-control);
+    color: var(--color-text-primary);
+    font: inherit;
+  }
+
+  .developer-control select:hover {
+    border-color: var(--color-border-hover);
+    background: var(--color-surface-control-hover);
+  }
+
+  .developer-controls .developer-warning {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-family: var(--font-readable);
+    font-size: var(--text-xs);
+    font-style: italic;
   }
 </style>

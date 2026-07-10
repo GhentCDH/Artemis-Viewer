@@ -9,8 +9,18 @@ export interface SearchMapPanes {
   rightMap: maplibregl.Map | null;
 }
 
-/** Activates the result's layer (picking a pane if it isn't already on) and flies that pane's camera to it. */
+/** Activates a historical result's layer, then flies the relevant map to the selected result. */
 export function focusSearchResult(result: SearchResult, panes: SearchMapPanes): void {
+  if (result.kind === 'image') {
+    if (result.lon !== null && result.lat !== null) {
+      panes.leftMap?.flyTo({
+        center: [result.lon, result.lat],
+        zoom: Math.max(panes.leftMap.getZoom(), TOPONYM_FOCUS_ZOOM),
+      });
+    }
+    return;
+  }
+
   const pane = timelineSelection.focusLayer(result.layerId);
   const map = pane === 'left' ? panes.leftMap : panes.rightMap;
   if (!map) return;

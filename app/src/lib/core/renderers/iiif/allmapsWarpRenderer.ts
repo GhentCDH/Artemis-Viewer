@@ -211,14 +211,28 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
           pendingQueue.sort((a, b) => squaredDistance(a.geoCenter, center) - squaredDistance(b.geoCenter, center));
         }
         const chunk = pendingQueue.splice(0, RECONCILE_CHUNK);
-        const results = await Promise.allSettled(chunk.map((canvas) => layer.addGeoreferencedMap(canvas.georeferencedMap)));
+        const results = await Promise.allSettled(
+          chunk.map((canvas) =>
+            layer.addGeoreferencedMap(canvas.georeferencedMap, {
+              transformationType: context.allmapsOptions.transformationType,
+              debugTriangles: context.allmapsOptions.debugTriangles,
+            })
+          )
+        );
+        const addedMapIds: string[] = [];
         for (const [index, result] of results.entries()) {
           if (result.status === 'fulfilled') {
             addedThisDrain.push(chunk[index]);
+            addedMapIds.push(result.value);
           } else {
             // skip this canvas — its georeferencing data is likely malformed
             console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${chunk[index].imageId}`, result.reason);
           }
+        }
+        if (context.allmapsOptions.showHighStretch && addedMapIds.length > 0) {
+          // Allmaps ignores distortionMeasure during addGeoreferencedMap's init path.
+          // Applying it afterwards triggers the option-change path and re-triangulation.
+          layer.setMapsOptions(addedMapIds, { distortionMeasure: 'log2sigma' });
         }
         layer.nativeUpdate();
         if (pendingQueue.length > 0) await nextFrame();

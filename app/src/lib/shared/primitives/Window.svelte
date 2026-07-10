@@ -118,6 +118,7 @@
     --window-bg: var(--color-surface-raised);
     --window-header-bg: var(--color-surface-raised);
     --window-border: var(--color-border);
+    --window-header-border-width: 1px;
     --window-radius: var(--radius-lg);
     --window-shadow:
       0 1px 3px color-mix(in srgb, var(--color-shadow-ink) 12%, transparent),
@@ -125,6 +126,8 @@
     --window-padding-block: var(--space-3);
     --window-padding-inline: var(--space-4);
     --window-gap: var(--space-2);
+    --window-width: auto;
+    --window-max-height: none;
     /* -- end exposed -- */
 
     position: relative;
@@ -133,6 +136,8 @@
     flex-direction: column;
     pointer-events: auto;
     overflow: hidden;
+    width: var(--window-width);
+    max-height: var(--window-max-height);
     background: var(--window-bg);
     border: 1px solid var(--window-border);
     border-radius: var(--window-radius);
@@ -156,7 +161,7 @@
     justify-content: space-between;
     gap: var(--window-gap);
     padding: var(--window-padding-block) var(--window-padding-inline);
-    border-bottom: 1px solid var(--window-border);
+    border-bottom: var(--window-header-border-width) solid var(--window-border);
     background: var(--window-header-bg);
     flex: 0 0 auto;
   }

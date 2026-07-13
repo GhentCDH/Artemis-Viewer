@@ -41,7 +41,7 @@
 
   .track {
     --track-width: 100%;
-    --timeline-line-width: 7.5px;
+    --timeline-line-width: 6.5px;
 
     position: relative;
     width: var(--track-width);

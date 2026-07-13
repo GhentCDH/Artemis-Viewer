@@ -59,18 +59,28 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
   // huge: tiles were pruned only outside a 17×-linear-viewport region (`pruneViewportBufferRatio`
   // buffers per side: 8 → 17× linear, ~290× area), producing texture arrays 100–180 tiles deep and
   // multi-hundred-ms frames on a Retina fullscreen canvas.
+  //
+  // The tuned defaults live in ALLMAPS_TUNING_DEFAULTS (developerSettings); each knob is
+  // adjustable at runtime via the branding panel's Advanced Allmaps developer menu. In brief:
+  // - log2ScaleFactorCorrection 0: fetch tiles at the nearest IIIF scale factor instead of the
+  //   default half-step finer (-0.5 ≈ 2× the tiles for sharpness that barely registers).
+  // - pruneViewportBufferRatio 2: keep viewport tiles for a 5×-linear-viewport pan-back region
+  //   instead of 17× (1 measured too aggressive: panning back triggered thousands of refetches).
+  // - overview*ViewportBufferRatio 2/4: request whole-image low-res fallback tiles within 5×,
+  //   keep within 9× linear viewport instead of 17×/33×.
+  // - maxTotalOverviewResolutionRatio: budget for total overview-tile resolution relative to the
+  //   viewport's; 0 disables overview tiles entirely (Allmaps' own default is 50).
+  // - overviewTilesMaxResolution/-Selection: per-map overview cap and zoom-level choice.
+  const tuning = context.allmapsOptions.tuning;
   const layer = new WarpedMapLayer({
     layerId,
-    // Fetch tiles at the nearest IIIF scale factor instead of the default half-step finer
-    // (log2 correction -0.5 ≈ 2× the tiles for sharpness that barely registers at map scale).
-    log2ScaleFactorCorrection: 0,
-    // Keep viewport tiles for a 5×-linear-viewport pan-back region instead of 17× (1 measured too
-    // aggressive: panning back triggered thousands of refetches).
-    pruneViewportBufferRatio: 2,
-    // Overview tiles (whole-image low-res fallbacks): request within 5×, keep within 9× linear
-    // viewport instead of 17×/33×.
-    overviewRequestViewportBufferRatio: 2,
-    overviewPruneViewportBufferRatio: 4,
+    log2ScaleFactorCorrection: tuning.log2ScaleFactorCorrection,
+    pruneViewportBufferRatio: tuning.pruneViewportBufferRatio,
+    overviewRequestViewportBufferRatio: tuning.overviewRequestViewportBufferRatio,
+    overviewPruneViewportBufferRatio: tuning.overviewPruneViewportBufferRatio,
+    maxTotalOverviewResolutionRatio: tuning.maxTotalOverviewResolutionRatio,
+    overviewTilesMaxResolution: tuning.overviewTilesMaxResolution,
+    overviewTilesSelection: tuning.overviewTilesSelection,
   });
   try {
     context.map.addLayer(layer);
@@ -146,6 +156,14 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
   async function uploadSpritesForCanvases(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
     if (canvases.length === 0) return;
 
+    if (!context.allmapsOptions.spritesEnabled) {
+      if (!warnedSpritesUnavailable) {
+        warnedSpritesUnavailable = true;
+        console.info(`[allmaps ${layerId}] sprite rendering disabled via developer settings — full-res IIIF tiles will be fetched for every canvas`);
+      }
+      return;
+    }
+
     if (!spritesImagePath || !spritesIndexPath) {
       if (!warnedSpritesUnavailable) {
         warnedSpritesUnavailable = true;
@@ -170,10 +188,20 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     if (sprites.length === 0) return;
 
     spriteBatchCounter += 1;
+    console.info(
+      `[allmaps ${layerId}] addSprites batch ${spriteBatchCounter}: ${sprites.length} sprites (${canvases.length} canvases, atlas ${atlas.imageSize[0]}×${atlas.imageSize[1]})`
+    );
     try {
       await layer.addSprites(sprites, `${atlas.imageUrl}#batch-${spriteBatchCounter}`, atlas.imageSize);
     } catch (error) {
       console.warn(`[allmaps ${layerId}] addSprites failed for batch of ${sprites.length}`, error);
+    } finally {
+      // Each batch's unique #batch-N URL pins a full decoded RGBA copy of the atlas
+      // (~86MB for the largest layer) in Allmaps' spritesTileCache, which is never pruned —
+      // panning leaked one copy per drain. By the time addSprites resolves, the clipped
+      // per-canvas thumbnails have been handed to the main tile cache, so the atlas copy
+      // is dead weight and safe to drop.
+      layer.renderer?.spritesTileCache.clear();
     }
   }
 

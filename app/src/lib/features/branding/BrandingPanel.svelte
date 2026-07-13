@@ -5,15 +5,44 @@
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import type { DatasetSource } from '$lib/core/dataset/dataSource';
   import type { SiteMetadata } from '$lib/core/dataset/siteMetadata';
-  import type { AllmapsTransformation, IiifLoadingMode } from '$lib/core/renderers/types';
+  import type {
+    AllmapsOverviewTilesSelection,
+    AllmapsTransformation,
+    AllmapsTuningOptions,
+    IiifLoadingMode,
+  } from '$lib/core/renderers/types';
   import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
 
   let { siteMetadata, style = '' }: { siteMetadata: SiteMetadata; style?: string } = $props();
 
   type Tab = 'about' | 'pipeline';
+  type TuningNumberKey = Exclude<keyof AllmapsTuningOptions, 'overviewTilesMaxResolution' | 'overviewTilesSelection'>;
 
   let isOpen = $state(false);
   let activeTab = $state<Tab>('about');
+
+  function onTuningNumberChange(key: TuningNumberKey, event: Event & { currentTarget: HTMLInputElement }): void {
+    const value = Number.parseFloat(event.currentTarget.value);
+    if (Number.isFinite(value)) {
+      developerSettings.setAllmapsTuning({ [key]: value });
+    } else {
+      event.currentTarget.value = String(developerSettings.allmapsTuning[key]);
+    }
+  }
+
+  function onOverviewMaxResolutionChange(event: Event & { currentTarget: HTMLInputElement }): void {
+    const text = event.currentTarget.value.trim();
+    if (text === '') {
+      developerSettings.setAllmapsTuning({ overviewTilesMaxResolution: undefined });
+      return;
+    }
+    const value = Number.parseFloat(text);
+    if (Number.isFinite(value)) {
+      developerSettings.setAllmapsTuning({ overviewTilesMaxResolution: value });
+    } else {
+      event.currentTarget.value = developerSettings.allmapsTuning.overviewTilesMaxResolution?.toString() ?? '';
+    }
+  }
 
   const pipeline = $derived(siteMetadata.pipeline);
   const hasPipeline = $derived(pipeline.info.length > 0 || pipeline.links.length > 0);
@@ -169,6 +198,15 @@
                   </label>
 
                   <div class="developer-control">
+                    <span>IIIF sprite thumbnails</span>
+                    <Toggle
+                      label="IIIF sprite thumbnails"
+                      checked={developerSettings.allmapsSprites}
+                      onclick={() => developerSettings.setAllmapsSprites(!developerSettings.allmapsSprites)}
+                    />
+                  </div>
+
+                  <div class="developer-control">
                     <span>Allmaps performance diagnostics</span>
                     <Toggle
                       label="Allmaps performance diagnostics"
@@ -176,6 +214,90 @@
                       onclick={() => developerSettings.setAllmapsDiagnostics(!developerSettings.allmapsDiagnostics)}
                     />
                   </div>
+
+                  <details class="allmaps-advanced">
+                    <summary>Advanced Allmaps</summary>
+                    <div class="developer-controls">
+                      <label class="developer-control">
+                        <span>Scale factor correction (log2)</span>
+                        <input
+                          type="number"
+                          step="0.25"
+                          value={developerSettings.allmapsTuning.log2ScaleFactorCorrection}
+                          onchange={(event) => onTuningNumberChange('log2ScaleFactorCorrection', event)}
+                        />
+                      </label>
+
+                      <label class="developer-control">
+                        <span>Prune viewport buffer ratio</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={developerSettings.allmapsTuning.pruneViewportBufferRatio}
+                          onchange={(event) => onTuningNumberChange('pruneViewportBufferRatio', event)}
+                        />
+                      </label>
+
+                      <label class="developer-control">
+                        <span>Overview request buffer ratio</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={developerSettings.allmapsTuning.overviewRequestViewportBufferRatio}
+                          onchange={(event) => onTuningNumberChange('overviewRequestViewportBufferRatio', event)}
+                        />
+                      </label>
+
+                      <label class="developer-control">
+                        <span>Overview prune buffer ratio</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={developerSettings.allmapsTuning.overviewPruneViewportBufferRatio}
+                          onchange={(event) => onTuningNumberChange('overviewPruneViewportBufferRatio', event)}
+                        />
+                      </label>
+
+                      <label class="developer-control">
+                        <span>Max total overview resolution ratio</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={developerSettings.allmapsTuning.maxTotalOverviewResolutionRatio}
+                          onchange={(event) => onTuningNumberChange('maxTotalOverviewResolutionRatio', event)}
+                        />
+                      </label>
+
+                      <label class="developer-control">
+                        <span>Overview tiles max resolution</span>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder="auto"
+                          value={developerSettings.allmapsTuning.overviewTilesMaxResolution ?? ''}
+                          onchange={onOverviewMaxResolutionChange}
+                        />
+                      </label>
+
+                      <label class="developer-control developer-control--stacked">
+                        <span>Overview tiles selection</span>
+                        <select
+                          value={developerSettings.allmapsTuning.overviewTilesSelection}
+                          onchange={(event) =>
+                            developerSettings.setAllmapsTuning({
+                              overviewTilesSelection: event.currentTarget.value as AllmapsOverviewTilesSelection,
+                            })}
+                        >
+                          <option value="lowest">Lowest zoom level</option>
+                          <option value="highest">Highest zoom level</option>
+                        </select>
+                      </label>
+                    </div>
+                  </details>
 
                   <label class="developer-control developer-control--stacked">
                     <span>Data source</span>
@@ -410,7 +532,8 @@
   }
 
   .developer-section summary:focus-visible,
-  .developer-section select:focus-visible {
+  .developer-section select:focus-visible,
+  .developer-section input:focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 1px;
   }
@@ -437,7 +560,8 @@
     gap: var(--space-1);
   }
 
-  .developer-control select {
+  .developer-control select,
+  .developer-control input[type='number'] {
     width: 100%;
     max-width: 100%;
     min-height: 1.75rem;
@@ -449,9 +573,34 @@
     font: inherit;
   }
 
-  .developer-control select:hover {
+  .developer-control select:hover,
+  .developer-control input[type='number']:hover {
     border-color: var(--color-border-hover);
     background: var(--color-surface-control-hover);
+  }
+
+  /* Number inputs sit inline on their row (unlike the full-width stacked selects),
+     so cap their width to keep the label legible. */
+  .developer-control input[type='number'] {
+    flex: none;
+    width: 6rem;
+    text-align: right;
+  }
+
+  /* Reads as a control-level disclosure, not a section header: undo the uppercase
+     header treatment inherited from the .developer-section summary rule above. */
+  .allmaps-advanced summary {
+    color: var(--color-text-secondary);
+    font-family: var(--font-readable);
+    font-size: var(--text-sm);
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .allmaps-advanced .developer-controls {
+    border-left: 1px solid var(--color-border-subtle);
+    padding-left: var(--space-3);
   }
 
   .developer-controls .developer-warning {

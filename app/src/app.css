@@ -28,8 +28,10 @@
   --palette-rust-700: #8b3a2a;
   --palette-blue-600: #3f789f;
   --palette-blue-650: #2f6f99;
+  --palette-blue-675: #2a6389;
   --palette-blue-700: #326481;
   --palette-slate-400: #8fa8b7;
+  --palette-slate-450: #7d9aab;
   --palette-slate-500: #607d91;
   --palette-slate-600: #52697b;
   --palette-white: #ffffff;
@@ -70,8 +72,9 @@
   --color-map-grid: var(--palette-gray-500);
   --color-map-water: var(--palette-slate-500);
 
-  --color-timeline-axis: var(--palette-slate-400);
-  --color-timeline-active: var(--palette-blue-650);
+  --color-timeline-axis: var(--palette-slate-450);
+  --color-timeline-active: var(--palette-blue-675);
+  --color-timeline-backdrop: var(--palette-blue-650);
   --color-timeline-tick: color-mix(in srgb, var(--palette-brown-600) 10%, transparent);
   --color-timeline-tick-label: color-mix(in srgb, var(--palette-brown-800) 60%, transparent);
 

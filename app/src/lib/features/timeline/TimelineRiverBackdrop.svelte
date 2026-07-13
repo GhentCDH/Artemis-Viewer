@@ -13,9 +13,9 @@
 <style>
   .timeline-river-backdrop {
     /* -- exposed -- */
-    --timeline-river-wide-color: color-mix(in srgb, var(--color-timeline-active) 2%, transparent);
-    --timeline-river-middle-color: color-mix(in srgb, var(--color-timeline-active) 3.5%, transparent);
-    --timeline-river-narrow-color: color-mix(in srgb, var(--color-timeline-active) 5%, transparent);
+    --timeline-river-wide-color: color-mix(in srgb, var(--color-timeline-backdrop) 2%, transparent);
+    --timeline-river-middle-color: color-mix(in srgb, var(--color-timeline-backdrop) 3.5%, transparent);
+    --timeline-river-narrow-color: color-mix(in srgb, var(--color-timeline-backdrop) 5%, transparent);
     --timeline-river-wide-width: 120;
     --timeline-river-middle-width: 70;
     --timeline-river-narrow-width: 35;

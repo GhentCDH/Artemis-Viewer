@@ -1,5 +1,6 @@
 import type maplibregl from 'maplibre-gl';
 import { timelineSelection } from '$lib/features/timeline/timelineSelection.svelte';
+import { imageBrowser } from '$lib/features/images/imageBrowserState.svelte';
 import type { SearchResult } from './searchTypes';
 
 const TOPONYM_FOCUS_ZOOM = 15;
@@ -17,6 +18,9 @@ export function focusSearchResult(result: SearchResult, panes: SearchMapPanes): 
         center: [result.lon, result.lat],
         zoom: Math.max(panes.leftMap.getZoom(), TOPONYM_FOCUS_ZOOM),
       });
+      // Opens the images panel too (making the pins visible) — the bubble waits
+      // hidden until the flight brings its anchor on screen.
+      imageBrowser.showPreview(result);
     }
     return;
   }

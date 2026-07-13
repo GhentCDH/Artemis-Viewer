@@ -5,10 +5,17 @@ export interface LayerSublayer {
   name: string;
   kind: string;
   description: string;
+  citation: string;
+  readingList: LayerReadingListEntry[];
   downloadFile: string;
   downloadUrl: string;
   source: LayerSublayerSource | null;
   artifacts: Record<string, string>;
+}
+
+export interface LayerReadingListEntry {
+  label: string;
+  url: string;
 }
 
 export interface LayerSummary {
@@ -34,6 +41,8 @@ interface LayersYamlDocument {
       name: string;
       kind: string;
       description?: string;
+      citation?: string;
+      readingList?: Record<string, string>;
       disabled?: boolean;
       source?: LayerSublayerSource;
       artifacts?: Record<string, string>;
@@ -85,6 +94,10 @@ export async function loadLayerRegistry(layersUrl: string): Promise<LayerSummary
         name: sublayer.name,
         kind: sublayer.kind,
         description: sublayer.description?.trim() ?? '',
+        citation: sublayer.citation?.trim() ?? '',
+        readingList: Object.entries(sublayer.readingList ?? {})
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && Boolean(entry[1].trim()))
+          .map(([label, url]) => ({ label: label.trim(), url: url.trim() })),
         downloadFile: sublayer.download?.file ?? '',
         downloadUrl: sublayer.download?.url ?? '',
         source: sublayer.source ?? null,

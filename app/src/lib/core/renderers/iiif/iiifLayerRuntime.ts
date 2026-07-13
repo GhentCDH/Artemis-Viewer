@@ -10,6 +10,10 @@ export function iiifLayerId(paneId: string, sublayerId: string, role: string): s
   return `iiif-layer-${role}-${paneId}-${sanitize(sublayerId)}`;
 }
 
+export function isIiifLayerRole(layerId: string, role: string): boolean {
+  return layerId.startsWith(`iiif-layer-${role}-`);
+}
+
 interface IiifGroupState {
   cleanups: Array<() => void>;
   renderToken: number;

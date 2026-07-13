@@ -2,15 +2,17 @@
   import { onMount } from 'svelte';
   import type maplibregl from 'maplibre-gl';
   import { initializeMapLibre, type MapLibreInitCamera, type PaneId } from '$lib/core/map/maplibreInit';
-  import { BASELAYER_BOUNDS } from '$lib/core/map/basemap';
+  import { applyBasemap, BASELAYER_BOUNDS, type BasemapOption } from '$lib/core/map/basemap';
   import { SublayerRendererManager } from '$lib/core/renderers/sublayerRendererManager';
   import type { AllmapsRenderOptions } from '$lib/core/renderers/types';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import type { IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
+  import { hasImagePinAt, restoreImagePins } from '$lib/features/images/imagePins';
 
   let {
     paneId,
     pmtilesUrl,
+    basemap,
     datasetBaseUrl,
     allmapsOptions,
     allmapsRenderRevision,
@@ -23,6 +25,7 @@
   }: {
     paneId: PaneId;
     pmtilesUrl: string;
+    basemap: BasemapOption;
     datasetBaseUrl: string;
     allmapsOptions: AllmapsRenderOptions;
     allmapsRenderRevision: number;
@@ -36,6 +39,7 @@
   } = $props();
 
   let container: HTMLElement;
+  let map = $state<maplibregl.Map | null>(null);
   let rendererManager = $state<SublayerRendererManager | null>(null);
 
   function reconcile(): void {
@@ -44,10 +48,15 @@
       activeLayerIds: activeLayerId ? [activeLayerId] : [],
       sublayersByLayerId,
     });
+    if (map) restoreImagePins(map);
   }
 
   $effect(() => {
     reconcile();
+  });
+
+  $effect(() => {
+    if (map) applyBasemap(map, basemap);
   });
 
   onMount(() => {
@@ -65,7 +74,8 @@
         allmapsOptions,
       },
       allmapsRenderRevision,
-      onIiifMaskSelect
+      onIiifMaskSelect,
+      (point) => hasImagePinAt(mapLibre.map, point)
     );
     const reconcileOnStyleLoad = () => {
       manager.reconcile(layers, {
@@ -73,8 +83,11 @@
         sublayersByLayerId,
       });
     };
+    const applySelectedBasemap = () => applyBasemap(mapLibre.map, basemap);
 
+    map = mapLibre.map;
     rendererManager = manager;
+    mapLibre.map.on('load', applySelectedBasemap);
     mapLibre.map.on('load', reconcileOnStyleLoad);
     mapLibre.map.on('styledata', reconcileOnStyleLoad);
     mapLibre.map.on('idle', reconcileOnStyleLoad);
@@ -88,11 +101,13 @@
 
     return () => {
       resizeObserver.disconnect();
+      mapLibre.map.off('load', applySelectedBasemap);
       mapLibre.map.off('load', reconcileOnStyleLoad);
       mapLibre.map.off('styledata', reconcileOnStyleLoad);
       mapLibre.map.off('idle', reconcileOnStyleLoad);
       manager.destroy();
       rendererManager = null;
+      map = null;
       mapLibre.destroy();
     };
   });

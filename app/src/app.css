@@ -18,16 +18,20 @@
   --palette-cream-50: #f8f5ed;
   --palette-cream-100: #fbf8f1;
   --palette-cream-200: #f2ede3;
+  --palette-brown-600: #78643c;
   --palette-brown-700: #6d5c3a;
+  --palette-brown-800: #50442c;
   --palette-gray-500: #757575;
   --palette-gray-600: #6a6a6a;
   --palette-gray-700: #555555;
   --palette-green-600: #4a7a4a;
   --palette-rust-700: #8b3a2a;
   --palette-blue-600: #3f789f;
+  --palette-blue-650: #2f6f99;
   --palette-blue-700: #326481;
   --palette-slate-400: #8fa8b7;
   --palette-slate-500: #607d91;
+  --palette-slate-600: #52697b;
   --palette-white: #ffffff;
   --palette-black: #000000;
 
@@ -51,18 +55,25 @@
   --color-accent: var(--palette-blue-600);
   --color-accent-hover: var(--palette-blue-700);
   --color-accent-contrast: var(--palette-white);
+
+  /* Muted counterpart to the accent blue, for primary canvas controls that
+     should stand out from plain surface buttons without shouting. */
+  --color-accent-muted: var(--palette-slate-500);
+  --color-accent-muted-hover: var(--palette-slate-600);
+  --color-accent-muted-contrast: var(--palette-white);
   --color-focus-ring: color-mix(in srgb, var(--color-accent) 46%, transparent);
 
   --color-shadow-ink: var(--palette-black);
   --color-overlay-backdrop: color-mix(in srgb, var(--palette-black) 40%, transparent);
 
   --color-map-background: var(--palette-cream-50);
+  --color-map-grid: var(--palette-gray-500);
   --color-map-water: var(--palette-slate-500);
 
   --color-timeline-axis: var(--palette-slate-400);
-  --color-timeline-active: var(--palette-blue-700);
-  --color-timeline-tick: color-mix(in srgb, var(--palette-brown-700) 30%, transparent);
-  --color-timeline-tick-label: color-mix(in srgb, var(--palette-brown-700) 62%, transparent);
+  --color-timeline-active: var(--palette-blue-650);
+  --color-timeline-tick: color-mix(in srgb, var(--palette-brown-600) 10%, transparent);
+  --color-timeline-tick-label: color-mix(in srgb, var(--palette-brown-800) 60%, transparent);
 
   /* --- Spacing scale (base-4 grid, rem) ---------------------------------- */
   --space-1: 0.25rem;

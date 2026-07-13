@@ -5,41 +5,107 @@
   import { loadLayerRegistry, type LayerSummary } from '$lib/core/dataset/layerRegistry';
   import { loadSiteMetadata, type SiteMetadata } from '$lib/core/dataset/siteMetadata';
   import { syncPaneCameras } from '$lib/core/map/paneSync';
+  import { ARTEMIS_BASEMAP, type BasemapOption } from '$lib/core/map/basemap';
+  import BasemapMenu from '$lib/features/basemap/BasemapMenu.svelte';
   import Timeline from '$lib/features/timeline/Timeline.svelte';
   import PaneSublayerMenu from '$lib/features/timeline/PaneSublayerMenu.svelte';
-  import { timelineSelection } from '$lib/features/timeline/timelineSelection.svelte';
+  import {
+    DEFAULT_TIMELINE_LAYER_ID,
+    timelineSelection,
+  } from '$lib/features/timeline/timelineSelection.svelte';
   import SearchMenu from '$lib/features/search/SearchMenu.svelte';
   import BrandingPanel from '$lib/features/branding/BrandingPanel.svelte';
   import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
   import ImageBrowser from '$lib/features/images/ImageBrowser.svelte';
+  import ScaleIndicator from '$lib/features/map/ScaleIndicator.svelte';
+  import ZoomIndicator from '$lib/features/map/ZoomIndicator.svelte';
   import IiifViewer from '$lib/features/viewer/IiifViewer.svelte';
   import { buildScreenshotFilename, captureViewScreenshot } from '$lib/features/screenshot/screenshot';
-  import type { IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
+  import { createUrlPersistence, type UrlPersistence } from '$lib/features/url/urlPersistence';
+  import {
+    decodeAppState,
+    DEFAULT_URL_CENTER,
+    type UrlAppState,
+  } from '$lib/features/url/urlState';
   import type { PaneId } from '$lib/core/map/maplibreInit';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Tooltip from '$lib/shared/primitives/Tooltip.svelte';
   import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
   import MapPane from './MapPane.svelte';
 
+  const selectedDatasetBaseUrl = datasetBaseUrl(developerSettings.dataSource);
+  const initialUrlState: UrlAppState =
+    typeof window === 'undefined' ? {} : decodeAppState(window.location.hash, selectedDatasetBaseUrl);
+  const hasPersistentUrlState = typeof window !== 'undefined' && window.location.hash.length > 1;
+  const initialCenter = initialUrlState.center ?? DEFAULT_URL_CENTER;
+  const initialMapCamera = { center: initialCenter, zoom: initialCenter.zoom, bearing: 0, pitch: 0 };
+
+  timelineSelection.restorePersistentState({
+    mode: initialUrlState.viewMode === 'split' ? 'compare' : 'single',
+    leftLayerId: hasPersistentUrlState
+      ? (initialUrlState.leftMainId ?? null)
+      : DEFAULT_TIMELINE_LAYER_ID,
+    rightLayerId: initialUrlState.rightMainId ?? null,
+  });
+
   let layers = $state<LayerSummary[]>([]);
-  let siteMetadata = $state<SiteMetadata>({ title: 'About Artemis', info: [], attribution: '', team: [], logos: [] });
+  let siteMetadata = $state<SiteMetadata>({
+    title: 'About Artemis',
+    info: [],
+    attribution: '',
+    pipeline: { title: 'Data pipeline', info: [], links: [] },
+    team: [],
+    logos: []
+  });
   let workspaceElement = $state<HTMLElement | null>(null);
   let leftMap = $state<maplibregl.Map | null>(null);
   let rightMap = $state<maplibregl.Map | null>(null);
-  let openDocument = $state<{ manifestUrl: string; imageId: string; pane: PaneId } | null>(null);
+  let openDocument = $state<{ manifestUrl: string; imageId: string; pane: PaneId } | null>(
+    initialUrlState.viewerManifestUrl
+      ? {
+          manifestUrl: initialUrlState.viewerManifestUrl,
+          imageId: '',
+          pane: initialUrlState.viewerPane ?? 'right',
+        }
+      : null
+  );
   let openDocumentTitle = $state('');
   let viewerCanvasHost = $state<HTMLElement | null>(null);
   let isViewerExpanded = $state(false);
   let isCapturingScreenshot = $state(false);
-  let isImageBrowserOpen = $state(false);
   let isMobile = $state(false);
-  const selectedDatasetBaseUrl = datasetBaseUrl(developerSettings.dataSource);
+  let selectedBasemap = $state<BasemapOption>(ARTEMIS_BASEMAP);
   const pmtilesUrl = datasetUrl('baselayer.pmtiles', selectedDatasetBaseUrl);
   const isCompare = $derived(timelineSelection.mode === 'compare');
   const leftMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.leftLayerId) ?? null);
   const rightMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.rightLayerId) ?? null);
+  let urlPersistence = $state<UrlPersistence | undefined>();
 
-  function openIiifDocument(sourcePane: PaneId, hit: IiifMaskHit): void {
+  function cameraFromMap(map: maplibregl.Map | null) {
+    if (!map) return undefined;
+    const center = map.getCenter();
+    return {
+      center,
+      zoom: map.getZoom(),
+      bearing: map.getBearing(),
+      pitch: map.getPitch(),
+    };
+  }
+
+  function currentUrlState(): UrlAppState {
+    const map = leftMap ?? rightMap;
+    const center = map?.getCenter();
+    return {
+      center: map && center ? { lng: center.lng, lat: center.lat, zoom: map.getZoom() } : initialCenter,
+      leftMainId: timelineSelection.leftLayerId ?? undefined,
+      rightMainId: timelineSelection.rightLayerId ?? undefined,
+      viewMode: timelineSelection.mode === 'compare' ? 'split' : undefined,
+      viewerManifestUrl: openDocument?.manifestUrl,
+      viewerPane: openDocument?.pane,
+    };
+  }
+
+  function openIiifDocument(sourcePane: PaneId, hit: { manifestUrl: string; imageId: string }): void {
     const viewerPane: PaneId = isCompare && sourcePane === 'right' ? 'left' : 'right';
     if (viewerPane === 'left') leftMap = null;
     else rightMap = null;
@@ -91,7 +157,28 @@
     return syncPaneCameras(leftMap, rightMap);
   });
 
+  $effect(() => {
+    const maps = [leftMap, rightMap].filter((map): map is maplibregl.Map => map !== null);
+    if (!urlPersistence) return;
+    const scheduleUpdate = () => urlPersistence?.schedule();
+    for (const map of maps) map.on('move', scheduleUpdate);
+    return () => {
+      for (const map of maps) map.off('move', scheduleUpdate);
+    };
+  });
+
+  $effect(() => {
+    timelineSelection.mode;
+    timelineSelection.leftLayerId;
+    timelineSelection.rightLayerId;
+    openDocument?.manifestUrl;
+    openDocument?.pane;
+    urlPersistence?.update();
+  });
+
   onMount(() => {
+    urlPersistence = createUrlPersistence(selectedDatasetBaseUrl, currentUrlState);
+
     const mobileQuery = window.matchMedia('(max-width: 40rem)');
     const syncMobileMode = () => {
       isMobile = mobileQuery.matches;
@@ -100,7 +187,11 @@
     };
     syncMobileMode();
     mobileQuery.addEventListener('change', syncMobileMode);
-    return () => mobileQuery.removeEventListener('change', syncMobileMode);
+    return () => {
+      mobileQuery.removeEventListener('change', syncMobileMode);
+      urlPersistence?.dispose();
+      urlPersistence = undefined;
+    };
   });
 
   $effect(() => {
@@ -146,12 +237,14 @@
     <MapPane
       paneId="left"
       {pmtilesUrl}
+      basemap={selectedBasemap}
       datasetBaseUrl={selectedDatasetBaseUrl}
       allmapsOptions={developerSettings.allmapsOptions}
       allmapsRenderRevision={developerSettings.renderRevision}
       {layers}
       activeLayerId={timelineSelection.leftLayerId}
       sublayersByLayerId={timelineSelection.sublayersByLayerId}
+      initialCamera={cameraFromMap(rightMap) ?? initialMapCamera}
       onMapReady={(map) => (leftMap = map)}
       onIiifMaskSelect={(hit) => openIiifDocument('left', hit)}
     />
@@ -163,15 +256,14 @@
         <MapPane
         paneId="right"
         {pmtilesUrl}
+        basemap={selectedBasemap}
         datasetBaseUrl={selectedDatasetBaseUrl}
         allmapsOptions={developerSettings.allmapsOptions}
         allmapsRenderRevision={developerSettings.renderRevision}
         {layers}
         activeLayerId={timelineSelection.rightLayerId}
         sublayersByLayerId={timelineSelection.sublayersByLayerId}
-        initialCamera={leftMap
-          ? { center: leftMap.getCenter(), zoom: leftMap.getZoom(), bearing: leftMap.getBearing(), pitch: leftMap.getPitch() }
-          : undefined}
+        initialCamera={cameraFromMap(leftMap) ?? initialMapCamera}
         onMapReady={(map) => (rightMap = map)}
         onIiifMaskSelect={(hit) => openIiifDocument('right', hit)}
       />
@@ -193,6 +285,7 @@
     <div class="window-slot compare-control-slot">
       <div class="compare-control">
         <Button
+          variant="prominent"
           active={isCompare}
           class="compare-toggle"
           aria-label="Toggle compare mode"
@@ -211,30 +304,38 @@
       </div>
     </div>
 
-    <div class="window-slot screenshot-slot">
-      <div class="screenshot-control">
-        <Button
-          iconOnly
-          disabled={isCapturingScreenshot}
-          aria-label="Screenshot without UI"
-          onmouseenter={(event) => showControlTooltip('Screenshot without UI', event)}
-          onmouseleave={hideTooltip}
-          onfocus={(event) => showControlTooltip('Screenshot without UI', event)}
-          onblur={hideTooltip}
-          onclick={captureScreenshot}
-          style="--button-height: var(--canvas-primary-control-height);"
-        >
-          <svg class="screenshot-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"></path>
-            <path d="M12 8v6M9 11.5l3 3 3-3"></path>
-          </svg>
-        </Button>
+    <div class="window-slot bottom-right-controls-slot">
+      <div class="bottom-right-controls">
+        <ZoomIndicator map={leftMap ?? rightMap} />
+        <ScaleIndicator map={leftMap ?? rightMap} />
+        <BasemapMenu selected={selectedBasemap} onselect={(basemap) => { selectedBasemap = basemap; }} />
+        <div class="screenshot-control">
+          <Button
+            iconOnly
+            disabled={isCapturingScreenshot}
+            aria-label="Screenshot without UI"
+            onmouseenter={(event) => showControlTooltip('Screenshot without UI', event)}
+            onmouseleave={hideTooltip}
+            onfocus={(event) => showControlTooltip('Screenshot without UI', event)}
+            onblur={hideTooltip}
+            onclick={captureScreenshot}
+            style="--button-height: var(--canvas-primary-control-height);"
+          >
+            <svg class="screenshot-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"></path>
+              <path d="M12 8v6M9 11.5l3 3 3-3"></path>
+            </svg>
+          </Button>
+        </div>
       </div>
     </div>
 
     {#if !openDocument}
       <div class="window-slot image-browser-slot">
-        <ImageBrowser map={leftMap} open={isImageBrowserOpen} onOpenChange={(open) => (isImageBrowserOpen = open)} />
+        <ImageBrowser
+          map={leftMap}
+          onOpenImage={(image) => openIiifDocument('left', { manifestUrl: image.manifestUrl, imageId: '' })}
+        />
       </div>
     {/if}
 
@@ -349,11 +450,17 @@
     right: var(--space-4);
   }
 
-  /* Same row as the compare/search controls (just above the timeline), right edge. */
-  .screenshot-slot {
+  /* Zoom and map scale sit immediately left of the screenshot control. */
+  .bottom-right-controls-slot {
     right: var(--space-4);
     bottom: calc(var(--canvas-timeline-bottom) + var(--canvas-timeline-height) + var(--space-4));
     display: flex;
+  }
+
+  .bottom-right-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
   }
 
   .screenshot-control {

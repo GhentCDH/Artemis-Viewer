@@ -132,8 +132,26 @@
               <p>{paragraph}</p>
             {/each}
           {/if}
+          {#if openInfoSublayer.citation}
+            <section class="detail-section" aria-label={`${openInfoSublayer.name} citation`}>
+              <WaveSeparator />
+              <h3>Citation</h3>
+              <p>{openInfoSublayer.citation}</p>
+            </section>
+          {/if}
+          {#if openInfoSublayer.readingList.length > 0}
+            <section class="detail-section" aria-label={`${openInfoSublayer.name} reading list`}>
+              <WaveSeparator />
+              <h3>Reading list</h3>
+              <ul class="reading-list">
+                {#each openInfoSublayer.readingList as entry (entry.label)}
+                  <li><a href={entry.url} target="_blank" rel="noreferrer">{entry.label}</a></li>
+                {/each}
+              </ul>
+            </section>
+          {/if}
           {#if openInfoSublayer.downloadUrl}
-            <section class="download-section" aria-label={`${openInfoSublayer.name} download`}>
+            <section class="detail-section" aria-label={`${openInfoSublayer.name} download`}>
               <WaveSeparator />
               <h3>Download</h3>
               <div class="download-row">
@@ -312,19 +330,40 @@
     margin-top: var(--space-3);
   }
 
-  .download-section {
+  .detail-section {
     position: relative;
     margin-top: var(--space-4);
     padding-top: var(--space-3);
   }
 
-  .download-section h3 {
+  .detail-section h3 {
     margin: 0 0 var(--space-2);
     color: var(--color-text-muted);
     font-size: var(--text-2xs);
     font-weight: 700;
     line-height: 1.2;
     text-transform: uppercase;
+  }
+
+  .reading-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding-left: var(--space-4);
+  }
+
+  .reading-list li {
+    color: var(--color-text-secondary);
+    font-family: var(--font-readable);
+    font-size: var(--text-xs);
+    line-height: 1.4;
+  }
+
+  .reading-list a {
+    color: var(--color-accent);
+    overflow-wrap: anywhere;
+    user-select: text;
   }
 
   .download-row {

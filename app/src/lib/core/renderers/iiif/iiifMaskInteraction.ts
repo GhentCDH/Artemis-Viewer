@@ -77,11 +77,19 @@ export class IiifMaskInteraction {
   private sublayerIds: string[] = [];
   private frame: number | null = null;
   private readonly onSelect?: (hit: IiifMaskHit) => void;
+  private readonly shouldYield?: (point: { x: number; y: number }) => boolean;
 
-  constructor(map: maplibregl.Map, paneId: string, onSelect?: (hit: IiifMaskHit) => void) {
+  constructor(
+    map: maplibregl.Map,
+    paneId: string,
+    onSelect?: (hit: IiifMaskHit) => void,
+    /** Masks span whole regions, so overlaid point targets (e.g. image pins) get priority at this point. */
+    shouldYield?: (point: { x: number; y: number }) => boolean
+  ) {
     this.map = map;
     this.paneId = paneId;
     this.onSelect = onSelect;
+    this.shouldYield = shouldYield;
     map.on('mousemove', this.onMouseMove);
     map.on('mouseout', this.onMouseOut);
     map.on('click', this.onClick);
@@ -109,13 +117,16 @@ export class IiifMaskInteraction {
     const point = { x: event.point.x, y: event.point.y };
     this.frame = requestAnimationFrame(() => {
       this.frame = null;
-      const hit = hitTestIiifMasks(this.map, point, this.paneId, this.sublayerIds);
+      const hit = this.shouldYield?.(point)
+        ? null
+        : hitTestIiifMasks(this.map, point, this.paneId, this.sublayerIds);
       this.setHover(hit);
       this.map.getCanvas().style.cursor = hit ? 'pointer' : '';
     });
   };
 
   private readonly onClick = (event: maplibregl.MapMouseEvent): void => {
+    if (this.shouldYield?.(event.point)) return;
     const hit = hitTestIiifMasks(this.map, event.point, this.paneId, this.sublayerIds);
     if (hit) this.onSelect?.(hit);
   };

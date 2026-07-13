@@ -20,8 +20,7 @@
 
   type Tab = 'all' | 'toponyms' | 'sheets' | 'images';
 
-  const PLACEHOLDERS = ['Search for a place…', 'Search for a map sheet…', 'Search the Massart photos…'];
-  const PLACEHOLDER_INTERVAL_MS = 2600;
+  const INPUT_PLACEHOLDER = 'Search for a place…';
 
   let expanded = $state(false);
   let query = $state('');
@@ -29,16 +28,7 @@
   let activeTab = $state<Tab>('all');
   let activeOnly = $state(false);
   let index = $state<SearchIndex | null>(null);
-  let placeholderIndex = $state(0);
   let inputElement = $state<HTMLInputElement | undefined>(undefined);
-
-  $effect(() => {
-    if (expanded) return;
-    const interval = window.setInterval(() => {
-      placeholderIndex = (placeholderIndex + 1) % PLACEHOLDERS.length;
-    }, PLACEHOLDER_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  });
 
   const trimmedQuery = $derived(query.trim());
   const activeLayerIds = $derived(new Set(timelineSelection.activeLayerIds));
@@ -149,12 +139,12 @@
 
 <div class="search-menu">
   <div class="search-trigger-layer">
-    <Button class="search-trigger" aria-label="Search" aria-expanded={expanded} onclick={toggle}>
+    <Button variant="prominent" active={expanded} class="search-trigger" aria-label="Search" aria-expanded={expanded} onclick={toggle}>
       <svg class="search-icon search-trigger-icon" viewBox="0 0 16 16" aria-hidden="true">
         <circle cx="6.8" cy="6.8" r="4.3"></circle>
         <path d="M10.2 10.2 14 14"></path>
       </svg>
-      <span class="search-trigger-text">{PLACEHOLDERS[placeholderIndex]}</span>
+      <span class="search-trigger-text">Search</span>
     </Button>
   </div>
 
@@ -179,7 +169,7 @@
           bind:this={inputElement}
           bind:value={query}
           type="text"
-          placeholder={PLACEHOLDERS[0]}
+          placeholder={INPUT_PLACEHOLDER}
           aria-label="Search toponyms, map sheets, and images"
         />
       </form>
@@ -298,7 +288,9 @@
     justify-content: center;
   }
 
-  :global(.search-trigger) {
+  /* Descendant selector (not inline style) so the portrait media query below can
+     override these; the extra specificity beats the Button defaults outright. */
+  .search-trigger-layer :global(.search-trigger) {
     --button-height: var(--canvas-primary-control-height);
     --button-padding-inline: var(--canvas-primary-control-padding-inline);
     --button-gap: var(--canvas-primary-control-gap);

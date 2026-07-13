@@ -3,7 +3,7 @@
   import type { HTMLButtonAttributes } from 'svelte/elements';
 
   interface Props extends Omit<HTMLButtonAttributes, 'class' | 'style'> {
-    variant?: 'default' | 'primary' | 'list';
+    variant?: 'default' | 'primary' | 'prominent' | 'list';
     iconOnly?: boolean;
     active?: boolean;
     disabled?: boolean;
@@ -55,6 +55,7 @@
     --button-font-family: var(--font-ui);
     --button-font-weight: 400;
     --button-justify: center;
+    --button-shadow: 0 0 3px color-mix(in srgb, var(--color-shadow-ink) 40%, transparent);
     /* -- end exposed -- */
 
     appearance: none;
@@ -69,6 +70,7 @@
     padding: var(--button-padding-block) var(--button-padding-inline);
     border: 1px solid var(--button-border);
     border-radius: var(--button-radius);
+    box-shadow: var(--button-shadow);
     background: var(--button-bg);
     color: var(--button-text);
     font-family: var(--button-font-family);
@@ -107,6 +109,14 @@
     --button-border-hover: var(--color-accent-hover);
   }
 
+  .button--prominent {
+    --button-bg: var(--color-accent-muted);
+    --button-bg-hover: var(--color-accent-muted-hover);
+    --button-text: var(--color-accent-muted-contrast);
+    --button-border: var(--color-accent-muted);
+    --button-border-hover: var(--color-accent-muted-hover);
+  }
+
   .button--list {
     --button-bg: transparent;
     --button-bg-hover: var(--color-surface-control-hover);
@@ -119,6 +129,7 @@
     --button-font-size: var(--text-sm);
     --button-font-family: var(--font-readable);
     --button-justify: flex-start;
+    --button-shadow: none;
   }
 
   .button.is-active {
@@ -126,6 +137,15 @@
     --button-bg-hover: var(--color-accent-hover);
     --button-text: var(--color-accent-contrast);
     --button-border: var(--color-accent);
+  }
+
+  /* The resting accent blue is too close to the prominent variant's muted
+     slate; active prominent toggles go a step darker to read unambiguously. */
+  .button--prominent.is-active {
+    --button-bg: var(--color-accent-hover);
+    --button-bg-hover: var(--color-accent-hover);
+    --button-border: var(--color-accent-hover);
+    --button-border-hover: var(--color-accent-hover);
   }
 
   .button--icon-only {

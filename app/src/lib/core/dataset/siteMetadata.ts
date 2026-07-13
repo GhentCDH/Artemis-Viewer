@@ -15,16 +15,32 @@ export interface SiteTeamInstitution {
   units: SiteTeamUnit[];
 }
 
+export interface SiteLink {
+  label: string;
+  url: string;
+}
+
+export interface SitePipeline {
+  title: string;
+  info: string[];
+  links: SiteLink[];
+}
+
 export interface SiteMetadata {
   title: string;
   info: string[];
   attribution: string;
+  pipeline: SitePipeline;
   team: SiteTeamInstitution[];
   logos: SiteLogo[];
 }
 
+function emptyPipeline(): SitePipeline {
+  return { title: 'Data pipeline', info: [], links: [] };
+}
+
 function emptySiteMetadata(): SiteMetadata {
-  return { title: 'About Artemis', info: [], attribution: '', team: [], logos: [] };
+  return { title: 'About Artemis', info: [], attribution: '', pipeline: emptyPipeline(), team: [], logos: [] };
 }
 
 async function fetchAboutJson(aboutUrl: string): Promise<unknown> {
@@ -49,6 +65,27 @@ function normalizeParagraphs(value: unknown): string[] {
   }
   if (!Array.isArray(value)) return [];
   return value.map((entry) => (typeof entry === 'string' ? entry.trim() : '')).filter(Boolean);
+}
+
+/** `links` in about.json is a map of display label → URL. */
+function normalizeLinks(value: unknown): SiteLink[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  return Object.entries(value as Record<string, unknown>).flatMap(([label, url]): SiteLink[] => {
+    const trimmedLabel = label.trim();
+    const trimmedUrl = typeof url === 'string' ? url.trim() : '';
+    if (!trimmedLabel || !/^https?:\/\//i.test(trimmedUrl)) return [];
+    return [{ label: trimmedLabel, url: trimmedUrl }];
+  });
+}
+
+function normalizePipeline(value: unknown): SitePipeline {
+  if (!value || typeof value !== 'object') return emptyPipeline();
+  const record = value as Record<string, unknown>;
+  return {
+    title: typeof record.title === 'string' && record.title.trim() ? record.title.trim() : 'Data pipeline',
+    info: normalizeParagraphs(record.info),
+    links: normalizeLinks(record.links)
+  };
 }
 
 function normalizeTeam(value: unknown): SiteTeamInstitution[] {
@@ -97,6 +134,7 @@ function normalizeSiteMetadata(raw: unknown, resolveUrl: (path: string) => strin
     title: typeof data.title === 'string' && data.title.trim() ? data.title.trim() : 'About Artemis',
     info: normalizeParagraphs(data.info),
     attribution: typeof data.attribution === 'string' ? data.attribution.trim() : '',
+    pipeline: normalizePipeline(data.dataPipeline),
     team: normalizeTeam(data.team),
     logos: normalizeLogos(data.logos, resolveUrl),
   };

@@ -3,6 +3,9 @@
   import { showTooltip, hideTooltip } from '$lib/shared/tooltip.svelte';
   import { DEFAULT_AXIS_RANGE, yearToPercent, type AxisRange } from './timelineScale';
   import { layoutMeanders, type MeanderPill } from './meanderLayout';
+  import TimelineScanPath, {
+    SCAN_BAND_WIDTH_PERCENT,
+  } from './TimelineScanPath.svelte';
 
   let {
     layers = [],
@@ -19,6 +22,14 @@
   const pills = $derived(layoutMeanders(layers));
   const activeLayerIdSet = $derived(new Set(activeLayerIds));
 
+  function localScanBandWidth(spanPercent: number): number {
+    return (SCAN_BAND_WIDTH_PERCENT / spanPercent) * 100;
+  }
+
+  function localScanPosition(globalPercent: number, leftPercent: number, spanPercent: number): number {
+    return ((globalPercent - leftPercent) / spanPercent) * 100;
+  }
+
   function onPillEnter(pill: MeanderPill, event: MouseEvent) {
     const rect = (event.currentTarget as SVGGeometryElement).getBoundingClientRect();
     showTooltip({
@@ -31,6 +42,14 @@
 </script>
 
 <div class="meanders">
+  {#if pills.length > 0}
+    <svg class="axis-scan-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <TimelineScanPath
+        id="axis"
+        d="M 0 50 H 100"
+      />
+    </svg>
+  {/if}
   {#each pills as pill (pill.id)}
     {@const left = yearToPercent(pill.visualStartYear, range)}
     {@const width = yearToPercent(pill.visualEndYear, range) - left}
@@ -93,6 +112,15 @@
           d={pill.path}
         ></path>
       </svg>
+      <svg class="meander-scan-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <TimelineScanPath
+          id={pill.id}
+          d={pill.path}
+          bandWidthPercent={localScanBandWidth(width)}
+          startPositionPercent={localScanPosition(0, left, width)}
+          endPositionPercent={localScanPosition(100, left, width)}
+        />
+      </svg>
       <span class="meander-dot" style="top: {pill.apexY}%"></span>
       <span class="meander-label" style="top: {pill.apexY}%">{pill.label}</span>
     </button>
@@ -117,6 +145,15 @@
     pointer-events: none;
   }
 
+  .axis-scan-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
   .meander-pill.is-inactive .meander-svg {
     opacity: 0.4;
     filter: grayscale(0.6);
@@ -132,12 +169,17 @@
     bottom: var(--space-5);
   }
 
-  .meander-svg {
+  .meander-svg,
+  .meander-scan-svg {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     overflow: visible;
+  }
+
+  .meander-scan-svg {
+    pointer-events: none;
   }
 
   .meander-hit {

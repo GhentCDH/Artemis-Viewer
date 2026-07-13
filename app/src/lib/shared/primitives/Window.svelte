@@ -121,21 +121,22 @@
     --window-header-border-width: 1px;
     --window-radius: var(--radius-lg);
     --window-shadow:
-      0 1px 3px color-mix(in srgb, var(--color-shadow-ink) 12%, transparent),
-      0 8px 18px color-mix(in srgb, var(--color-shadow-ink) 10%, transparent);
+      0 0 3px color-mix(in srgb, var(--color-shadow-ink) 22%, transparent),
+      0 0 18px color-mix(in srgb, var(--color-shadow-ink) 20%, transparent);
     --window-padding-block: var(--space-3);
     --window-padding-inline: var(--space-4);
     --window-gap: var(--space-2);
     --window-width: auto;
     --window-height: auto;
     --window-max-height: none;
+    --window-pointer-events: auto;
     /* -- end exposed -- */
 
     position: relative;
     z-index: var(--z-window);
     display: flex;
     flex-direction: column;
-    pointer-events: auto;
+    pointer-events: var(--window-pointer-events);
     overflow: hidden;
     width: var(--window-width);
     height: var(--window-height);
@@ -155,6 +156,10 @@
   .window--popover {
     --window-bg: color-mix(in srgb, var(--color-surface-raised) 98%, var(--color-surface-tint));
     z-index: var(--z-popover);
+  }
+
+  .window :global(.button) {
+    --button-shadow: none;
   }
 
   .window-header {

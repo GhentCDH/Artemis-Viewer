@@ -5,16 +5,17 @@
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import { loadImageCollections } from '$lib/features/search/searchIndex';
   import type { ImageResult } from '$lib/features/search/searchTypes';
-  import { removeImagePins, syncImagePins } from './imagePins';
+  import { attachImagePinInteraction, removeImagePins, syncImagePins } from './imagePins';
+  import { imageBrowser } from './imageBrowserState.svelte';
+  import { spriteBackgroundPosition, spriteBackgroundSize } from './sprites';
+  import ImagePreviewBubble from './ImagePreviewBubble.svelte';
 
   let {
     map,
-    open = false,
-    onOpenChange,
+    onOpenImage,
   }: {
     map: maplibregl.Map | null;
-    open?: boolean;
-    onOpenChange?: (open: boolean) => void;
+    onOpenImage?: (image: ImageResult) => void;
   } = $props();
 
   let loading = $state(true);
@@ -84,7 +85,7 @@
 
   $effect(() => {
     if (!map) return;
-    const sync = () => syncImagePins(map, images, open);
+    const sync = () => syncImagePins(map, images, imageBrowser.panelOpen);
     sync();
     map.on('styledata', sync);
     return () => {
@@ -93,13 +94,22 @@
     };
   });
 
+  $effect(() => {
+    if (!map) return;
+    return attachImagePinInteraction(map, (imageId) => {
+      const image = imageId === null ? undefined : images.find((candidate) => candidate.id === imageId);
+      if (image) imageBrowser.showPreview(image);
+      else imageBrowser.closePreview();
+    });
+  });
+
   function setFilterStart(value: number): void {
     if (!Number.isFinite(value)) return;
     filterStart = Math.min(Math.max(value, yearMin), filterEnd);
   }
 
   function setOpen(nextOpen: boolean): void {
-    onOpenChange?.(nextOpen);
+    imageBrowser.setPanelOpen(nextOpen);
   }
 
   function setFilterEnd(value: number): void {
@@ -110,46 +120,35 @@
   function focusImage(image: ImageResult): void {
     if (image.lon === null || image.lat === null || !map) return;
     map.flyTo({ center: [image.lon, image.lat], zoom: Math.max(map.getZoom(), 15) });
-  }
-
-  function spriteBackgroundSize(image: ImageResult): string {
-    if (!image.sprite) return 'auto';
-    return `${(image.sprite.sheetWidth / image.sprite.width) * 100}% ${(image.sprite.sheetHeight / image.sprite.height) * 100}%`;
-  }
-
-  function spriteBackgroundPosition(image: ImageResult): string {
-    if (!image.sprite) return '0% 0%';
-    const horizontalRange = image.sprite.sheetWidth - image.sprite.width;
-    const verticalRange = image.sprite.sheetHeight - image.sprite.height;
-    const x = horizontalRange > 0 ? (image.sprite.x / horizontalRange) * 100 : 0;
-    const y = verticalRange > 0 ? (image.sprite.y / verticalRange) * 100 : 0;
-    return `${x}% ${y}%`;
+    imageBrowser.showPreview(image);
   }
 </script>
 
 <div class="image-browser">
   <Button
+    variant="prominent"
+    active={imageBrowser.panelOpen}
     class="image-browser-trigger"
-    aria-label="Images in view ({imagesInView.length})"
-    aria-expanded={open}
-    onclick={() => setOpen(!open)}
+    aria-label="Landscapes in view ({imagesInView.length})"
+    aria-expanded={imageBrowser.panelOpen}
+    onclick={() => setOpen(!imageBrowser.panelOpen)}
   >
     <svg class="image-browser-icon" viewBox="0 0 24 24" aria-hidden="true">
       <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
       <circle cx="8.2" cy="9.3" r="1.7"></circle>
       <path d="m5.5 16.5 4.2-4.2 3.2 3 2.3-2.2 3.3 3.4"></path>
     </svg>
-    <span class="image-browser-trigger-text">Images ({imagesInView.length})</span>
+    <span class="image-browser-trigger-text">Landscapes</span>
   </Button>
 
-  {#if open}
+  {#if imageBrowser.panelOpen}
     <div class="image-browser-panel-layer">
       <Window
-        title="Images in view"
+        title="Landscapes in view"
         subtitle={`${filteredImages.length} of ${imagesInView.length} visible images`}
         placement="right"
         showClose
-        closeOnEscape
+        closeOnEscape={imageBrowser.preview === null}
         onclose={() => setOpen(false)}
         style="--window-width: var(--image-browser-width); --window-max-height: var(--image-browser-max-height); --window-header-border-width: 0px;"
       >
@@ -211,8 +210,8 @@
                       role="img"
                       aria-label={`Preview of ${image.title}`}
                       style:background-image={`url("${image.sprite.imageUrl.replaceAll('"', '%22')}")`}
-                      style:background-size={spriteBackgroundSize(image)}
-                      style:background-position={spriteBackgroundPosition(image)}
+                      style:background-size={spriteBackgroundSize(image.sprite)}
+                      style:background-position={spriteBackgroundPosition(image.sprite)}
                     ></span>
                   {:else}
                     <span class="image-thumbnail image-thumbnail--empty" aria-hidden="true"></span>
@@ -228,6 +227,20 @@
         </div>
       </Window>
     </div>
+  {/if}
+
+  {#if map && imageBrowser.preview}
+    {#key imageBrowser.preview.id}
+      <ImagePreviewBubble
+        {map}
+        image={imageBrowser.preview}
+        onclose={() => imageBrowser.closePreview()}
+        onopen={(image) => {
+          imageBrowser.closePreview();
+          onOpenImage?.(image);
+        }}
+      />
+    {/key}
   {/if}
 </div>
 
@@ -259,7 +272,7 @@
   }
 
   .image-browser-icon {
-    display: none;
+    flex: 0 0 auto;
     width: calc(1rem * 1.5);
     height: calc(1rem * 1.5);
     fill: none;
@@ -392,10 +405,6 @@
     .image-browser :global(.image-browser-trigger) {
       --button-width: var(--image-browser-trigger-height);
       --button-padding-inline: 0rem;
-    }
-
-    .image-browser-icon {
-      display: block;
     }
 
     .image-browser-trigger-text {

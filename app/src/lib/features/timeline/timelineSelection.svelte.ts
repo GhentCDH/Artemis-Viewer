@@ -2,10 +2,11 @@ import type { PaneId } from '$lib/core/map/maplibreInit';
 import type { LayerSublayer } from '$lib/core/dataset/layerRegistry';
 
 export type TimelineMode = 'single' | 'compare';
+export const DEFAULT_TIMELINE_LAYER_ID = 'GereduceerdeKadaster';
 
 class TimelineSelectionStore {
   mode = $state<TimelineMode>('single');
-  leftLayerId = $state<string | null>(null);
+  leftLayerId = $state<string | null>(DEFAULT_TIMELINE_LAYER_ID);
   rightLayerId = $state<string | null>(null);
   nextComparePane = $state<PaneId>('left');
   sublayersByLayerId = $state<Record<string, Record<string, boolean>>>({});
@@ -85,6 +86,18 @@ class TimelineSelectionStore {
 
   toggleCompareMode(): void {
     this.setMode(this.mode === 'compare' ? 'single' : 'compare');
+  }
+
+  restorePersistentState(state: {
+    mode: TimelineMode;
+    leftLayerId: string | null;
+    rightLayerId: string | null;
+  }): void {
+    this.mode = state.mode;
+    this.leftLayerId = state.leftLayerId;
+    this.rightLayerId = state.rightLayerId;
+    this.nextComparePane =
+      state.leftLayerId === null ? 'left' : state.rightLayerId === null ? 'right' : 'left';
   }
 
   clearPane(paneId: PaneId): void {

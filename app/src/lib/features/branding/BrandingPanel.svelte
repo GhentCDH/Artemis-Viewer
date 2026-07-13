@@ -15,6 +15,9 @@
   let isOpen = $state(false);
   let activeTab = $state<Tab>('about');
 
+  const pipeline = $derived(siteMetadata.pipeline);
+  const hasPipeline = $derived(pipeline.info.length > 0 || pipeline.links.length > 0);
+
   function open(): void {
     isOpen = true;
     activeTab = 'about';
@@ -60,7 +63,9 @@
         {#snippet header()}
           <div class="branding-tabs">
             <Button active={activeTab === 'about'} onclick={() => (activeTab = 'about')}>About</Button>
-            <Button active={activeTab === 'pipeline'} onclick={() => (activeTab = 'pipeline')}>Data pipeline</Button>
+            {#if hasPipeline}
+              <Button active={activeTab === 'pipeline'} onclick={() => (activeTab = 'pipeline')}>{pipeline.title}</Button>
+            {/if}
           </div>
         {/snippet}
 
@@ -188,12 +193,13 @@
               </details>
             </section>
           {:else}
-            <h3>Data pipeline</h3>
-            <p>
-              Every layer in this viewer is produced by the Artemis-Data build pipeline — georeferencing,
-              tiling and search-index generation from source scans and archival maps.
-            </p>
-            <p><a href="https://github.com/GhentCDH/Artemis-Data" target="_blank" rel="noopener noreferrer">View the pipeline on GitHub</a></p>
+            <h3>{pipeline.title}</h3>
+            {#each pipeline.info as paragraph (paragraph)}
+              <p>{paragraph}</p>
+            {/each}
+            {#each pipeline.links as link (link.url)}
+              <p><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a></p>
+            {/each}
           {/if}
         </div>
       </Window>

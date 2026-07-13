@@ -22,10 +22,15 @@ export class SublayerRendererManager {
   private appliedLayerOrderSignature = '';
   private readonly iiifMaskInteraction: IiifMaskInteraction;
 
-  constructor(context: SublayerRenderContext, allmapsRenderRevision = 0, onIiifMaskSelect?: (hit: IiifMaskHit) => void) {
+  constructor(
+    context: SublayerRenderContext,
+    allmapsRenderRevision = 0,
+    onIiifMaskSelect?: (hit: IiifMaskHit) => void,
+    iiifMaskShouldYield?: (point: { x: number; y: number }) => boolean
+  ) {
     this.context = context;
     this.allmapsRenderRevision = allmapsRenderRevision;
-    this.iiifMaskInteraction = new IiifMaskInteraction(context.map, context.paneId, onIiifMaskSelect);
+    this.iiifMaskInteraction = new IiifMaskInteraction(context.map, context.paneId, onIiifMaskSelect, iiifMaskShouldYield);
   }
 
   updateAllmapsOptions(options: AllmapsRenderOptions, revision: number): void {

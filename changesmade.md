@@ -111,6 +111,40 @@ The full texture-array experiment, including the vertex-buffer variant it was te
 on branch `experiment/allmaps-texture-arrays` at commit `367d521` for reference. It is not active on
 `ref/viewerV2`.
 
+## Firefox vs Chrome tile-streaming observation
+
+The current sequential renderer behaves differently between the two browsers:
+
+- **Firefox:** full-resolution IIIF tiles stream in noticeably faster and the observed canvases
+  eventually fill in.
+- **Chrome/Chromium:** tile replacement is much slower, and some individual tiles never appear at
+  all. This is not just slower visual refinement: affected areas can remain missing indefinitely.
+
+This comparison concerns tile streaming after the Allmaps layer and its low-resolution sprites are
+already visible. It is separate from the high-resolution memory/GC investigation above. We do not
+yet have a confirmed cause for the Chrome behavior.
+
+### Tested Chrome hypothesis 1 — concurrent per-canvas sprite uploads
+
+Allmaps resolves `addSprites()` using a shared `MAPTILESLOADEDFROMSPRITES` event. Starting several
+per-canvas calls concurrently could therefore allow the first completion to resolve every caller,
+after which clearing `spritesTileCache` could abort the remaining requests. The app-side upload loop
+was changed to submit the small per-canvas sprites serially and clear the source cache after each
+individual call settles.
+
+**Result:** this did not change Chrome's slow/missing full-resolution tile behavior. The serialized
+upload remains as a correctness guard for the shared-event API, but it is not the tile-streaming fix.
+
+### Rejected Chrome hypothesis 2 — edge-tile `createImageBitmap` crop
+
+A temporary removable `pnpm` patch changed Allmaps' worker from
+`createImageBitmap(blob, 0, 0, width, height)` to `createImageBitmap(blob)` in case Chromium was
+rejecting nominal 512×512 crop dimensions for smaller edge tiles. The experiment also propagated
+asynchronous decode failures and removed failed cache entries so they could be requested again.
+
+**Result: rejected.** It did not change the behavior and has been removed completely. The local
+Allmaps patch has returned to the PBO deletion only.
+
 ## Active local Allmaps patch
 
 Only the one-line PBO fix remains active in

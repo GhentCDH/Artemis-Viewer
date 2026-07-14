@@ -1,7 +1,7 @@
 # Changes Made — IIIF/Allmaps Performance (2026-07-14)
 
-Companion to `DebugPlan.md` / `DebugFindings.md`. Log of trace observations and the two fixes
-made off the back of them.
+Companion to `DebugPlan.md` / `DebugFindings.md`. Log of trace observations, retained fixes, and
+performance experiments that were subsequently rejected.
 
 ## Trace at start of day
 
@@ -69,11 +69,55 @@ call site.
 - Isolate and re-measure Fix 1 vs Fix 2 individually to attribute the memory-cap drop correctly.
 - Try the Allmaps advanced tuning knobs (developer menu) for further memory reduction, per the
   original memory-bottleneck note.
-- Vertex-buffer leak (upstream item 2 in `DebugPlan.md`) is still open — not a one-line patch like
-  the PBO fix, needs reading back the currently-bound buffer via `gl.getVertexAttrib` before
-  replacing it.
+- Continue isolating texture-array retention, shrinking and in-viewport overdraw. The vertex-buffer
+  and texture-array experiments below were both rejected after profiling; only the PBO patch remains
+  active.
 
 ## Fix 3 — superseded-render cleanup
 
 Starting a replacement render for the same IIIF sublayer now runs the previous session's cleanup
 callbacks first, preventing stale listeners, diagnostics and map layers from remaining active.
+
+## Rejected experiment 1 — persistent vertex buffers (`pnpm patch`)
+
+Allmaps created a new `WebGLBuffer` for every map, line and point attribute on each
+`updateVertexBuffers*()` call and left the replaced buffer to garbage collection. The patch makes
+each `WebGL2WarpedMap` own one lazily-created buffer per attribute, reuses it with `bufferData()`,
+and explicitly deletes all owned buffers in `destroy()`. Context restoration resets the ownership
+maps so invalid buffers from the lost context are never reused.
+
+**Decision: rejected.** Although the patch reduced JS/native buffer replacement and GC churn, the
+measured GPU workload increased and the high-zoom freeze did not improve. Reusing the buffers was
+therefore not a worthwhile tradeoff for the observed increase in GPU load. The vertex changes have
+been removed from the active branch.
+
+## Rejected experiment 2 — texture-array shrinking and offscreen release (`pnpm patch`)
+
+The texture experiment implemented the previously empty `clearTextures()`, tracked allocated
+texture-array depth, rebuilt strict-subset tile sets at a smaller depth after a 500ms debounce, and
+released textures once a canvas left the buffered prune viewport. This successfully bounded
+resident texture memory during high-zoom panning: diagnostics showed only 6–17 resident maps and
+roughly 24–53MB of texture arrays even while 186 canvases remained loaded, with `shrinkLag=0`.
+
+**Decision: rejected.** Allmaps resizes an array with a complete `texImage3D()` allocation and
+reuploads every retained tile. Continually removing or shrinking arrays therefore traded retained
+memory for upload churn and visible stalls. Representative diagnostic windows included 17 complete
+rebuilds / 70MB uploaded with a 410ms worst frame, 16 rebuilds / 87MB with a 430ms frame, and 12
+rebuilds / 97MB with a 520ms frame. Zooming out was especially costly because many canvases became
+resident together: one window performed 283 rebuilds and uploaded 365MB. The memory reduction did
+not justify the reallocation cost or flicker risk.
+
+The full texture-array experiment, including the vertex-buffer variant it was tested with, is kept
+on branch `experiment/allmaps-texture-arrays` at commit `367d521` for reference. It is not active on
+`ref/viewerV2`.
+
+## Active local Allmaps patch
+
+Only the one-line PBO fix remains active in
+`app/patches/@allmaps__render@1.0.0-beta.83.patch`:
+
+```js
+gl.deleteBuffer(pbo);
+```
+
+The vertex-buffer and texture-array lifecycle patches are not part of the active branch.

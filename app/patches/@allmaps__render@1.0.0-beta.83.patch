@@ -1,0 +1,12 @@
+diff --git a/dist/maps/WebGL2WarpedMap.js b/dist/maps/WebGL2WarpedMap.js
+index 552374ad1a9314dc48d8178eafc7f6e4872b1ee3..13a16166d498ce2e7e118fef645e55c78b60e2a4 100644
+--- a/dist/maps/WebGL2WarpedMap.js
++++ b/dist/maps/WebGL2WarpedMap.js
+@@ -418,6 +418,7 @@ var WebGL2WarpedMap = class WebGL2WarpedMap extends TriangulatedWarpedMap {
+ 			gl.bufferData(gl.PIXEL_UNPACK_BUFFER, imageData.data, gl.STATIC_DRAW);
+ 			gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, i, imageData.width, imageData.height, 1, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+ 			gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, null);
++			gl.deleteBuffer(pbo);
+ 		}
+ 		gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+ 		gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);

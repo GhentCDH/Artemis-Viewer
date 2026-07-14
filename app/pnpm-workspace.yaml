@@ -8,3 +8,5 @@ overrides:
   picomatch: ^4.0.4
   lodash-es: ^4.18.0
   protocol-buffers-schema: ^3.6.1
+patchedDependencies:
+  '@allmaps/render@1.0.0-beta.83': patches/@allmaps__render@1.0.0-beta.83.patch

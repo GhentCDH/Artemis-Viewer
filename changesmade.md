@@ -50,9 +50,13 @@ with the two changes isolated to confirm how much of the 2.6GB → 800MB drop is
 attributable to the PBO patch vs. the sprite split (they were measured together, not separately).
 
 
-## observation ## 
+## observation ## s
  
 Incremental GC remains a very large bottleneck - clearing PBO in the rendering loop improved this in some cases but it did not solve the porblem altogether, pointing at the fact there is mmore manual buffer cleanup to do.
+
+## theory ## 
+
+the reason we only observe this behaviour at higher resolution screens is because the buffers scale exponentially with dpi and resolution: at lower res GC can handle cleaning just fine, at higher res it becomes a problem. 
 
 ## Trace reading note
 
@@ -68,3 +72,8 @@ call site.
 - Vertex-buffer leak (upstream item 2 in `DebugPlan.md`) is still open — not a one-line patch like
   the PBO fix, needs reading back the currently-bound buffer via `gl.getVertexAttrib` before
   replacing it.
+
+## Fix 3 — superseded-render cleanup
+
+Starting a replacement render for the same IIIF sublayer now runs the previous session's cleanup
+callbacks first, preventing stale listeners, diagnostics and map layers from remaining active.

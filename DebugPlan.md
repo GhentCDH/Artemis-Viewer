@@ -47,13 +47,15 @@ info.json refetch storm (pre-seeded via `addImageInfos`; would worsen on zoom-ou
 
 ### Phase 0 — Confirm before coding (½ day, no code changes)
 
-1. Enable `allmapsDiagnostics`; open Task Manager's dedicated-GPU-memory column (or `chrome://gpu`) for the browser's GPU process.
+1. Enable `allmapsDiagnostics`. The module (rewritten 2026-07-14) now measures both axes directly, so Task Manager's dedicated-GPU-memory column is only an external cross-check. It logs two lines per 2 s window (`render` = Axis 1, `gpu` = Axis 2) and mirrors the latest sample to `window.__allmapsDiag[label]` for comparing knob-test runs.
 2. Reproduce: 2–3 minutes of high-zoom panning over a dense area. Expected signatures:
-   - `drawnPerFrame` correlates with jank onset → **Axis 1 confirmed**.
-   - GPU memory climbs steadily while `tiles max/map` stays stable → **Axis 2 confirmed**.
+   - **Axis 1:** jank onset tracks `scan` (Σ over drawn maps of projected device-pixel coverage × texture-array depth) and `overdraw` > ~2x, and the worst-frame snapshot (`worst=…ms@drawnK/ΣdepthD`) shows high drawn/depth at the moment of the stall → **Axis 1 confirmed**.
+   - **Axis 2:** on the `gpu` line, `buf live` count/bytes (especially the `pbo` subset — PIXEL_UNPACK is Allmaps-only) climbs with `gc` lagging `Δ+created`, and `tex≈…MB` staircases as new areas are visited while `shrinkLag` grows (texture depth retained beyond tile-cache pruning) → **Axis 2 confirmed**. The live-buffer gauges account for GC-freed buffers via FinalizationRegistry, so a monotonic climb is real retention, not GC lag.
 3. Knob test: set `log2ScaleFactorCorrection: 1` in the Advanced Allmaps developer menu (~4× fewer tiles per fullscreen canvas). If the freeze threshold moves by roughly that ratio, Axis 1 is confirmed end-to-end. This knob is also the **immediate stopgap** we can ship behind a setting if relief is needed before Phase 1 lands (sharpness cost ≈ rendering at dpr 1).
 
 ### Phase 1 — Cap in-viewport overdraw (our code; fixes the freeze) — highest priority
+
+-> This phase is dangerous!! never implement without asking the user, it assumes that canvases always fully overlap which tehy do not.
 
 In `allmapsWarpRenderer.ts`, on `moveend` (same place as `reconcileViewport`):
 

@@ -5,7 +5,7 @@ import { attachAllmapsDiagnostics } from './iiifAllmapsDiagnostics';
 import type { NormalizedGeomapsCanvas } from './geomapsTypes';
 import { buildAllmapsImageInfos } from './iiifImageInfo';
 import { iiifLayerId, isCurrentIiifRender, registerIiifCleanup } from './iiifLayerRuntime';
-import { loadSpriteAtlas, type IiifSprite, type IiifSpriteAtlas } from './iiifSpriteAtlas';
+import { joinUrl, loadSpriteAtlas, loadSpriteIndex, type IiifSprite, type IiifSpriteAtlas } from './iiifSpriteAtlas';
 
 // Below this zoom the raster preview alone is the renderer — visually equivalent at overview
 // zoom, but free of Allmaps' per-canvas triangulation cost.
@@ -141,15 +141,21 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     return atlasPromise;
   }
 
+  let spriteIndexPromise: Promise<Map<string, IiifSprite>> | null = null;
+  function getSpriteIndex(): Promise<Map<string, IiifSprite>> {
+    if (!spriteIndexPromise) {
+      spriteIndexPromise = spritesIndexPath ? loadSpriteIndex(context.datasetBaseUrl, spritesIndexPath) : Promise.resolve(new Map());
+    }
+    return spriteIndexPromise;
+  }
+
   // Sprites must be uploaded AFTER the maps they cover exist in the warped-map list:
   // `BaseRenderer.addSprites` binds sprites to maps via `warpedMapsByResourceId` built from the
   // *current* list, and `spritesDataToCachedTiles` `break`s on the first sprite without a matching
   // map — uploading before any canvas is triangulated silently produces zero sprite tiles (every
   // canvas then fetches full-res IIIF tiles at all zooms; this was the branch's high-zoom pan-lag
   // regression vs main, which uploaded sprites after its addGeoreferencedMap batches). So: upload
-  // once per drain, only the sprites for canvases added in that drain. The atlas URL gets a unique
-  // fragment per batch because the sprites tile cache dedupes by tile URL and would ignore repeat
-  // calls; fragments are stripped from the HTTP request, so the image bytes come from browser cache.
+  // once per drain, only the sprites for canvases added in that drain.
   // Sprites are an optimization: any failure is non-fatal — Allmaps fetches full-res tiles directly.
   let spriteBatchCounter = 0;
   let warnedSpritesUnavailable = false;
@@ -172,6 +178,63 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
       return;
     }
 
+    // Sequential (viewport-driven) mode only ever needs one canvas's sprite at a time — reuse the
+    // per-canvas file each build now writes alongside the shared sheet (see IiifSprite.file)
+    // instead of re-decoding/re-uploading the whole shared sheet on every drain batch (that decode
+    // was the heavy step: `addSprites` treats its imageUrl as a single tile, so the *entire* sheet
+    // gets fetched and rasterized just to crop out a handful of sprites). Eager mode still wants
+    // the shared sheet: it uploads every canvas at once, so one decode amortizes across all of them.
+    if (context.allmapsOptions.loadingMode === 'sequential') {
+      await uploadSpritesFromPerCanvasFiles(canvases);
+    } else {
+      await uploadSpritesFromAtlas(canvases);
+    }
+  }
+
+  async function uploadSpritesFromPerCanvasFiles(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
+    const index = await getSpriteIndex();
+    if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return;
+    if (index.size === 0) {
+      if (!warnedSpritesUnavailable) {
+        warnedSpritesUnavailable = true;
+        console.warn(`[allmaps ${layerId}] sprite index failed to load (${spritesIndexPath})`);
+      }
+      return;
+    }
+
+    const needsAtlasFallback: NormalizedGeomapsCanvas[] = [];
+    const uploads: Promise<void>[] = [];
+    for (const canvas of canvases) {
+      const sprite = index.get(canvas.imageServiceUrl);
+      if (!sprite) continue;
+      if (!sprite.file) {
+        // Older build without per-canvas sprite files — fall back to the shared sheet for this one.
+        needsAtlasFallback.push(canvas);
+        continue;
+      }
+      const fileUrl = joinUrl(context.datasetBaseUrl, sprite.file);
+      // The per-canvas file is already cropped to just this sprite, so it occupies the whole image.
+      const singleSprite: IiifSprite = { ...sprite, x: 0, y: 0 };
+      uploads.push(
+        layer.addSprites([singleSprite], fileUrl, [sprite.width, sprite.height]).then(
+          () => undefined,
+          (error) => console.warn(`[allmaps ${layerId}] addSprites failed for canvas ${canvas.imageId}`, error)
+        )
+      );
+    }
+
+    if (uploads.length > 0) {
+      console.info(`[allmaps ${layerId}] addSprites (per-canvas files): ${uploads.length} canvases`);
+      await Promise.all(uploads);
+      // Each canvas's sprite crop has been handed to the main tile cache by the time addSprites
+      // resolves, so the decoded source copy in spritesTileCache is dead weight — see the same
+      // note on uploadSpritesFromAtlas.
+      layer.renderer?.spritesTileCache.clear();
+    }
+    if (needsAtlasFallback.length > 0) await uploadSpritesFromAtlas(needsAtlasFallback);
+  }
+
+  async function uploadSpritesFromAtlas(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
     const atlas = await getSpriteAtlas();
     if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return;
     if (!atlas) {
@@ -192,6 +255,9 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
       `[allmaps ${layerId}] addSprites batch ${spriteBatchCounter}: ${sprites.length} sprites (${canvases.length} canvases, atlas ${atlas.imageSize[0]}×${atlas.imageSize[1]})`
     );
     try {
+      // The atlas URL gets a unique fragment per batch because the sprites tile cache dedupes by
+      // tile URL and would ignore repeat calls; fragments are stripped from the HTTP request, so
+      // the image bytes still come from browser cache.
       await layer.addSprites(sprites, `${atlas.imageUrl}#batch-${spriteBatchCounter}`, atlas.imageSize);
     } catch (error) {
       console.warn(`[allmaps ${layerId}] addSprites failed for batch of ${sprites.length}`, error);

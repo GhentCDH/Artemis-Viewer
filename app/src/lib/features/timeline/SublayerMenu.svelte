@@ -193,8 +193,12 @@
   :global(.sublayer-menu-window) {
     --window-radius: var(--radius-lg);
 
-    flex: 0 1 min(19.8rem, calc(100vw - (2 * var(--space-3))));
-    max-width: 100%;
+    flex: 0 1 auto;
+    width: fit-content;
+    /* Must stay wider than the scaled branding trigger it overlays in the
+       top-left slot, so the trigger never peeks out from underneath. */
+    min-width: 15.5rem;
+    max-width: min(19.8rem, calc(100vw - (2 * var(--space-3))));
     max-height: min(19.8rem, calc(100dvh - (2 * var(--space-3))));
   }
 
@@ -207,7 +211,7 @@
 
   :global(.sublayer-menu-window .window-header) {
     align-items: flex-start;
-    padding: var(--space-4) var(--space-4) var(--space-2);
+    padding: var(--space-3) var(--space-3) var(--space-2);
     border-bottom: 0;
   }
 
@@ -262,43 +266,44 @@
 
   .sublayer-menu {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    padding: var(--space-3) var(--space-4) var(--space-3);
+    display: grid;
+    grid-template-columns: minmax(0, max-content) max-content 1fr;
+    column-gap: var(--space-2);
+    padding: var(--space-2) var(--space-3) var(--space-3);
   }
 
   .sublayer-row {
     position: relative;
-    display: flex;
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
     align-items: center;
-    gap: var(--space-2);
-    min-height: 2rem;
+    min-height: 1.75rem;
   }
 
   .sublayer-copy {
-    flex: 1 1 auto;
     min-width: 0;
   }
 
   .sublayer-name {
     display: block;
     color: var(--color-text-primary);
-    font-family: var(--font-ui);
+    font-family: var(--font-readable);
     font-size: var(--text-xs);
     font-weight: 700;
     line-height: 1.25;
   }
 
   :global(.sublayer-menu-window .toggle) {
-    --toggle-width: 1.5rem;
-    --toggle-height: 0.875rem;
-    --toggle-padding: 0.09375rem;
+    --toggle-width: 2.25rem;
+    --toggle-height: 1.25rem;
     --toggle-track-bg-checked: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface-control-hover));
     --toggle-thumb-bg-checked: var(--color-accent);
   }
 
   :global(.info-button) {
     flex: 0 0 auto;
+    margin-left: auto;
     --button-height: 1.5rem;
   }
 
@@ -387,10 +392,6 @@
       flex-basis: auto;
     }
 
-    :global(.sublayer-menu-window .window-header) {
-      padding: var(--space-3) var(--space-3) var(--space-2);
-    }
-
     .sublayer-menu {
       padding: var(--space-2) var(--space-3);
     }
@@ -449,16 +450,6 @@
 
     .sublayer-menu {
       padding: var(--space-1) var(--space-3) var(--space-2);
-    }
-
-    .sublayer-row {
-      min-height: 1.75rem;
-    }
-
-    :global(.sublayer-menu-window .toggle) {
-      --toggle-width: 2.25rem;
-      --toggle-height: 1.25rem;
-      --toggle-padding: 0.125rem;
     }
   }
 </style>

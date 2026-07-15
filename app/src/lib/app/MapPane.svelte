@@ -2,17 +2,27 @@
   import { onMount } from 'svelte';
   import type maplibregl from 'maplibre-gl';
   import { initializeMapLibre, type MapLibreInitCamera, type PaneId } from '$lib/core/map/maplibreInit';
-  import { applyBasemap, BASELAYER_BOUNDS, type BasemapOption } from '$lib/core/map/basemap';
+  import {
+    applyBasemap,
+    applyOverlay,
+    BASELAYER_BOUNDS,
+    type BasemapOption,
+    type OverlayOption,
+  } from '$lib/core/map/basemap';
   import { SublayerRendererManager } from '$lib/core/renderers/sublayerRendererManager';
   import type { AllmapsRenderOptions } from '$lib/core/renderers/types';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import type { IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
   import { hasImagePinAt, restoreImagePins } from '$lib/features/images/imagePins';
+  import { queryOverlayAtPoint } from '$lib/features/basemap/overlayQuery';
 
   let {
     paneId,
     pmtilesUrl,
     basemap,
+    overlay,
+    overlayOpacity,
+    overlayFeatureOpen,
     datasetBaseUrl,
     allmapsOptions,
     allmapsRenderRevision,
@@ -22,10 +32,15 @@
     initialCamera,
     onMapReady,
     onIiifMaskSelect,
+    onOverlayFeature,
+    onOverlayQueryError,
   }: {
     paneId: PaneId;
     pmtilesUrl: string;
     basemap: BasemapOption;
+    overlay: OverlayOption | null;
+    overlayOpacity: number;
+    overlayFeatureOpen: boolean;
     datasetBaseUrl: string;
     allmapsOptions: AllmapsRenderOptions;
     allmapsRenderRevision: number;
@@ -36,6 +51,12 @@
     initialCamera?: MapLibreInitCamera;
     onMapReady?: (map: maplibregl.Map) => void;
     onIiifMaskSelect?: (hit: IiifMaskHit) => void;
+    onOverlayFeature?: (result: {
+      map: maplibregl.Map;
+      lngLat: [number, number];
+      info: import('$lib/core/map/basemap').OverlayFeatureInfo | null;
+    }) => void;
+    onOverlayQueryError?: (reason: string) => void;
   } = $props();
 
   let container: HTMLElement;
@@ -48,6 +69,7 @@
       activeLayerIds: activeLayerId ? [activeLayerId] : [],
       sublayersByLayerId,
     });
+    if (map) applyOverlay(map, overlay, overlayOpacity);
     if (map) restoreImagePins(map);
   }
 
@@ -57,6 +79,37 @@
 
   $effect(() => {
     if (map) applyBasemap(map, basemap);
+  });
+
+  $effect(() => {
+    if (map) applyOverlay(map, overlay, overlayOpacity);
+  });
+
+  $effect(() => {
+    if (!map || !overlay || overlay.query?.status !== 'supported') return;
+    let requestRevision = 0;
+    const handleClick = async (event: maplibregl.MapMouseEvent) => {
+      if (overlayFeatureOpen) {
+        onOverlayFeature?.({ map: map!, lngLat: [event.lngLat.lng, event.lngLat.lat], info: null });
+        return;
+      }
+      if (hasImagePinAt(map!, event.point)) return;
+      const revision = ++requestRevision;
+      try {
+        const info = await queryOverlayAtPoint(map!, overlay, event);
+        if (revision !== requestRevision) return;
+        onOverlayFeature?.({ map: map!, lngLat: [event.lngLat.lng, event.lngLat.lat], info });
+      } catch (reason) {
+        if (revision !== requestRevision) return;
+        const message = reason instanceof Error ? reason.message : 'The feature-info request failed.';
+        onOverlayQueryError?.(message);
+      }
+    };
+    map.on('click', handleClick);
+    return () => {
+      requestRevision += 1;
+      map?.off('click', handleClick);
+    };
   });
 
   onMount(() => {
@@ -82,12 +135,17 @@
         activeLayerIds: activeLayerId ? [activeLayerId] : [],
         sublayersByLayerId,
       });
+      applyOverlay(mapLibre.map, overlay, overlayOpacity);
+      restoreImagePins(mapLibre.map);
     };
-    const applySelectedBasemap = () => applyBasemap(mapLibre.map, basemap);
+    const applySelectedMapLayers = () => {
+      applyBasemap(mapLibre.map, basemap);
+      applyOverlay(mapLibre.map, overlay, overlayOpacity);
+    };
 
     map = mapLibre.map;
     rendererManager = manager;
-    mapLibre.map.on('load', applySelectedBasemap);
+    mapLibre.map.on('load', applySelectedMapLayers);
     mapLibre.map.on('load', reconcileOnStyleLoad);
     mapLibre.map.on('styledata', reconcileOnStyleLoad);
     mapLibre.map.on('idle', reconcileOnStyleLoad);
@@ -101,7 +159,7 @@
 
     return () => {
       resizeObserver.disconnect();
-      mapLibre.map.off('load', applySelectedBasemap);
+      mapLibre.map.off('load', applySelectedMapLayers);
       mapLibre.map.off('load', reconcileOnStyleLoad);
       mapLibre.map.off('styledata', reconcileOnStyleLoad);
       mapLibre.map.off('idle', reconcileOnStyleLoad);

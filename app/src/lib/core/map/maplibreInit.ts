@@ -2,6 +2,7 @@ import maplibregl from 'maplibre-gl';
 import type { LngLatBoundsLike, LngLatLike } from 'maplibre-gl';
 import { registerMapProtocols } from './protocols';
 import { createBaselayerStyle } from './basemap';
+import { DEFAULT_MAPLIBRE_PAN_BOUNDS } from './mapBounds';
 
 export type PaneId = 'left' | 'right';
 
@@ -28,32 +29,15 @@ export interface MapLibreInstance {
   destroy: () => void;
 }
 
-const BELGIUM_BOUNDS = [
-  [2.53, 50.685],
-  [5.92, 51.52],
-] as const;
-
-function expandBounds(
-  [[west, south], [east, north]]: typeof BELGIUM_BOUNDS,
-  paddingRatio: number
-): LngLatBoundsLike {
-  const longitudePadding = (east - west) * paddingRatio;
-  const latitudePadding = (north - south) * paddingRatio;
-  return [
-    [west - longitudePadding, south - latitudePadding],
-    [east + longitudePadding, north + latitudePadding],
-  ];
-}
-
-export const DEFAULT_MAPLIBRE_PAN_BOUNDS: LngLatBoundsLike = expandBounds(BELGIUM_BOUNDS, 0.3);
-
 export function initializeMapLibre(paneId: PaneId, options: MapLibreInitOptions): MapLibreInstance {
   registerMapProtocols();
+  const panBounds = options.panBounds ?? DEFAULT_MAPLIBRE_PAN_BOUNDS;
+  const gridBounds = maplibregl.LngLatBounds.convert(panBounds).toArray();
 
   const map = new maplibregl.Map({
     container: options.container,
-    style: createBaselayerStyle(options.pmtilesUrl),
-    maxBounds: options.panBounds ?? DEFAULT_MAPLIBRE_PAN_BOUNDS,
+    style: createBaselayerStyle(options.pmtilesUrl, gridBounds),
+    maxBounds: panBounds,
     fitBoundsOptions: { padding: 24 },
     // Hard-locked top-down: the IIIF warp layer alpha-blends overlapping canvases in insertion
     // order with no depth buffer, so any pitch breaks the "draw order == visual stacking"

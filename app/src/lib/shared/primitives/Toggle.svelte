@@ -64,6 +64,15 @@
     outline-offset: 1px;
   }
 
+  .toggle:hover .toggle-track {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 12%, var(--toggle-track-bg));
+  }
+
+  .toggle.is-checked:hover .toggle-track {
+    background: color-mix(in srgb, var(--color-shadow-ink) 8%, var(--toggle-track-bg-checked));
+  }
+
   .toggle-track {
     position: relative;
     width: var(--toggle-width);

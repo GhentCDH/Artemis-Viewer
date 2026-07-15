@@ -1,6 +1,11 @@
-import type { BasemapOption } from '$lib/core/map/basemap';
+import type {
+  BasemapOption,
+  OverlayOption,
+  OverlayQueryCapability,
+} from '$lib/core/map/basemap';
 
 const CUSTOM_BASEMAPS_STORAGE_KEY = 'artemis.custom-basemaps.v1';
+const CUSTOM_OVERLAYS_STORAGE_KEY = 'artemis.custom-overlays.v1';
 
 function isStoredCustomBasemap(value: unknown): value is BasemapOption {
   if (!value || typeof value !== 'object') return false;
@@ -50,6 +55,51 @@ export function saveCustomBasemaps(basemaps: BasemapOption[]): void {
   }
 }
 
+function isStoredCustomOverlay(value: unknown): value is OverlayOption {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<OverlayOption>;
+  if (
+    typeof candidate.id !== 'string'
+    || !candidate.id.startsWith('overlay-')
+    || typeof candidate.label !== 'string'
+    || candidate.label.trim().length === 0
+    || (candidate.kind !== 'raster' && candidate.kind !== 'wfs')
+    || typeof candidate.url !== 'string'
+  ) return false;
+
+  try {
+    const parsedUrl = new URL(candidate.url);
+    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function loadCustomOverlays(): OverlayOption[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(CUSTOM_OVERLAYS_STORAGE_KEY) ?? '[]') as unknown;
+    if (!Array.isArray(stored)) return [];
+    const seenIds = new Set<string>();
+    return stored.filter((value): value is OverlayOption => {
+      if (!isStoredCustomOverlay(value) || seenIds.has(value.id)) return false;
+      seenIds.add(value.id);
+      return true;
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomOverlays(overlays: OverlayOption[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(CUSTOM_OVERLAYS_STORAGE_KEY, JSON.stringify(overlays));
+  } catch {
+    // The overlay remains available for this session if browser storage is unavailable.
+  }
+}
+
 function requireHttpUrl(value: string): URL {
   let url: URL;
   try {
@@ -92,6 +142,7 @@ function decodeEncodedPlaceholders(url: string): string {
 export interface ResolvedCustomBasemap {
   kind: 'raster' | 'wfs';
   url: string;
+  serviceType: 'xyz' | 'wmts' | 'wms' | 'wfs' | 'geojson';
 }
 
 export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
@@ -103,7 +154,7 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
     && hasPlaceholder(input, 'x')
     && (hasPlaceholder(input, 'y') || hasPlaceholder(input, '-y'));
   if (isXyzTemplate) {
-    return { kind: 'raster', url: decodeEncodedPlaceholders(original) };
+    return { kind: 'raster', url: decodeEncodedPlaceholders(original), serviceType: 'xyz' };
   }
 
   if (hasPlaceholder(input, 'TileMatrix')
@@ -111,6 +162,7 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
     && hasPlaceholder(input, 'TileRow')) {
     return {
       kind: 'raster',
+      serviceType: 'wmts',
       url: input
         .replace(/\{TileMatrix\}/gi, '{z}')
         .replace(/\{TileCol\}/gi, '{x}')
@@ -145,7 +197,7 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
     setQueryValue(parsedUrl, 'TILEMATRIX', '{z}');
     setQueryValue(parsedUrl, 'TILEROW', '{y}');
     setQueryValue(parsedUrl, 'TILECOL', '{x}');
-    return { kind: 'raster', url: decodeEncodedPlaceholders(parsedUrl.toString()) };
+    return { kind: 'raster', url: decodeEncodedPlaceholders(parsedUrl.toString()), serviceType: 'wmts' };
   }
 
   const isWms = service === 'wms'
@@ -177,7 +229,7 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
       deleteQueryValue(parsedUrl, 'CRS');
     }
     setQueryValue(parsedUrl, 'BBOX', '{bbox-epsg-3857}');
-    return { kind: 'raster', url: decodeEncodedPlaceholders(parsedUrl.toString()) };
+    return { kind: 'raster', url: decodeEncodedPlaceholders(parsedUrl.toString()), serviceType: 'wms' };
   }
 
   const isWfs = service === 'wfs'
@@ -202,16 +254,101 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
     }
     setQueryValue(parsedUrl, 'OUTPUTFORMAT', 'application/json');
     setQueryValue(parsedUrl, 'SRSNAME', 'EPSG:4326');
-    return { kind: 'wfs', url: parsedUrl.toString() };
+    return { kind: 'wfs', url: parsedUrl.toString(), serviceType: 'wfs' };
   }
 
   if (/\.geojson(?:$|\?)/i.test(input)) {
-    return { kind: 'wfs', url: original };
+    return { kind: 'wfs', url: original, serviceType: 'geojson' };
   }
 
   throw new Error(
     'We could not identify this map URL. XYZ/TMS URLs need {z}, {x}, and {y}; WMTS, WMS, or WFS URLs need SERVICE plus a layer or type-name parameter.'
   );
+}
+
+function directChildText(element: Element, localName: string): string | null {
+  const child = [...element.children].find((candidate) => candidate.localName === localName);
+  return child?.textContent?.trim() || null;
+}
+
+function inheritedQueryable(layer: Element): boolean {
+  let current: Element | null = layer;
+  while (current?.localName === 'Layer') {
+    const value = current.getAttribute('queryable');
+    if (value !== null) return value === '1' || value.toLowerCase() === 'true';
+    current = current.parentElement;
+  }
+  return false;
+}
+
+async function discoverWmsQueryCapability(url: string, timeoutMs = 6000): Promise<OverlayQueryCapability> {
+  const mapUrl = new URL(url);
+  const layerNames = (queryValue(mapUrl, 'LAYERS') ?? '').split(',').filter(Boolean);
+  setQueryValue(mapUrl, 'SERVICE', 'WMS');
+  setQueryValue(mapUrl, 'REQUEST', 'GetCapabilities');
+  for (const parameter of ['LAYERS', 'STYLES', 'FORMAT', 'TRANSPARENT', 'WIDTH', 'HEIGHT', 'CRS', 'SRS', 'BBOX']) {
+    deleteQueryValue(mapUrl, parameter);
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(mapUrl, { signal: controller.signal });
+    if (!response.ok) {
+      return { status: 'unavailable', reason: `Capabilities request returned HTTP ${response.status}.` };
+    }
+    const document = new DOMParser().parseFromString(await response.text(), 'application/xml');
+    if (document.querySelector('parsererror')) {
+      return { status: 'unavailable', reason: 'The service returned malformed capabilities XML.' };
+    }
+    const layers = [...document.getElementsByTagNameNS('*', 'Layer')];
+    const requestedLayers = layerNames.map((name) =>
+      layers.find((layer) => directChildText(layer, 'Name') === name)
+    );
+    const missingLayer = layerNames.find((_name, index) => !requestedLayers[index]);
+    if (missingLayer) {
+      return { status: 'unsupported', reason: `Layer “${missingLayer}” was not found in GetCapabilities.` };
+    }
+    const nonQueryableLayer = layerNames.find((_name, index) => !inheritedQueryable(requestedLayers[index]!));
+    if (nonQueryableLayer) {
+      return { status: 'unsupported', reason: `Layer “${nonQueryableLayer}” is not marked queryable.` };
+    }
+
+    const getFeatureInfo = [...document.getElementsByTagNameNS('*', 'GetFeatureInfo')][0];
+    if (!getFeatureInfo) {
+      return { status: 'unsupported', reason: 'The service does not advertise GetFeatureInfo.' };
+    }
+    const formats = [...getFeatureInfo.getElementsByTagNameNS('*', 'Format')]
+      .map((format) => format.textContent?.trim() ?? '')
+      .filter(Boolean);
+    const infoFormat = formats.find((format) => /(?:application|text)\/(?:geo\+)?json/i.test(format))
+      ?? formats.find((format) => /text\/html/i.test(format))
+      ?? formats.find((format) => /text\/plain/i.test(format));
+    if (!infoFormat) {
+      return { status: 'unsupported', reason: 'GetFeatureInfo has no JSON, HTML, or plain-text response format.' };
+    }
+    return { status: 'supported', strategy: 'wms-get-feature-info', infoFormat };
+  } catch (reason) {
+    const detail = reason instanceof DOMException && reason.name === 'AbortError'
+      ? 'The capabilities request timed out.'
+      : 'Capabilities could not be loaded; the server may block browser requests.';
+    return { status: 'unavailable', reason: detail };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export async function discoverOverlayQueryCapability(
+  resolved: ResolvedCustomBasemap,
+): Promise<OverlayQueryCapability> {
+  if (resolved.serviceType === 'wfs' || resolved.serviceType === 'geojson') {
+    return { status: 'supported', strategy: 'vector' };
+  }
+  if (resolved.serviceType === 'wms') return discoverWmsQueryCapability(resolved.url);
+  if (resolved.serviceType === 'wmts') {
+    return { status: 'unsupported', reason: 'This viewer does not yet support WMTS feature-info queries.' };
+  }
+  return { status: 'unsupported', reason: 'XYZ/TMS tiles do not advertise a standard feature-info operation.' };
 }
 
 export function tileUrlForValidation(tileUrl: string): string {

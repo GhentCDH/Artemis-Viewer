@@ -1,10 +1,48 @@
 import type { NormalizedIiifImageInfo } from './geomapsTypes';
 
 /**
- * The UGent IIIF server serves WebP but does not advertise it in `info.json`. Allmaps requests
- * `preferredFormats: ['webp', 'jpg']` but only emits `.webp` when the info it was given actually
- * advertises webp support — so without this patch it silently falls back to larger JPG tiles.
- * Remove once the server advertises WebP itself.
+ * The UGent IIIF server currently sends WebP tile bodies 1 byte longer than their Content-Length
+ * header. Firefox truncates the body to the header and decodes fine; Chromium's network stack
+ * aborts the whole response (net::ERR_CONTENT_LENGTH_MISMATCH), so every WebP tile fails there.
+ * Until the server is fixed, Chromium-based browsers must stay on the server's jpg default.
+ */
+function isChromiumBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const brands = (navigator as Navigator & { userAgentData?: { brands?: Array<{ brand: string }> } }).userAgentData
+    ?.brands;
+  if (brands) return brands.some(({ brand }) => brand === 'Chromium');
+  return /Chrome|Chromium|CriOS|Edg\//.test(navigator.userAgent);
+}
+
+/**
+ * Chromium must not receive WebP tiles until the server's off-by-one Content-Length on WebP
+ * bodies is fixed (see isChromiumBrowser). The server now advertises webp itself (`extraFormats`,
+ * observed 2026-07-15), so skipping forceWebpFormat is not enough — webp must be actively
+ * removed from every format list Allmaps consults, or it will still emit `.webp` tile URLs.
+ */
+function stripWebpFormat(info: Record<string, unknown>): Record<string, unknown> {
+  const patched = { ...info };
+  const withoutWebp = (formats: string[]) => formats.filter((format) => format !== 'webp');
+
+  if (Array.isArray(patched.profile)) {
+    patched.profile = (patched.profile as unknown[]).map((profile) => {
+      if (profile && typeof profile === 'object' && Array.isArray((profile as { formats?: unknown }).formats)) {
+        return { ...(profile as object), formats: withoutWebp((profile as { formats: string[] }).formats) };
+      }
+      return profile;
+    });
+  }
+  if (Array.isArray(patched.extraFormats)) patched.extraFormats = withoutWebp(patched.extraFormats as string[]);
+  if (Array.isArray(patched.preferredFormats)) patched.preferredFormats = withoutWebp(patched.preferredFormats as string[]);
+
+  return patched;
+}
+
+/**
+ * Historically the UGent IIIF server served WebP without advertising it in `info.json`, and
+ * Allmaps only emits `.webp` when the info advertises it — this patch closed that gap. As of
+ * 2026-07-15 the server advertises webp itself, making this a harmless no-op there; kept for
+ * datasets/servers that still under-advertise.
  */
 function forceWebpFormat(info: Record<string, unknown>): Record<string, unknown> {
   const patched = { ...info };
@@ -51,5 +89,6 @@ function overrideTileSize(info: Record<string, unknown>): Record<string, unknown
 }
 
 export function buildAllmapsImageInfos(imageInfos: NormalizedIiifImageInfo[]): Record<string, unknown>[] {
-  return imageInfos.map(({ info }) => overrideTileSize(forceWebpFormat(info)));
+  const transformFormats = isChromiumBrowser() ? stripWebpFormat : forceWebpFormat;
+  return imageInfos.map(({ info }) => overrideTileSize(transformFormats(info)));
 }

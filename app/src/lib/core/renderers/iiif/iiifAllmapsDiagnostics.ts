@@ -25,6 +25,12 @@ import type maplibregl from 'maplibre-gl';
  * staircasing as new areas are visited are the Axis 2 signatures — no Task Manager needed
  * (it remains useful as an external cross-check).
  *
+ * Watchdog — slow structural sampler. Every WATCHDOG_INTERVAL_MS it snapshots what the fast
+ * lines can't see: CPU-side decoded-tile bytes held by Allmaps' tile caches, the fetch/prune
+ * queues, the app-side canvas queue, JS heap, and texture residency with its lifetime peak.
+ * It escalates to console.warn when retained tile data crosses WATCHDOG_TILE_BYTES_WARN or when
+ * fetching/draining keeps running past WATCHDOG_BACKGROUND_WORK_WARN_MS in a hidden tab.
+ *
  * The latest report is also mirrored to `window.__allmapsDiag[label]` for programmatic
  * comparison between knob-test runs. Delete this module once DebugPlan Phase 4 acceptance
  * passes.
@@ -32,9 +38,21 @@ import type maplibregl from 'maplibre-gl';
 const REPORT_INTERVAL_MS = 2000;
 // rAF gaps above this count as a janky frame (~2 missed 60Hz frames).
 const JANK_FRAME_MS = 33;
+const WATCHDOG_INTERVAL_MS = 5000;
+const WATCHDOG_BACKGROUND_WORK_WARN_MS = 15000;
+const WATCHDOG_TILE_BYTES_WARN = 512 * 1024 * 1024;
+
+/** Decoded tile as held by Allmaps' tile caches (ImageData in the worker-decode pipeline). */
+interface CacheableTileInternals {
+  data?: { width?: number; height?: number; data?: { byteLength?: number } };
+}
 
 interface TileCacheInternals extends EventTarget {
   getMapCachedTiles(mapId: string): unknown[];
+  // Verified against @allmaps/render beta.83 TileCache; probed defensively anyway.
+  getCachedTiles?: () => CacheableTileInternals[];
+  tilesFetchingCount?: number;
+  tileRemoveQueue?: unknown[];
 }
 
 /** Structural view of @allmaps/render's WebGL2WarpedMap (fields verified against beta.83). */
@@ -246,6 +264,45 @@ function releaseGlInstrumentation(gl: WebGL2RenderingContext): void {
 
 const mb = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(0)}MB`;
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(unit === 0 || value >= 10 ? 0 : 1)}${units[unit]}`;
+}
+
+/** Bytes held by a decoded tile; falls back to width×height×RGBA when the buffer is absent. */
+function tileDataBytes(tile: CacheableTileInternals): number {
+  const bufferBytes = tile.data?.data?.byteLength ?? 0;
+  if (bufferBytes > 0) return bufferBytes;
+  const width = tile.data?.width ?? 0;
+  const height = tile.data?.height ?? 0;
+  return width > 0 && height > 0 ? width * height * 4 : 0;
+}
+
+function cachedTileFootprint(cache: TileCacheInternals | undefined): { count: number; bytes: number } {
+  try {
+    const tiles = cache?.getCachedTiles?.() ?? [];
+    let bytes = 0;
+    for (const tile of tiles) bytes += tileDataBytes(tile);
+    return { count: tiles.length, bytes };
+  } catch {
+    // Diagnostics must never interfere with rendering.
+    return { count: -1, bytes: 0 };
+  }
+}
+
+function heapUsage(): string {
+  const memory = (performance as Performance & { memory?: { usedJSHeapSize?: number; jsHeapSizeLimit?: number } }).memory;
+  if (!memory?.usedJSHeapSize) return 'n/a';
+  return `${formatBytes(memory.usedJSHeapSize)} (limit ${formatBytes(memory.jsHeapSizeLimit ?? 0)})`;
+}
+
 /** Device pixels of the viewport covered by a geo bbox (bbox of projected corners, rotation-safe overestimate). */
 function coveredDevicePixels(map: maplibregl.Map, bbox: [number, number, number, number], cssWidth: number, cssHeight: number, dpr: number): number {
   const corners: [number, number][] = [
@@ -272,15 +329,25 @@ function coveredDevicePixels(map: maplibregl.Map, bbox: [number, number, number,
   return width * height * dpr * dpr;
 }
 
+export interface AllmapsRuntimeState {
+  queued: number;
+  adding: number;
+  failed: number;
+  draining: boolean;
+  started: boolean;
+  spriteBatches: number;
+}
+
 export function attachAllmapsDiagnostics(args: {
   label: string;
   map: maplibregl.Map;
   layer: WarpedMapLayer;
   getLoadedCount: () => number;
+  getRuntimeState?: () => AllmapsRuntimeState;
   enabled: boolean;
 }): () => void {
   if (!args.enabled) return () => {};
-  const { label, map, layer, getLoadedCount } = args;
+  const { label, map, layer, getLoadedCount, getRuntimeState } = args;
 
   let detached = false;
   let renderer: RendererInternals | null = null;
@@ -420,30 +487,34 @@ export function attachAllmapsDiagnostics(args: {
       if (depth > cached) shrinkLag += depth - cached;
     }
 
+    const runtime = getRuntimeState?.();
     console.log(
-      `[allmaps-diag ${label}] render z=${map.getZoom().toFixed(2)} canvas=${canvas.width}x${canvas.height}@${dpr} | ` +
-        `maps drawn=${renderSet?.size ?? -1} inVp=${inViewport} resident=${residentMaps} loaded=${getLoadedCount()} | ` +
-        `depth drawnΣ=${drawnDepthSum} max=${drawnDepthMax} residentΣ=${residentDepthSum} shrinkLag=${shrinkLag} | ` +
-        `scan≈${(scanCost / 1e9).toFixed(2)}G texel·layers/frame overdraw=${overdraw.toFixed(1)}x` +
-        (topLine ? ` top=${topLine}` : ''),
+      `[allmaps-diag ${label}] render | z=${map.getZoom().toFixed(2)} canvas=${canvas.width}x${canvas.height}@${dpr} | ` +
+        `maps: drawn=${renderSet?.size ?? -1} inViewport=${inViewport} resident=${residentMaps} loaded=${getLoadedCount()} | ` +
+        (runtime ? `queue: pending=${runtime.queued} adding=${runtime.adding} failed=${runtime.failed} | ` : '') +
+        `depth: drawnSum=${drawnDepthSum} max=${drawnDepthMax} residentSum=${residentDepthSum} shrinkLag=${shrinkLag} | ` +
+        `scan=${(scanCost / 1e9).toFixed(2)}G/frame overdraw=${overdraw.toFixed(1)}x` +
+        (topLine ? ` | heaviest: ${topLine}` : ''),
     );
     if (gl && previousGl) {
       console.log(
-        `[allmaps-diag ${label}] gpu tex≈${mb(residentTextureBytes)}/${residentMaps}maps | ` +
-          `buf live=${gl.liveBuffers}≈${mb(gl.liveBufferBytes)} (pbo ${gl.livePboBuffers}≈${mb(gl.livePboBytes)}) ` +
-          `Δ+${gl.created - previousGl.created}/-${gl.deleted - previousGl.deleted} gc=${gl.gcFreed - previousGl.gcFreed} | ` +
-          `Δupload pbo=${mb(gl.pboUploadedBytes - previousGl.pboUploadedBytes)} ` +
-          `tex3D=${gl.texArrayReallocs - previousGl.texArrayReallocs}x/${mb(gl.texArrayReallocBytes - previousGl.texArrayReallocBytes)} | ` +
-          `tiles +${realTiles}r +${spriteTiles}s ${fetchErrors}e | ` +
-          `frames=${frames} jank(>${JANK_FRAME_MS}ms)=${jankFrames} worst=${worstFrameMs.toFixed(0)}ms` +
-          (worstFrameDrawn >= 0 ? `@drawn${worstFrameDrawn}/Σdepth${worstFrameDepthSum}` : ''),
+        `[allmaps-diag ${label}] gpu    | textures=${mb(residentTextureBytes)} across ${residentMaps} maps | ` +
+          `buffers: live=${gl.liveBuffers} (${mb(gl.liveBufferBytes)}) pbo=${gl.livePboBuffers} (${mb(gl.livePboBytes)}) ` +
+          `created+${gl.created - previousGl.created} deleted-${gl.deleted - previousGl.deleted} gc=${gl.gcFreed - previousGl.gcFreed} | ` +
+          `uploads: pbo=${mb(gl.pboUploadedBytes - previousGl.pboUploadedBytes)} ` +
+          `texRealloc=${gl.texArrayReallocs - previousGl.texArrayReallocs} (${mb(gl.texArrayReallocBytes - previousGl.texArrayReallocBytes)}) | ` +
+          `tiles: real+${realTiles} sprite+${spriteTiles} errors=${fetchErrors} | ` +
+          `frames: ${frames} jank=${jankFrames} worst=${worstFrameMs.toFixed(0)}ms` +
+          (worstFrameDrawn >= 0 ? ` (drawn=${worstFrameDrawn} depthSum=${worstFrameDepthSum})` : ''),
       );
     }
 
     // Mirror for programmatic comparison between knob-test runs (e.g. log2ScaleFactorCorrection).
-    const globalDiag = (window as unknown as { __allmapsDiag?: Record<string, unknown> }).__allmapsDiag ?? {};
-    (window as unknown as { __allmapsDiag: Record<string, unknown> }).__allmapsDiag = globalDiag;
+    // Merged, not replaced: the watchdog sampler stores its own snapshot under the same label.
+    const globalDiag = (window as unknown as { __allmapsDiag?: Record<string, Record<string, unknown>> }).__allmapsDiag ?? {};
+    (window as unknown as { __allmapsDiag: Record<string, Record<string, unknown>> }).__allmapsDiag = globalDiag;
     globalDiag[label] = {
+      ...globalDiag[label],
       at: Date.now(),
       zoom: map.getZoom(),
       drawn: renderSet?.size ?? -1,
@@ -473,10 +544,93 @@ export function attachAllmapsDiagnostics(args: {
     worstFrameDepthSum = -1;
   }, REPORT_INTERVAL_MS);
 
+  // --- Watchdog: slow structural sampler (see module doc). Sampled rather than event-driven, so
+  // sub-interval peaks can slip between snapshots; the lifetime texture peak below compensates
+  // for the metric where that matters most.
+  let textureBytesPeak = 0;
+  let backgroundWorkStartedAt: number | null = null;
+  const watchdogTimer = setInterval(() => {
+    const runtime = getRuntimeState?.();
+    const renderSet = renderer?.mapsWithFetchableTilesForViewport;
+    const inViewport = renderer?.mapsInViewport?.size ?? -1;
+    const tileCache = cachedTileFootprint(renderer?.tileCache);
+    const spriteCache = cachedTileFootprint(renderer?.spritesTileCache);
+    const fetching = renderer?.tileCache?.tilesFetchingCount ?? 0;
+    const removeQueue = renderer?.tileCache?.tileRemoveQueue?.length ?? 0;
+
+    let residentMaps = 0;
+    let textureBytes = 0;
+    let deepestArray = 0;
+    let biggestMapBytes = 0;
+    for (const warpedMap of renderer?.warpedMapList?.getWarpedMaps() ?? []) {
+      const depth = warpedMap.cachedTilesForTexture?.length ?? 0;
+      if (depth === 0) continue;
+      residentMaps += 1;
+      const [tileWidth, tileHeight] = warpedMap.tileSize ?? [0, 0];
+      const bytes = depth * tileWidth * tileHeight * 4;
+      textureBytes += bytes;
+      if (depth > deepestArray) deepestArray = depth;
+      if (bytes > biggestMapBytes) biggestMapBytes = bytes;
+    }
+    if (textureBytes > textureBytesPeak) textureBytesPeak = textureBytes;
+
+    // Work that keeps running in a hidden tab burns battery and can balloon caches unobserved.
+    const hidden = typeof document !== 'undefined' && document.hidden;
+    const busy = fetching > 0 || (runtime?.queued ?? 0) > 0 || (runtime?.draining ?? false);
+    const now = performance.now();
+    backgroundWorkStartedAt = hidden && busy ? (backgroundWorkStartedAt ?? now) : null;
+    const backgroundWorkMs = backgroundWorkStartedAt === null ? 0 : now - backgroundWorkStartedAt;
+
+    const retainedTileBytes = tileCache.bytes + spriteCache.bytes;
+    const warnings: string[] = [];
+    if (retainedTileBytes >= WATCHDOG_TILE_BYTES_WARN) {
+      warnings.push(`retained tile data ${formatBytes(retainedTileBytes)} >= ${formatBytes(WATCHDOG_TILE_BYTES_WARN)}`);
+    }
+    if (backgroundWorkMs >= WATCHDOG_BACKGROUND_WORK_WARN_MS) {
+      warnings.push(`background work for ${(backgroundWorkMs / 1000).toFixed(0)}s in hidden tab`);
+    }
+
+    const yesNo = (value: boolean | undefined) => (value ? 'yes' : 'no');
+    const message =
+      `[allmaps-watchdog ${label}] z=${map.getZoom().toFixed(2)} hidden=${yesNo(hidden)} moving=${yesNo(map.isMoving())} heap=${heapUsage()}` +
+      (warnings.length > 0 ? `\n  WARN:      ${warnings.join('; ')}` : '') +
+      (runtime
+        ? `\n  lifecycle: loaded=${getLoadedCount()} queued=${runtime.queued} adding=${runtime.adding} failed=${runtime.failed}` +
+          ` draining=${yesNo(runtime.draining)} started=${yesNo(runtime.started)} spriteBatches=${runtime.spriteBatches}`
+        : `\n  lifecycle: loaded=${getLoadedCount()}`) +
+      `\n  maps:      resident=${residentMaps} drawn=${renderSet?.size ?? -1} inViewport=${inViewport}` +
+      `\n  tileCache: ${tileCache.count} tiles = ${formatBytes(tileCache.bytes)} | fetching=${fetching} removeQueue=${removeQueue}` +
+      `\n  sprites:   ${spriteCache.count} tiles = ${formatBytes(spriteCache.bytes)}` +
+      `\n  textures:  ${formatBytes(textureBytes)} now / ${formatBytes(textureBytesPeak)} peak | deepest=${deepestArray} tiles biggestMap=${formatBytes(biggestMapBytes)}`;
+    if (warnings.length > 0) console.warn(message);
+    else console.info(message);
+
+    const globalDiag = (window as unknown as { __allmapsDiag?: Record<string, Record<string, unknown>> }).__allmapsDiag ?? {};
+    (window as unknown as { __allmapsDiag: Record<string, Record<string, unknown>> }).__allmapsDiag = globalDiag;
+    globalDiag[label] = {
+      ...globalDiag[label],
+      watchdog: {
+        at: Date.now(),
+        hidden,
+        runtime: runtime ?? null,
+        tileCache,
+        spriteCache,
+        fetching,
+        removeQueue,
+        textureBytes,
+        textureBytesPeak,
+        retainedTileBytes,
+        backgroundWorkMs,
+        warnings,
+      },
+    };
+  }, WATCHDOG_INTERVAL_MS);
+
   return () => {
     detached = true;
     clearInterval(attachPoll);
     clearInterval(reportTimer);
+    clearInterval(watchdogTimer);
     cancelAnimationFrame(rafId);
     if (renderer) {
       renderer.tileCache?.removeEventListener('maptileloaded', onRealTile);

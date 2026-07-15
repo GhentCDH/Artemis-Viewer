@@ -15,6 +15,11 @@ const ALLMAPS_TRIGGER_ZOOM = 12.5;
 // cut how many canvases a single pan reveal queues — at 0.5 the padded load area is ~4x the
 // visible viewport; at 0.15 it's ~1.7x, much closer to what's actually on screen.
 const ALLMAPS_VIEWPORT_MARGIN = 0.15;
+// Keep maps for a substantially larger area than the load viewport. This bounds GPU/JS
+// residency without making an ordinary back-and-forth pan repeatedly destroy and triangulate
+// the same canvas. At 1.0 the retained area extends one full viewport on every side (3x linear,
+// 9x area), versus the 1.3x-linear load area above.
+const ALLMAPS_EVICTION_VIEWPORT_MARGIN = 1.0;
 // Triangulation is a one-time, cached cost per canvas (paid inside `addGeoreferencedMap`, not
 // repeated on later frames) — this just caps how many *newly revealed* canvases get that one-time
 // cost paid per frame while draining the queue, so a reconcile that reveals a big batch at once
@@ -117,18 +122,33 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     console.warn(`[allmaps ${layerId}] addImageInfos failed — per-canvas info.json fetches will happen instead`, error);
   }
 
-  const loadedCanvasIds = new Set<string>();
+  // A canvas must be in exactly one of these lifecycle states. In particular, don't mark it as
+  // resident before addGeoreferencedMap succeeds: doing so used to make malformed maps
+  // permanently look loaded, and makes removal/re-entry races impossible to reason about.
+  const queuedCanvasIds = new Set<string>();
+  const addingCanvasIds = new Set<string>();
+  const residentMapIdsByCanvasId = new Map<string, string>();
+  const failedCanvasIds = new Set<string>();
+  const pendingQueue: NormalizedGeomapsCanvas[] = [];
+  let draining = false;
+  let started = false;
+  let spriteBatchCounter = 0;
   const detachDiagnostics = attachAllmapsDiagnostics({
     label: layerId,
     map: context.map,
     layer,
-    getLoadedCount: () => loadedCanvasIds.size,
+    getLoadedCount: () => residentMapIdsByCanvasId.size,
+    getRuntimeState: () => ({
+      queued: queuedCanvasIds.size,
+      adding: addingCanvasIds.size,
+      failed: failedCanvasIds.size,
+      draining,
+      started,
+      spriteBatches: spriteBatchCounter,
+    }),
     enabled: context.allmapsOptions.diagnostics,
   });
   registerIiifCleanup(context.paneId, target.sublayer.id, detachDiagnostics);
-  const pendingQueue: NormalizedGeomapsCanvas[] = [];
-  let draining = false;
-  let started = false;
   const spritesImagePath = target.sublayer.artifacts.sprites;
   const spritesIndexPath = target.sublayer.artifacts.spritesIndex;
 
@@ -157,7 +177,6 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
   // regression vs main, which uploaded sprites after its addGeoreferencedMap batches). So: upload
   // once per drain, only the sprites for canvases added in that drain.
   // Sprites are an optimization: any failure is non-fatal — Allmaps fetches full-res tiles directly.
-  let spriteBatchCounter = 0;
   let warnedSpritesUnavailable = false;
   async function uploadSpritesForCanvases(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
     if (canvases.length === 0) return;
@@ -307,6 +326,10 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
           pendingQueue.sort((a, b) => squaredDistance(a.geoCenter, center) - squaredDistance(b.geoCenter, center));
         }
         const chunk = pendingQueue.splice(0, RECONCILE_CHUNK);
+        for (const canvas of chunk) {
+          queuedCanvasIds.delete(canvas.imageId);
+          addingCanvasIds.add(canvas.imageId);
+        }
         const results = await Promise.allSettled(
           chunk.map((canvas) =>
             layer.addGeoreferencedMap(canvas.georeferencedMap, {
@@ -316,13 +339,32 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
           )
         );
         const addedMapIds: string[] = [];
+        const evictionBounds = paddedViewportBounds(ALLMAPS_EVICTION_VIEWPORT_MARGIN);
         for (const [index, result] of results.entries()) {
+          const canvas = chunk[index];
+          addingCanvasIds.delete(canvas.imageId);
           if (result.status === 'fulfilled') {
-            addedThisDrain.push(chunk[index]);
-            addedMapIds.push(result.value);
+            // The camera may have moved while triangulation was in flight. Destroy a map that is
+            // already outside the wider retention bounds instead of briefly making it resident
+            // and uploading its sprite. Missing bboxes are deliberately never evicted.
+            if (evictionBounds && canvas.geoBbox && !bboxIntersects(canvas.geoBbox, evictionBounds)) {
+              try {
+                layer.removeGeoreferencedMapById(result.value);
+              } catch (error) {
+                // The add succeeded, so retain ownership if removal unexpectedly fails. Losing
+                // this ID would leave an Allmaps map that the reconciler can never remove.
+                residentMapIdsByCanvasId.set(canvas.imageId, result.value);
+                console.warn(`[allmaps ${layerId}] immediate removeGeoreferencedMapById failed for canvas ${canvas.imageId}`, error);
+              }
+            } else {
+              residentMapIdsByCanvasId.set(canvas.imageId, result.value);
+              addedThisDrain.push(canvas);
+              addedMapIds.push(result.value);
+            }
           } else {
             // skip this canvas — its georeferencing data is likely malformed
-            console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${chunk[index].imageId}`, result.reason);
+            failedCanvasIds.add(canvas.imageId);
+            console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${canvas.imageId}`, result.reason);
           }
         }
         if (context.allmapsOptions.showHighStretch && addedMapIds.length > 0) {
@@ -333,22 +375,64 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
         layer.nativeUpdate();
         if (pendingQueue.length > 0) await nextFrame();
       }
-      await uploadSpritesForCanvases(addedThisDrain);
+      // A moveend can evict maps while another chunk is being triangulated. Only upload sprites
+      // for maps that still exist when this drain finishes.
+      await uploadSpritesForCanvases(addedThisDrain.filter((canvas) => residentMapIdsByCanvasId.has(canvas.imageId)));
     } finally {
       draining = false;
+      // A moveend may enqueue work while this drain is awaiting sprite decoding/upload. Its
+      // drainQueue call sees `draining` and returns, so explicitly hand off after lowering the
+      // guard or those canvases remain queued forever.
+      if (pendingQueue.length > 0 && isCurrentIiifRender(context.paneId, target.sublayer.id, token)) {
+        void drainQueue();
+      }
     }
   }
 
   function reconcileViewport(): void {
     if (context.map.getZoom() < ALLMAPS_TRIGGER_ZOOM) return;
     const loadBounds = paddedViewportBounds(ALLMAPS_VIEWPORT_MARGIN);
-    if (!loadBounds) return;
+    const evictionBounds = paddedViewportBounds(ALLMAPS_EVICTION_VIEWPORT_MARGIN);
+    if (!loadBounds || !evictionBounds) return;
+
+    // Cancel queued work that has become irrelevant after a large/rapid pan. Work already inside
+    // addGeoreferencedMap cannot be cancelled, so drainQueue checks the current eviction bounds
+    // again as soon as that call resolves.
+    for (let index = pendingQueue.length - 1; index >= 0; index -= 1) {
+      const canvas = pendingQueue[index];
+      if (canvas.geoBbox && !bboxIntersects(canvas.geoBbox, evictionBounds)) {
+        pendingQueue.splice(index, 1);
+        queuedCanvasIds.delete(canvas.imageId);
+      }
+    }
+
+    // removeGeoreferencedMapById reaches WebGL2WarpedMap.destroy(), releasing the map's texture
+    // arrays and VAOs and cancelling its throttled texture work. Allmaps' shared tile cache may
+    // retain reusable tile entries until its normal pruning runs; missing bboxes stay resident
+    // because there is no safe spatial eviction decision for them.
+    for (const canvas of geomaps.canvases) {
+      const mapId = residentMapIdsByCanvasId.get(canvas.imageId);
+      if (!mapId || !canvas.geoBbox || bboxIntersects(canvas.geoBbox, evictionBounds)) continue;
+      try {
+        layer.removeGeoreferencedMapById(mapId);
+        residentMapIdsByCanvasId.delete(canvas.imageId);
+      } catch (error) {
+        console.warn(`[allmaps ${layerId}] removeGeoreferencedMapById failed for canvas ${canvas.imageId}`, error);
+      }
+    }
 
     let queued = false;
     for (const canvas of geomaps.canvases) {
-      if (loadedCanvasIds.has(canvas.imageId)) continue;
+      if (
+        residentMapIdsByCanvasId.has(canvas.imageId) ||
+        queuedCanvasIds.has(canvas.imageId) ||
+        addingCanvasIds.has(canvas.imageId) ||
+        failedCanvasIds.has(canvas.imageId)
+      ) {
+        continue;
+      }
       if (!canvas.geoBbox || bboxIntersects(canvas.geoBbox, loadBounds)) {
-        loadedCanvasIds.add(canvas.imageId);
+        queuedCanvasIds.add(canvas.imageId);
         pendingQueue.push(canvas);
         queued = true;
       }
@@ -358,7 +442,6 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
 
   async function loadAllEagerly(): Promise<void> {
     const eagerStartedAt = performance.now();
-    for (const canvas of geomaps.canvases) loadedCanvasIds.add(canvas.imageId);
     const results = await Promise.allSettled(
       geomaps.canvases.map((canvas) =>
         layer.addGeoreferencedMap(canvas.georeferencedMap, {
@@ -374,9 +457,12 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     const addedMapIds: string[] = [];
     for (const [index, result] of results.entries()) {
       if (result.status === 'fulfilled') {
-        addedCanvases.push(geomaps.canvases[index]);
+        const canvas = geomaps.canvases[index];
+        residentMapIdsByCanvasId.set(canvas.imageId, result.value);
+        addedCanvases.push(canvas);
         addedMapIds.push(result.value);
       } else {
+        failedCanvasIds.add(geomaps.canvases[index].imageId);
         console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${geomaps.canvases[index].imageId}`, result.reason);
       }
     }

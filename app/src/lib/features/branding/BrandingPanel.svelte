@@ -215,6 +215,33 @@
                     />
                   </div>
 
+                  <div class="developer-control">
+                    <span>Allmaps tile cache log</span>
+                    <Toggle
+                      label="Allmaps tile cache log"
+                      checked={developerSettings.allmapsTileCacheLog}
+                      onclick={() => developerSettings.setAllmapsTileCacheLog(!developerSettings.allmapsTileCacheLog)}
+                    />
+                  </div>
+
+                  <div class="developer-control">
+                    <span>Allmaps GPU texture log</span>
+                    <Toggle
+                      label="Allmaps GPU texture log"
+                      checked={developerSettings.allmapsTextureLog}
+                      onclick={() => developerSettings.setAllmapsTextureLog(!developerSettings.allmapsTextureLog)}
+                    />
+                  </div>
+
+                  <div class="developer-control">
+                    <span>Allmaps PBO log</span>
+                    <Toggle
+                      label="Allmaps PBO log"
+                      checked={developerSettings.allmapsPboLog}
+                      onclick={() => developerSettings.setAllmapsPboLog(!developerSettings.allmapsPboLog)}
+                    />
+                  </div>
+
                   <details class="allmaps-advanced">
                     <summary>Advanced Allmaps</summary>
                     <div class="developer-controls">

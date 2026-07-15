@@ -26,6 +26,12 @@ export interface AllmapsRenderOptions {
   showHighStretch: boolean;
   loadingMode: IiifLoadingMode;
   diagnostics: boolean;
+  /** Logs Allmaps tile-cache size and in-viewport tile counts to the console (iiifAllmapsTileCacheLog). */
+  tileCacheLog: boolean;
+  /** Logs per-map GPU texture-array residency to the console (iiifAllmapsGpuLogs). */
+  textureLog: boolean;
+  /** Logs live PBO staging-buffer residency and upload churn to the console (iiifAllmapsGpuLogs). */
+  pboLog: boolean;
   /** When false, no sprite atlas is uploaded — every canvas fetches full-res IIIF tiles directly. */
   spritesEnabled: boolean;
   tuning: AllmapsTuningOptions;

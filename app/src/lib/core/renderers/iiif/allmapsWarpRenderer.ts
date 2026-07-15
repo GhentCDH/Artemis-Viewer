@@ -2,6 +2,8 @@ import { WarpedMapLayer } from '@allmaps/maplibre';
 import type { SublayerRenderContext, SublayerRenderTarget } from '../types';
 import { loadGeomaps } from './geomapsLoader';
 import { attachAllmapsDiagnostics } from './iiifAllmapsDiagnostics';
+import { attachAllmapsTileCacheLog } from './iiifAllmapsTileCacheLog';
+import { attachAllmapsPboLog, attachAllmapsTextureLog } from './iiifAllmapsGpuLogs';
 import type { NormalizedGeomapsCanvas } from './geomapsTypes';
 import { buildAllmapsImageInfos } from './iiifImageInfo';
 import { iiifLayerId, isCurrentIiifRender, registerIiifCleanup } from './iiifLayerRuntime';
@@ -149,6 +151,27 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     enabled: context.allmapsOptions.diagnostics,
   });
   registerIiifCleanup(context.paneId, target.sublayer.id, detachDiagnostics);
+  const detachTileCacheLog = attachAllmapsTileCacheLog({
+    label: layerId,
+    map: context.map,
+    layer,
+    enabled: context.allmapsOptions.tileCacheLog,
+  });
+  registerIiifCleanup(context.paneId, target.sublayer.id, detachTileCacheLog);
+  const detachTextureLog = attachAllmapsTextureLog({
+    label: layerId,
+    map: context.map,
+    layer,
+    enabled: context.allmapsOptions.textureLog,
+  });
+  registerIiifCleanup(context.paneId, target.sublayer.id, detachTextureLog);
+  const detachPboLog = attachAllmapsPboLog({
+    label: layerId,
+    map: context.map,
+    layer,
+    enabled: context.allmapsOptions.pboLog,
+  });
+  registerIiifCleanup(context.paneId, target.sublayer.id, detachPboLog);
   const spritesImagePath = target.sublayer.artifacts.sprites;
   const spritesIndexPath = target.sublayer.artifacts.spritesIndex;
 

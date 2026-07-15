@@ -95,7 +95,7 @@ interface BufferHolder {
   freed: boolean;
 }
 
-interface GlCounters {
+export interface GlCounters {
   // Live gauges.
   liveBuffers: number;
   liveBufferBytes: number;
@@ -112,7 +112,7 @@ interface GlCounters {
   texArrayReallocBytes: number;
 }
 
-interface GlInstrumentation {
+export interface GlInstrumentation {
   counters: GlCounters;
   refs: number;
   restore: () => void;
@@ -120,7 +120,9 @@ interface GlInstrumentation {
 
 const glInstrumentations = new WeakMap<WebGL2RenderingContext, GlInstrumentation>();
 
-function instrumentGl(gl: WebGL2RenderingContext): GlInstrumentation {
+// Exported for the standalone PBO-log toggle (iiifAllmapsGpuLogs) — refcounting makes
+// concurrent use with the full diagnostics toggle safe.
+export function instrumentGl(gl: WebGL2RenderingContext): GlInstrumentation {
   const existing = glInstrumentations.get(gl);
   if (existing) {
     existing.refs += 1;
@@ -253,7 +255,7 @@ function instrumentGl(gl: WebGL2RenderingContext): GlInstrumentation {
   return instrumentation;
 }
 
-function releaseGlInstrumentation(gl: WebGL2RenderingContext): void {
+export function releaseGlInstrumentation(gl: WebGL2RenderingContext): void {
   const instrumentation = glInstrumentations.get(gl);
   if (!instrumentation) return;
   instrumentation.refs -= 1;

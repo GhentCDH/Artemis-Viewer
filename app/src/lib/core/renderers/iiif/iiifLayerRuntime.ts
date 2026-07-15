@@ -39,7 +39,17 @@ export function beginIiifRender(paneId: string, sublayerId: string): number {
   const groups = paneGroups(paneId);
   const existing = groups.get(sublayerId);
   const token = (existing?.renderToken ?? 0) + 1;
-  groups.set(sublayerId, { cleanups: existing?.cleanups ?? [], renderToken: token });
+
+  // A new render for the same sublayer supersedes the previous render session. Invalidate it
+  // first, then disconnect its listeners, timers, diagnostics and map layers before installing
+  // the new session. Merely changing the token stops stale async mutations, but it does not stop
+  // already-registered callbacks from continuing to run and accumulate private state.
+  if (existing) {
+    existing.renderToken = token;
+    for (const cleanup of existing.cleanups) cleanup();
+  }
+
+  groups.set(sublayerId, { cleanups: [], renderToken: token });
   return token;
 }
 

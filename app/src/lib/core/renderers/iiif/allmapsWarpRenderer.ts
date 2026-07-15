@@ -5,7 +5,7 @@ import { attachAllmapsDiagnostics } from './iiifAllmapsDiagnostics';
 import type { NormalizedGeomapsCanvas } from './geomapsTypes';
 import { buildAllmapsImageInfos } from './iiifImageInfo';
 import { iiifLayerId, isCurrentIiifRender, registerIiifCleanup } from './iiifLayerRuntime';
-import { loadSpriteAtlas, type IiifSprite, type IiifSpriteAtlas } from './iiifSpriteAtlas';
+import { joinUrl, loadSpriteAtlas, loadSpriteIndex, type IiifSprite, type IiifSpriteAtlas } from './iiifSpriteAtlas';
 
 // Below this zoom the raster preview alone is the renderer — visually equivalent at overview
 // zoom, but free of Allmaps' per-canvas triangulation cost.
@@ -15,6 +15,11 @@ const ALLMAPS_TRIGGER_ZOOM = 12.5;
 // cut how many canvases a single pan reveal queues — at 0.5 the padded load area is ~4x the
 // visible viewport; at 0.15 it's ~1.7x, much closer to what's actually on screen.
 const ALLMAPS_VIEWPORT_MARGIN = 0.15;
+// Keep maps for a substantially larger area than the load viewport. This bounds GPU/JS
+// residency without making an ordinary back-and-forth pan repeatedly destroy and triangulate
+// the same canvas. At 1.0 the retained area extends one full viewport on every side (3x linear,
+// 9x area), versus the 1.3x-linear load area above.
+const ALLMAPS_EVICTION_VIEWPORT_MARGIN = 1.0;
 // Triangulation is a one-time, cached cost per canvas (paid inside `addGeoreferencedMap`, not
 // repeated on later frames) — this just caps how many *newly revealed* canvases get that one-time
 // cost paid per frame while draining the queue, so a reconcile that reveals a big batch at once
@@ -117,18 +122,33 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     console.warn(`[allmaps ${layerId}] addImageInfos failed — per-canvas info.json fetches will happen instead`, error);
   }
 
-  const loadedCanvasIds = new Set<string>();
+  // A canvas must be in exactly one of these lifecycle states. In particular, don't mark it as
+  // resident before addGeoreferencedMap succeeds: doing so used to make malformed maps
+  // permanently look loaded, and makes removal/re-entry races impossible to reason about.
+  const queuedCanvasIds = new Set<string>();
+  const addingCanvasIds = new Set<string>();
+  const residentMapIdsByCanvasId = new Map<string, string>();
+  const failedCanvasIds = new Set<string>();
+  const pendingQueue: NormalizedGeomapsCanvas[] = [];
+  let draining = false;
+  let started = false;
+  let spriteBatchCounter = 0;
   const detachDiagnostics = attachAllmapsDiagnostics({
     label: layerId,
     map: context.map,
     layer,
-    getLoadedCount: () => loadedCanvasIds.size,
+    getLoadedCount: () => residentMapIdsByCanvasId.size,
+    getRuntimeState: () => ({
+      queued: queuedCanvasIds.size,
+      adding: addingCanvasIds.size,
+      failed: failedCanvasIds.size,
+      draining,
+      started,
+      spriteBatches: spriteBatchCounter,
+    }),
     enabled: context.allmapsOptions.diagnostics,
   });
   registerIiifCleanup(context.paneId, target.sublayer.id, detachDiagnostics);
-  const pendingQueue: NormalizedGeomapsCanvas[] = [];
-  let draining = false;
-  let started = false;
   const spritesImagePath = target.sublayer.artifacts.sprites;
   const spritesIndexPath = target.sublayer.artifacts.spritesIndex;
 
@@ -141,17 +161,22 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     return atlasPromise;
   }
 
+  let spriteIndexPromise: Promise<Map<string, IiifSprite>> | null = null;
+  function getSpriteIndex(): Promise<Map<string, IiifSprite>> {
+    if (!spriteIndexPromise) {
+      spriteIndexPromise = spritesIndexPath ? loadSpriteIndex(context.datasetBaseUrl, spritesIndexPath) : Promise.resolve(new Map());
+    }
+    return spriteIndexPromise;
+  }
+
   // Sprites must be uploaded AFTER the maps they cover exist in the warped-map list:
   // `BaseRenderer.addSprites` binds sprites to maps via `warpedMapsByResourceId` built from the
   // *current* list, and `spritesDataToCachedTiles` `break`s on the first sprite without a matching
   // map — uploading before any canvas is triangulated silently produces zero sprite tiles (every
   // canvas then fetches full-res IIIF tiles at all zooms; this was the branch's high-zoom pan-lag
   // regression vs main, which uploaded sprites after its addGeoreferencedMap batches). So: upload
-  // once per drain, only the sprites for canvases added in that drain. The atlas URL gets a unique
-  // fragment per batch because the sprites tile cache dedupes by tile URL and would ignore repeat
-  // calls; fragments are stripped from the HTTP request, so the image bytes come from browser cache.
+  // once per drain, only the sprites for canvases added in that drain.
   // Sprites are an optimization: any failure is non-fatal — Allmaps fetches full-res tiles directly.
-  let spriteBatchCounter = 0;
   let warnedSpritesUnavailable = false;
   async function uploadSpritesForCanvases(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
     if (canvases.length === 0) return;
@@ -172,6 +197,63 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
       return;
     }
 
+    // Sequential (viewport-driven) mode only ever needs one canvas's sprite at a time — reuse the
+    // per-canvas file each build now writes alongside the shared sheet (see IiifSprite.file)
+    // instead of re-decoding/re-uploading the whole shared sheet on every drain batch (that decode
+    // was the heavy step: `addSprites` treats its imageUrl as a single tile, so the *entire* sheet
+    // gets fetched and rasterized just to crop out a handful of sprites). Eager mode still wants
+    // the shared sheet: it uploads every canvas at once, so one decode amortizes across all of them.
+    if (context.allmapsOptions.loadingMode === 'sequential') {
+      await uploadSpritesFromPerCanvasFiles(canvases);
+    } else {
+      await uploadSpritesFromAtlas(canvases);
+    }
+  }
+
+  async function uploadSpritesFromPerCanvasFiles(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
+    const index = await getSpriteIndex();
+    if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return;
+    if (index.size === 0) {
+      if (!warnedSpritesUnavailable) {
+        warnedSpritesUnavailable = true;
+        console.warn(`[allmaps ${layerId}] sprite index failed to load (${spritesIndexPath})`);
+      }
+      return;
+    }
+
+    const needsAtlasFallback: NormalizedGeomapsCanvas[] = [];
+    const uploads: Promise<void>[] = [];
+    for (const canvas of canvases) {
+      const sprite = index.get(canvas.imageServiceUrl);
+      if (!sprite) continue;
+      if (!sprite.file) {
+        // Older build without per-canvas sprite files — fall back to the shared sheet for this one.
+        needsAtlasFallback.push(canvas);
+        continue;
+      }
+      const fileUrl = joinUrl(context.datasetBaseUrl, sprite.file);
+      // The per-canvas file is already cropped to just this sprite, so it occupies the whole image.
+      const singleSprite: IiifSprite = { ...sprite, x: 0, y: 0 };
+      uploads.push(
+        layer.addSprites([singleSprite], fileUrl, [sprite.width, sprite.height]).then(
+          () => undefined,
+          (error) => console.warn(`[allmaps ${layerId}] addSprites failed for canvas ${canvas.imageId}`, error)
+        )
+      );
+    }
+
+    if (uploads.length > 0) {
+      console.info(`[allmaps ${layerId}] addSprites (per-canvas files): ${uploads.length} canvases`);
+      await Promise.all(uploads);
+      // Each canvas's sprite crop has been handed to the main tile cache by the time addSprites
+      // resolves, so the decoded source copy in spritesTileCache is dead weight — see the same
+      // note on uploadSpritesFromAtlas.
+      layer.renderer?.spritesTileCache.clear();
+    }
+    if (needsAtlasFallback.length > 0) await uploadSpritesFromAtlas(needsAtlasFallback);
+  }
+
+  async function uploadSpritesFromAtlas(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
     const atlas = await getSpriteAtlas();
     if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return;
     if (!atlas) {
@@ -192,6 +274,9 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
       `[allmaps ${layerId}] addSprites batch ${spriteBatchCounter}: ${sprites.length} sprites (${canvases.length} canvases, atlas ${atlas.imageSize[0]}×${atlas.imageSize[1]})`
     );
     try {
+      // The atlas URL gets a unique fragment per batch because the sprites tile cache dedupes by
+      // tile URL and would ignore repeat calls; fragments are stripped from the HTTP request, so
+      // the image bytes still come from browser cache.
       await layer.addSprites(sprites, `${atlas.imageUrl}#batch-${spriteBatchCounter}`, atlas.imageSize);
     } catch (error) {
       console.warn(`[allmaps ${layerId}] addSprites failed for batch of ${sprites.length}`, error);
@@ -241,6 +326,10 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
           pendingQueue.sort((a, b) => squaredDistance(a.geoCenter, center) - squaredDistance(b.geoCenter, center));
         }
         const chunk = pendingQueue.splice(0, RECONCILE_CHUNK);
+        for (const canvas of chunk) {
+          queuedCanvasIds.delete(canvas.imageId);
+          addingCanvasIds.add(canvas.imageId);
+        }
         const results = await Promise.allSettled(
           chunk.map((canvas) =>
             layer.addGeoreferencedMap(canvas.georeferencedMap, {
@@ -250,13 +339,32 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
           )
         );
         const addedMapIds: string[] = [];
+        const evictionBounds = paddedViewportBounds(ALLMAPS_EVICTION_VIEWPORT_MARGIN);
         for (const [index, result] of results.entries()) {
+          const canvas = chunk[index];
+          addingCanvasIds.delete(canvas.imageId);
           if (result.status === 'fulfilled') {
-            addedThisDrain.push(chunk[index]);
-            addedMapIds.push(result.value);
+            // The camera may have moved while triangulation was in flight. Destroy a map that is
+            // already outside the wider retention bounds instead of briefly making it resident
+            // and uploading its sprite. Missing bboxes are deliberately never evicted.
+            if (evictionBounds && canvas.geoBbox && !bboxIntersects(canvas.geoBbox, evictionBounds)) {
+              try {
+                layer.removeGeoreferencedMapById(result.value);
+              } catch (error) {
+                // The add succeeded, so retain ownership if removal unexpectedly fails. Losing
+                // this ID would leave an Allmaps map that the reconciler can never remove.
+                residentMapIdsByCanvasId.set(canvas.imageId, result.value);
+                console.warn(`[allmaps ${layerId}] immediate removeGeoreferencedMapById failed for canvas ${canvas.imageId}`, error);
+              }
+            } else {
+              residentMapIdsByCanvasId.set(canvas.imageId, result.value);
+              addedThisDrain.push(canvas);
+              addedMapIds.push(result.value);
+            }
           } else {
             // skip this canvas — its georeferencing data is likely malformed
-            console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${chunk[index].imageId}`, result.reason);
+            failedCanvasIds.add(canvas.imageId);
+            console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${canvas.imageId}`, result.reason);
           }
         }
         if (context.allmapsOptions.showHighStretch && addedMapIds.length > 0) {
@@ -267,22 +375,64 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
         layer.nativeUpdate();
         if (pendingQueue.length > 0) await nextFrame();
       }
-      await uploadSpritesForCanvases(addedThisDrain);
+      // A moveend can evict maps while another chunk is being triangulated. Only upload sprites
+      // for maps that still exist when this drain finishes.
+      await uploadSpritesForCanvases(addedThisDrain.filter((canvas) => residentMapIdsByCanvasId.has(canvas.imageId)));
     } finally {
       draining = false;
+      // A moveend may enqueue work while this drain is awaiting sprite decoding/upload. Its
+      // drainQueue call sees `draining` and returns, so explicitly hand off after lowering the
+      // guard or those canvases remain queued forever.
+      if (pendingQueue.length > 0 && isCurrentIiifRender(context.paneId, target.sublayer.id, token)) {
+        void drainQueue();
+      }
     }
   }
 
   function reconcileViewport(): void {
     if (context.map.getZoom() < ALLMAPS_TRIGGER_ZOOM) return;
     const loadBounds = paddedViewportBounds(ALLMAPS_VIEWPORT_MARGIN);
-    if (!loadBounds) return;
+    const evictionBounds = paddedViewportBounds(ALLMAPS_EVICTION_VIEWPORT_MARGIN);
+    if (!loadBounds || !evictionBounds) return;
+
+    // Cancel queued work that has become irrelevant after a large/rapid pan. Work already inside
+    // addGeoreferencedMap cannot be cancelled, so drainQueue checks the current eviction bounds
+    // again as soon as that call resolves.
+    for (let index = pendingQueue.length - 1; index >= 0; index -= 1) {
+      const canvas = pendingQueue[index];
+      if (canvas.geoBbox && !bboxIntersects(canvas.geoBbox, evictionBounds)) {
+        pendingQueue.splice(index, 1);
+        queuedCanvasIds.delete(canvas.imageId);
+      }
+    }
+
+    // removeGeoreferencedMapById reaches WebGL2WarpedMap.destroy(), releasing the map's texture
+    // arrays and VAOs and cancelling its throttled texture work. Allmaps' shared tile cache may
+    // retain reusable tile entries until its normal pruning runs; missing bboxes stay resident
+    // because there is no safe spatial eviction decision for them.
+    for (const canvas of geomaps.canvases) {
+      const mapId = residentMapIdsByCanvasId.get(canvas.imageId);
+      if (!mapId || !canvas.geoBbox || bboxIntersects(canvas.geoBbox, evictionBounds)) continue;
+      try {
+        layer.removeGeoreferencedMapById(mapId);
+        residentMapIdsByCanvasId.delete(canvas.imageId);
+      } catch (error) {
+        console.warn(`[allmaps ${layerId}] removeGeoreferencedMapById failed for canvas ${canvas.imageId}`, error);
+      }
+    }
 
     let queued = false;
     for (const canvas of geomaps.canvases) {
-      if (loadedCanvasIds.has(canvas.imageId)) continue;
+      if (
+        residentMapIdsByCanvasId.has(canvas.imageId) ||
+        queuedCanvasIds.has(canvas.imageId) ||
+        addingCanvasIds.has(canvas.imageId) ||
+        failedCanvasIds.has(canvas.imageId)
+      ) {
+        continue;
+      }
       if (!canvas.geoBbox || bboxIntersects(canvas.geoBbox, loadBounds)) {
-        loadedCanvasIds.add(canvas.imageId);
+        queuedCanvasIds.add(canvas.imageId);
         pendingQueue.push(canvas);
         queued = true;
       }
@@ -292,7 +442,6 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
 
   async function loadAllEagerly(): Promise<void> {
     const eagerStartedAt = performance.now();
-    for (const canvas of geomaps.canvases) loadedCanvasIds.add(canvas.imageId);
     const results = await Promise.allSettled(
       geomaps.canvases.map((canvas) =>
         layer.addGeoreferencedMap(canvas.georeferencedMap, {
@@ -308,9 +457,12 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     const addedMapIds: string[] = [];
     for (const [index, result] of results.entries()) {
       if (result.status === 'fulfilled') {
-        addedCanvases.push(geomaps.canvases[index]);
+        const canvas = geomaps.canvases[index];
+        residentMapIdsByCanvasId.set(canvas.imageId, result.value);
+        addedCanvases.push(canvas);
         addedMapIds.push(result.value);
       } else {
+        failedCanvasIds.add(geomaps.canvases[index].imageId);
         console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${geomaps.canvases[index].imageId}`, result.reason);
       }
     }

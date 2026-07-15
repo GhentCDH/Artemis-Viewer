@@ -12,9 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Must track the pnpm major used locally: pnpm 11 writes the patchedDependencies hash
+      # (@allmaps/render patch) in a format pnpm 10 rejects with LOCKFILE_CONFIG_MISMATCH.
       - uses: pnpm/action-setup@v6
         with:
-          version: 10
+          version: 11
 
       - uses: actions/setup-node@v6
         with:

@@ -1,8 +1,10 @@
 import type maplibregl from 'maplibre-gl';
 import type { LngLatBoundsLike, StyleSpecification } from 'maplibre-gl';
-import { removeGeoJsonLayers, renderGeoJsonLayers } from '$lib/core/renderers/geoJsonRenderer';
+import { geoJsonLayerIds, removeGeoJsonLayers, renderGeoJsonLayers } from '$lib/core/renderers/geoJsonRenderer';
 import { removeRasterLayer, renderRasterLayer } from '$lib/core/renderers/rasterRenderer';
-import { readThemeColor } from './mapColors';
+import { isIiifLayerRole } from '$lib/core/renderers/iiif/iiifLayerRuntime';
+import { readThemeColor, readThemeNumber } from './mapColors';
+import { DEFAULT_MAPLIBRE_PAN_BOUNDS } from './mapBounds';
 
 // Published extent of the current baselayer.pmtiles (Scheldt corridor, Ghent–Antwerp).
 export const BASELAYER_BOUNDS: LngLatBoundsLike = [
@@ -15,6 +17,24 @@ export interface BasemapOption {
   label: string;
   kind: 'artemis' | 'raster' | 'wfs';
   url: string | null;
+}
+
+export interface OverlayOption {
+  id: string;
+  label: string;
+  kind: 'raster' | 'wfs';
+  url: string;
+  query?: OverlayQueryCapability;
+}
+
+export type OverlayQueryCapability =
+  | { status: 'supported'; strategy: 'vector'; error?: string }
+  | { status: 'supported'; strategy: 'wms-get-feature-info'; infoFormat: string; error?: string }
+  | { status: 'unsupported' | 'unavailable' | 'error'; reason: string };
+
+export interface OverlayFeatureInfo {
+  title: string;
+  properties: Record<string, unknown>;
 }
 
 export const ARTEMIS_BASEMAP: BasemapOption = {
@@ -35,16 +55,21 @@ export const BUILT_IN_BASEMAPS = [ARTEMIS_BASEMAP, OPENSTREETMAP_BASEMAP] as con
 
 const OSM_SOURCE_ID = 'background-openstreetmap';
 const OSM_LAYER_ID = 'background-openstreetmap';
+
 const CUSTOM_SOURCE_ID = 'background-custom';
 const CUSTOM_RASTER_LAYER_ID = 'background-custom-raster';
 const CUSTOM_GEOJSON_LAYER_PREFIX = 'background-custom';
+const OVERLAY_SOURCE_ID = 'overlay-custom';
+const OVERLAY_RASTER_LAYER_ID = 'overlay-custom-raster';
+const OVERLAY_GEOJSON_LAYER_PREFIX = 'overlay-custom';
+// Matches the base fill-opacity geoJsonRenderer assigns, so an overlay opacity
+// of 1 renders a GeoJSON overlay exactly like a GeoJSON basemap.
+const OVERLAY_GEOJSON_FILL_OPACITY = 0.24;
 
-const GRID_BOUNDS = {
-  west: 1.5,
-  south: 50.4,
-  east: 7,
-  north: 51.8,
-};
+export function customOverlayLayerIds(): string[] {
+  return [OVERLAY_RASTER_LAYER_ID, ...geoJsonLayerIds(OVERLAY_GEOJSON_LAYER_PREFIX)];
+}
+
 const GRID_STEP_LONGITUDE_DEGREES = 0.005;
 const GRID_STEP_MERCATOR = GRID_STEP_LONGITUDE_DEGREES / 360;
 
@@ -65,12 +90,14 @@ function mercatorYToLatitude(y: number): number {
   return (Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180) / Math.PI;
 }
 
-function createGrid(): GeoJSON.FeatureCollection<GeoJSON.LineString, { scale: GridScale }> {
+function createGrid(
+  [[west, south], [east, north]]: [[number, number], [number, number]]
+): GeoJSON.FeatureCollection<GeoJSON.LineString, { scale: GridScale }> {
   const features: Array<GeoJSON.Feature<GeoJSON.LineString, { scale: GridScale }>> = [];
-  const firstLongitude = Math.ceil(GRID_BOUNDS.west / GRID_STEP_LONGITUDE_DEGREES);
-  const lastLongitude = Math.floor(GRID_BOUNDS.east / GRID_STEP_LONGITUDE_DEGREES);
-  const firstMercatorY = Math.ceil(latitudeToMercatorY(GRID_BOUNDS.north) / GRID_STEP_MERCATOR);
-  const lastMercatorY = Math.floor(latitudeToMercatorY(GRID_BOUNDS.south) / GRID_STEP_MERCATOR);
+  const firstLongitude = Math.ceil(west / GRID_STEP_LONGITUDE_DEGREES);
+  const lastLongitude = Math.floor(east / GRID_STEP_LONGITUDE_DEGREES);
+  const firstMercatorY = Math.ceil(latitudeToMercatorY(north) / GRID_STEP_MERCATOR);
+  const lastMercatorY = Math.floor(latitudeToMercatorY(south) / GRID_STEP_MERCATOR);
 
   for (let index = firstLongitude; index <= lastLongitude; index += 1) {
     const longitude = index * GRID_STEP_LONGITUDE_DEGREES;
@@ -80,8 +107,8 @@ function createGrid(): GeoJSON.FeatureCollection<GeoJSON.LineString, { scale: Gr
       geometry: {
         type: 'LineString',
         coordinates: [
-          [longitude, GRID_BOUNDS.south],
-          [longitude, GRID_BOUNDS.north],
+          [longitude, south],
+          [longitude, north],
         ],
       },
     });
@@ -95,8 +122,8 @@ function createGrid(): GeoJSON.FeatureCollection<GeoJSON.LineString, { scale: Gr
       geometry: {
         type: 'LineString',
         coordinates: [
-          [GRID_BOUNDS.west, latitude],
-          [GRID_BOUNDS.east, latitude],
+          [west, latitude],
+          [east, latitude],
         ],
       },
     });
@@ -105,7 +132,10 @@ function createGrid(): GeoJSON.FeatureCollection<GeoJSON.LineString, { scale: Gr
   return { type: 'FeatureCollection', features };
 }
 
-export function createBaselayerStyle(pmtilesUrl: string): StyleSpecification {
+export function createBaselayerStyle(
+  pmtilesUrl: string,
+  gridBounds: [[number, number], [number, number]] = DEFAULT_MAPLIBRE_PAN_BOUNDS
+): StyleSpecification {
   return {
     version: 8,
     name: 'baselayer',
@@ -116,7 +146,7 @@ export function createBaselayerStyle(pmtilesUrl: string): StyleSpecification {
       },
       'background-grid': {
         type: 'geojson',
-        data: createGrid(),
+        data: createGrid(gridBounds),
       },
       [OSM_SOURCE_ID]: {
         type: 'raster',
@@ -138,6 +168,16 @@ export function createBaselayerStyle(pmtilesUrl: string): StyleSpecification {
         type: 'raster',
         source: OSM_SOURCE_ID,
         layout: { visibility: 'none' },
+      },
+      {
+        id: 'baselayer-border',
+        type: 'fill',
+        source: 'baselayer',
+        'source-layer': 'border',
+        paint: {
+          'fill-color': readThemeColor('--color-map-border', '#e6dfcf'),
+          'fill-opacity': readThemeNumber('--opacity-map-border', 0.45),
+        },
       },
       {
         id: 'background-grid-major',
@@ -178,9 +218,10 @@ export function createBaselayerStyle(pmtilesUrl: string): StyleSpecification {
         id: 'baselayer-water',
         type: 'fill',
         source: 'baselayer',
-        'source-layer': 'baselayer',
+        'source-layer': 'water',
         paint: {
           'fill-color': readThemeColor('--color-map-water', '#607d91'),
+          'fill-opacity': 1,
         },
       },
     ],
@@ -210,6 +251,7 @@ export function applyBasemap(map: maplibregl.Map, basemap: BasemapOption): void 
   setLayerVisibility(map, 'background-grid-major', isArtemis);
   setLayerVisibility(map, 'background-grid-minor', isArtemis);
   setLayerVisibility(map, 'background-grid-micro', isArtemis);
+  setLayerVisibility(map, 'baselayer-border', isArtemis);
   setLayerVisibility(map, 'baselayer-water', isArtemis);
 
   if (!isArtemis && !isOpenStreetMap && basemap.url && basemap.kind === 'raster') {
@@ -232,4 +274,88 @@ export function applyBasemap(map: maplibregl.Map, basemap: BasemapOption): void 
       pointColor: readThemeColor('--color-map-water', '#607d91'),
     });
   }
+}
+
+const appliedOverlayKeyByMap = new WeakMap<maplibregl.Map, string>();
+
+function setOverlayOpacity(map: maplibregl.Map, opacity: number): void {
+  const safeOpacity = Math.min(1, Math.max(0, opacity));
+  if (map.getLayer(OVERLAY_RASTER_LAYER_ID)) {
+    map.setPaintProperty(OVERLAY_RASTER_LAYER_ID, 'raster-opacity', safeOpacity);
+  }
+  const [fillLayerId, lineLayerId, pointLayerId] = geoJsonLayerIds(OVERLAY_GEOJSON_LAYER_PREFIX);
+  if (map.getLayer(fillLayerId)) {
+    map.setPaintProperty(fillLayerId, 'fill-opacity', OVERLAY_GEOJSON_FILL_OPACITY * safeOpacity);
+  }
+  if (map.getLayer(lineLayerId)) map.setPaintProperty(lineLayerId, 'line-opacity', safeOpacity);
+  if (map.getLayer(pointLayerId)) map.setPaintProperty(pointLayerId, 'circle-opacity', safeOpacity);
+}
+
+function removeOverlay(map: maplibregl.Map): void {
+  if (map.getLayer(OVERLAY_RASTER_LAYER_ID)) {
+    removeRasterLayer(map, OVERLAY_SOURCE_ID, OVERLAY_RASTER_LAYER_ID);
+  } else if (map.getSource(OVERLAY_SOURCE_ID)) {
+    removeGeoJsonLayers(map, OVERLAY_SOURCE_ID, OVERLAY_GEOJSON_LAYER_PREFIX);
+  }
+  appliedOverlayKeyByMap.delete(map);
+}
+
+function moveOverlayToTop(map: maplibregl.Map): void {
+  const layerIds = map.getLayer(OVERLAY_RASTER_LAYER_ID)
+    ? [OVERLAY_RASTER_LAYER_ID]
+    : geoJsonLayerIds(OVERLAY_GEOJSON_LAYER_PREFIX);
+  const existingLayerIds = layerIds.filter((layerId) => map.getLayer(layerId));
+  const styleLayers = map.getStyle()?.layers ?? [];
+  const lastOverlayIndex = Math.max(...existingLayerIds.map((layerId) =>
+    styleLayers.findIndex((layer) => layer.id === layerId)
+  ));
+  const allowedAboveOverlay = (layerId: string) =>
+    layerId === 'artemis-image-collection-pins' || isIiifLayerRole(layerId, 'mask-outline');
+  const obstructingLayer = styleLayers
+    .slice(lastOverlayIndex + 1)
+    .find((layer) => !allowedAboveOverlay(layer.id));
+  if (!obstructingLayer) return;
+
+  const firstInteractionLayer = styleLayers.find((layer) => allowedAboveOverlay(layer.id));
+  for (const layerId of existingLayerIds) map.moveLayer(layerId, firstInteractionLayer?.id);
+}
+
+export function applyOverlay(map: maplibregl.Map, overlay: OverlayOption | null, opacity: number): void {
+  // Same readiness gate as applyBasemap: editable once the base style is registered.
+  if (!map.getLayer('background')) return;
+
+  const overlayKey = overlay?.url ? `${overlay.kind}:${overlay.url}` : null;
+  const appliedKey = appliedOverlayKeyByMap.get(map) ?? null;
+
+  if (appliedKey !== null && appliedKey !== overlayKey) {
+    removeOverlay(map);
+  }
+
+  if (!overlay || overlayKey === null) {
+    if (map.getSource(OVERLAY_SOURCE_ID)) removeOverlay(map);
+    return;
+  }
+
+  if (appliedOverlayKeyByMap.get(map) !== overlayKey || !map.getSource(OVERLAY_SOURCE_ID)) {
+    if (overlay.kind === 'raster') {
+      renderRasterLayer(map, {
+        sourceId: OVERLAY_SOURCE_ID,
+        layerId: OVERLAY_RASTER_LAYER_ID,
+        tileUrl: overlay.url,
+      });
+    } else {
+      renderGeoJsonLayers(map, {
+        sourceId: OVERLAY_SOURCE_ID,
+        layerIdPrefix: OVERLAY_GEOJSON_LAYER_PREFIX,
+        dataUrl: overlay.url,
+        fillColor: readThemeColor('--color-accent', '#3f789f'),
+        lineColor: readThemeColor('--color-accent', '#3f789f'),
+        pointColor: readThemeColor('--color-accent', '#3f789f'),
+      });
+    }
+    appliedOverlayKeyByMap.set(map, overlayKey);
+  }
+
+  setOverlayOpacity(map, opacity);
+  moveOverlayToTop(map);
 }

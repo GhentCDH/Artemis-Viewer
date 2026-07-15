@@ -5,8 +5,14 @@
   import { loadLayerRegistry, type LayerSummary } from '$lib/core/dataset/layerRegistry';
   import { loadSiteMetadata, type SiteMetadata } from '$lib/core/dataset/siteMetadata';
   import { syncPaneCameras } from '$lib/core/map/paneSync';
-  import { ARTEMIS_BASEMAP, type BasemapOption } from '$lib/core/map/basemap';
+  import {
+    ARTEMIS_BASEMAP,
+    type BasemapOption,
+    type OverlayFeatureInfo,
+    type OverlayOption,
+  } from '$lib/core/map/basemap';
   import BasemapMenu from '$lib/features/basemap/BasemapMenu.svelte';
+  import OverlayFeatureBubble from '$lib/features/basemap/OverlayFeatureBubble.svelte';
   import Timeline from '$lib/features/timeline/Timeline.svelte';
   import PaneSublayerMenu from '$lib/features/timeline/PaneSublayerMenu.svelte';
   import {
@@ -75,6 +81,13 @@
   let isCapturingScreenshot = $state(false);
   let isMobile = $state(false);
   let selectedBasemap = $state<BasemapOption>(ARTEMIS_BASEMAP);
+  let selectedOverlay = $state<OverlayOption | null>(null);
+  let overlayOpacity = $state(0.6);
+  let overlayFeature = $state<{
+    map: maplibregl.Map;
+    lngLat: [number, number];
+    info: OverlayFeatureInfo;
+  } | null>(null);
   const pmtilesUrl = datasetUrl('baselayer.pmtiles', selectedDatasetBaseUrl);
   const isCompare = $derived(timelineSelection.mode === 'compare');
   const leftMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.leftLayerId) ?? null);
@@ -148,6 +161,25 @@
   function showControlTooltip(text: string, event: MouseEvent | FocusEvent): void {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     showTooltip({ text, x: rect.left + rect.width / 2, y: rect.top, placement: 'above' });
+  }
+
+  function handleOverlayFeature(result: {
+    map: maplibregl.Map;
+    lngLat: [number, number];
+    info: OverlayFeatureInfo | null;
+  }): void {
+    overlayFeature = result.info ? { ...result, info: result.info } : null;
+    if (selectedOverlay?.query?.status === 'supported' && selectedOverlay.query.error) {
+      const { error: _error, ...query } = selectedOverlay.query;
+      selectedOverlay = { ...selectedOverlay, query };
+    }
+  }
+
+  function handleOverlayQueryError(reason: string): void {
+    overlayFeature = null;
+    if (selectedOverlay?.query?.status === 'supported') {
+      selectedOverlay = { ...selectedOverlay, query: { ...selectedOverlay.query, error: reason } };
+    }
   }
 
   // Hard camera lock only makes sense with both panes on screen; dropping either
@@ -238,6 +270,9 @@
       paneId="left"
       {pmtilesUrl}
       basemap={selectedBasemap}
+      overlay={selectedOverlay}
+      {overlayOpacity}
+      overlayFeatureOpen={overlayFeature !== null}
       datasetBaseUrl={selectedDatasetBaseUrl}
       allmapsOptions={developerSettings.allmapsOptions}
       allmapsRenderRevision={developerSettings.renderRevision}
@@ -247,6 +282,8 @@
       initialCamera={cameraFromMap(rightMap) ?? initialMapCamera}
       onMapReady={(map) => (leftMap = map)}
       onIiifMaskSelect={(hit) => openIiifDocument('left', hit)}
+      onOverlayFeature={handleOverlayFeature}
+      onOverlayQueryError={handleOverlayQueryError}
     />
     {:else}
       {@render documentViewer(openDocument)}
@@ -257,6 +294,9 @@
         paneId="right"
         {pmtilesUrl}
         basemap={selectedBasemap}
+        overlay={selectedOverlay}
+        {overlayOpacity}
+        overlayFeatureOpen={overlayFeature !== null}
         datasetBaseUrl={selectedDatasetBaseUrl}
         allmapsOptions={developerSettings.allmapsOptions}
         allmapsRenderRevision={developerSettings.renderRevision}
@@ -266,6 +306,8 @@
         initialCamera={cameraFromMap(leftMap) ?? initialMapCamera}
         onMapReady={(map) => (rightMap = map)}
         onIiifMaskSelect={(hit) => openIiifDocument('right', hit)}
+        onOverlayFeature={handleOverlayFeature}
+        onOverlayQueryError={handleOverlayQueryError}
       />
       {:else}
         {@render documentViewer(openDocument)}
@@ -308,7 +350,14 @@
       <div class="bottom-right-controls">
         <ZoomIndicator map={leftMap ?? rightMap} />
         <ScaleIndicator map={leftMap ?? rightMap} />
-        <BasemapMenu selected={selectedBasemap} onselect={(basemap) => { selectedBasemap = basemap; }} />
+        <BasemapMenu
+          selected={selectedBasemap}
+          onselect={(basemap) => { selectedBasemap = basemap; }}
+          selectedOverlay={selectedOverlay}
+          onOverlaySelect={(overlay) => { selectedOverlay = overlay; overlayFeature = null; }}
+          {overlayOpacity}
+          onOverlayOpacityChange={(opacity) => { overlayOpacity = opacity; }}
+        />
         <div class="screenshot-control">
           <Button
             iconOnly
@@ -354,6 +403,14 @@
   </div>
 
   <Tooltip />
+  {#if overlayFeature}
+    <OverlayFeatureBubble
+      map={overlayFeature.map}
+      lngLat={overlayFeature.lngLat}
+      info={overlayFeature.info}
+      onclose={() => { overlayFeature = null; }}
+    />
+  {/if}
 </main>
 
 <style>

@@ -71,6 +71,8 @@
   --color-map-background: var(--palette-cream-50);
   --color-map-grid: var(--palette-gray-500);
   --color-map-water: var(--palette-slate-500);
+  --color-map-border: var(--palette-gray-500);
+  --opacity-map-border: .2;
 
   --color-timeline-axis: var(--palette-slate-450);
   --color-timeline-active: var(--palette-blue-675);

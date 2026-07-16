@@ -327,7 +327,7 @@
   <div class="overlay-layer">
     <div class="window-slot branding-slot">
       <div class="branding-slot-inner">
-        <BrandingPanel resolveDatasetUrl={(path) => datasetUrl(path, selectedDatasetBaseUrl)} style="--branding-scale: 1.6;" />
+        <BrandingPanel style="--branding-scale: 1.6;" />
       </div>
     </div>
 

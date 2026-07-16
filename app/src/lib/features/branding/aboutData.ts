@@ -2,6 +2,7 @@
 // links. The translatable prose lives in the i18n dictionaries; team roles are
 // dictionary keys so the roster is maintained in exactly one place.
 import type { TeamRole } from '$lib/shared/i18n/i18n.svelte';
+import { base } from '$app/paths';
 
 export const SITE_TITLE = 'Schelde Gemapt';
 
@@ -85,18 +86,18 @@ export const TEAM: TeamInstitution[] = [
 export interface PartnerLogo {
   name: string;
   alt: string;
-  /** Dataset-relative path — the logo images live in the data repo, next to the tiles. */
+  /** App-owned static asset path. */
   src: string;
   href: string;
 }
 
 export const PARTNER_LOGOS: PartnerLogo[] = [
-  { name: 'Universiteit Antwerpen', alt: 'Logo Universiteit Antwerpen', src: 'attribution-logos/Logo_UAntw.jpg', href: 'https://www.uantwerpen.be' },
-  { name: 'KBR', alt: 'Logo KBR', src: 'attribution-logos/logo_KRB.png', href: 'https://www.kbr.be' },
-  { name: 'Nationaal Geografisch Instituut', alt: 'Logo Nationaal Geografisch Instituut', src: 'attribution-logos/logo_NGI.png', href: 'https://www.ngi.be' },
-  { name: 'Rijksarchief', alt: 'Logo Rijksarchief', src: 'attribution-logos/logo_Rijksarchief.png', href: 'https://www.arch.be' },
-  { name: 'Universiteit Gent', alt: 'Logo Universiteit Gent', src: 'attribution-logos/logo_Ugent.png', href: 'https://www.ugent.be' },
-  { name: 'FWO', alt: 'Logo FWO', src: 'attribution-logos/logo_fwo.png', href: 'https://www.fwo.be' },
+  { name: 'Universiteit Antwerpen', alt: 'Logo Universiteit Antwerpen', src: `${base}/attribution-logos/Logo_UAntw.jpg`, href: 'https://www.uantwerpen.be' },
+  { name: 'KBR', alt: 'Logo KBR', src: `${base}/attribution-logos/logo_KRB.png`, href: 'https://www.kbr.be' },
+  { name: 'Nationaal Geografisch Instituut', alt: 'Logo Nationaal Geografisch Instituut', src: `${base}/attribution-logos/logo_NGI.png`, href: 'https://www.ngi.be' },
+  { name: 'Rijksarchief', alt: 'Logo Rijksarchief', src: `${base}/attribution-logos/logo_Rijksarchief.png`, href: 'https://www.arch.be' },
+  { name: 'Universiteit Gent', alt: 'Logo Universiteit Gent', src: `${base}/attribution-logos/logo_Ugent.png`, href: 'https://www.ugent.be' },
+  { name: 'FWO', alt: 'Logo FWO', src: `${base}/attribution-logos/logo_fwo.png`, href: 'https://www.fwo.be' },
 ];
 
 export const PIPELINE_URL = 'https://github.com/GhentCDH/Artemis-Data';

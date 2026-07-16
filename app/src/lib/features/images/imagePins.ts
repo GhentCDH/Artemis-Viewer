@@ -29,9 +29,17 @@ const LEGACY_ICON_IDS = [
 interface ImagePinState {
   images: ImageResult[];
   visible: boolean;
+  /** Bumped only when `images` is a new array — the signal that the source data must be resent. */
+  revision: number;
 }
 
 const stateByMap = new WeakMap<maplibregl.Map, ImagePinState>();
+// restoreImagePins runs on every styledata/idle reconcile pass; `setData` has no
+// unchanged-data short-circuit in MapLibre (every call is a worker round-trip, a recluster,
+// and a repaint — which re-fires `idle` and made the reconcile cycle self-sustaining), so the
+// applied revision per map is what keeps the steady state mutation-free.
+const appliedRevisionByMap = new WeakMap<maplibregl.Map, number>();
+const legacyIconsPurgedMaps = new WeakSet<maplibregl.Map>();
 
 /** MapLibre pixels do not inherit rem sizing; use a slightly steeper version of the root scale. */
 function responsivePinScale(): number {
@@ -117,7 +125,9 @@ function featureCollection(images: ImageResult[]): GeoJSON.FeatureCollection<Geo
 }
 
 export function syncImagePins(map: maplibregl.Map, images: ImageResult[], visible: boolean): void {
-  stateByMap.set(map, { images, visible });
+  const previous = stateByMap.get(map);
+  const revision = previous && previous.images === images ? previous.revision : (previous?.revision ?? 0) + 1;
+  stateByMap.set(map, { images, visible, revision });
   restoreImagePins(map);
 }
 
@@ -138,18 +148,21 @@ export function restoreImagePins(map: maplibregl.Map): void {
     }
   }
 
-  const data = featureCollection(state.images);
   const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (source) {
-    source.setData(data);
+    if (appliedRevisionByMap.get(map) !== state.revision) {
+      source.setData(featureCollection(state.images));
+      appliedRevisionByMap.set(map, state.revision);
+    }
   } else {
     map.addSource(SOURCE_ID, {
       type: 'geojson',
-      data,
+      data: featureCollection(state.images),
       cluster: true,
       clusterMaxZoom: 14,
       clusterRadius: 28,
     });
+    appliedRevisionByMap.set(map, state.revision);
   }
 
   if (!map.getLayer(CLUSTER_LAYER_ID)) {
@@ -194,8 +207,11 @@ export function restoreImagePins(map: maplibregl.Map): void {
     }
   }
 
-  for (const legacyIconId of LEGACY_ICON_IDS) {
-    if (map.hasImage(legacyIconId)) map.removeImage(legacyIconId);
+  if (!legacyIconsPurgedMaps.has(map)) {
+    legacyIconsPurgedMaps.add(map);
+    for (const legacyIconId of LEGACY_ICON_IDS) {
+      if (map.hasImage(legacyIconId)) map.removeImage(legacyIconId);
+    }
   }
 
   syncResponsivePinScale(map);
@@ -315,6 +331,7 @@ export function attachImagePinInteraction(
 export function removeImagePins(map: maplibregl.Map): void {
   const imageCount = stateByMap.get(map)?.images.length ?? 0;
   stateByMap.delete(map);
+  appliedRevisionByMap.delete(map);
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getLayer(CLUSTER_LAYER_ID)) map.removeLayer(CLUSTER_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);

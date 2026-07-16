@@ -279,9 +279,16 @@ export function applyBasemap(map: maplibregl.Map, basemap: BasemapOption): void 
 }
 
 const appliedOverlayKeyByMap = new WeakMap<maplibregl.Map, string>();
+// applyOverlay runs on every reconcile pass (styledata/idle). Map.setPaintProperty schedules a
+// repaint even when the value is unchanged, which kept re-firing `idle` and made the reconcile
+// cycle self-sustaining — so remember what was applied and skip the steady-state calls. Cleared
+// in removeOverlay, since freshly created overlay layers start from their renderer defaults.
+const appliedOverlayOpacityByMap = new WeakMap<maplibregl.Map, number>();
 
 function setOverlayOpacity(map: maplibregl.Map, opacity: number): void {
   const safeOpacity = Math.min(1, Math.max(0, opacity));
+  if (appliedOverlayOpacityByMap.get(map) === safeOpacity) return;
+  appliedOverlayOpacityByMap.set(map, safeOpacity);
   if (map.getLayer(OVERLAY_RASTER_LAYER_ID)) {
     map.setPaintProperty(OVERLAY_RASTER_LAYER_ID, 'raster-opacity', safeOpacity);
   }
@@ -300,6 +307,7 @@ function removeOverlay(map: maplibregl.Map): void {
     removeGeoJsonLayers(map, OVERLAY_SOURCE_ID, OVERLAY_GEOJSON_LAYER_PREFIX);
   }
   appliedOverlayKeyByMap.delete(map);
+  appliedOverlayOpacityByMap.delete(map);
 }
 
 function moveOverlayToTop(map: maplibregl.Map): void {

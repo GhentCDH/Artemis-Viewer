@@ -64,7 +64,9 @@ function metadataFields(manifest: any, manifestUrl: string): IiifMetadataField[]
   return fields;
 }
 
-export async function loadIiifViewerSource(manifestUrl: string, selectedImageId = ''): Promise<IiifViewerSource> {
+const sourceByManifest = new Map<string, Promise<IiifViewerSource>>();
+
+async function fetchIiifViewerSource(manifestUrl: string, selectedImageId: string): Promise<IiifViewerSource> {
   const response = await fetch(manifestUrl);
   if (!response.ok) throw new Error(`Manifest request failed (HTTP ${response.status})`);
   const manifest = await response.json();
@@ -85,4 +87,15 @@ export async function loadIiifViewerSource(manifestUrl: string, selectedImageId 
     imageServiceUrl: imageServiceUrl.replace(/\/$/, ''),
     metadata: metadataFields(manifest, manifestUrl),
   };
+}
+
+export function loadIiifViewerSource(manifestUrl: string, selectedImageId = ''): Promise<IiifViewerSource> {
+  const cacheKey = `${manifestUrl}\n${selectedImageId}`;
+  let pending = sourceByManifest.get(cacheKey);
+  if (!pending) {
+    pending = fetchIiifViewerSource(manifestUrl, selectedImageId);
+    pending.catch(() => sourceByManifest.delete(cacheKey));
+    sourceByManifest.set(cacheKey, pending);
+  }
+  return pending;
 }

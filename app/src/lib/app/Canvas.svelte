@@ -64,7 +64,7 @@
     initialUrlState.viewerManifestUrl
       ? {
           manifestUrl: initialUrlState.viewerManifestUrl,
-          imageId: '',
+          imageId: initialUrlState.viewerImageId ?? '',
           pane: initialUrlState.viewerPane ?? 'right',
         }
       : null
@@ -110,6 +110,7 @@
       rightMainId: timelineSelection.rightLayerId ?? undefined,
       viewMode: timelineSelection.mode === 'compare' ? 'split' : undefined,
       viewerManifestUrl: openDocument?.manifestUrl,
+      viewerImageId: openDocument?.imageId,
       viewerPane: openDocument?.pane,
     };
   }
@@ -204,6 +205,7 @@
     timelineSelection.leftLayerId;
     timelineSelection.rightLayerId;
     openDocument?.manifestUrl;
+    openDocument?.imageId;
     openDocument?.pane;
     urlPersistence?.update();
   });
@@ -289,6 +291,7 @@
       initialCamera={cameraFromMap(rightMap) ?? initialMapCamera}
       onMapReady={(map) => (leftMap = map)}
       onIiifMaskSelect={(hit) => openIiifDocument('left', hit)}
+      activeIiifMask={openDocument}
       onOverlayFeature={handleOverlayFeature}
       onOverlayQueryError={handleOverlayQueryError}
     />
@@ -313,6 +316,7 @@
         initialCamera={cameraFromMap(leftMap) ?? initialMapCamera}
         onMapReady={(map) => (rightMap = map)}
         onIiifMaskSelect={(hit) => openIiifDocument('right', hit)}
+        activeIiifMask={openDocument}
         onOverlayFeature={handleOverlayFeature}
         onOverlayQueryError={handleOverlayQueryError}
       />
@@ -399,14 +403,13 @@
       </div>
     </div>
 
-    {#if !openDocument}
-      <div class="window-slot image-browser-slot">
-        <ImageBrowser
-          map={leftMap}
-          onOpenImage={(image) => openIiifDocument('left', { manifestUrl: image.manifestUrl, imageId: '' })}
-        />
-      </div>
-    {/if}
+    <div class="window-slot image-browser-slot">
+      <ImageBrowser
+        map={leftMap}
+        showControls={!openDocument}
+        onOpenImage={(image) => openIiifDocument('left', { manifestUrl: image.manifestUrl, imageId: '' })}
+      />
+    </div>
 
     <div class="window-slot sublayer-menu-slot sublayer-menu-slot--left" class:sublayer-menu-slot--split={isCompare}>
       <PaneSublayerMenu layer={leftMenuLayer} />
@@ -610,6 +613,12 @@
 
     .compare-toggle-text {
       display: none;
+    }
+  }
+
+  @media (max-width: 56rem) {
+    .canvas {
+      --canvas-timeline-height: 8.55rem;
     }
   }
 

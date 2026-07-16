@@ -208,7 +208,16 @@
   .iiif-viewer {
     /* -- exposed -- */
     --iiif-viewer-min-width: 0rem;
-    --iiif-viewer-header-height: 3rem;
+    --iiif-viewer-header-height: 4.8rem;
+    --iiif-viewer-header-padding-block: 0.8rem;
+    --iiif-viewer-header-padding-inline: 1.2rem;
+    --iiif-viewer-header-gap: 1.2rem;
+    --iiif-viewer-header-control-gap: 0.8rem;
+    --iiif-viewer-header-control-height: var(--canvas-primary-control-height);
+    --iiif-viewer-header-control-padding-inline: var(--space-3);
+    --iiif-viewer-header-control-font-size: var(--text-xs);
+    --iiif-viewer-header-icon-size: 1.5rem;
+    --iiif-viewer-header-title-font-size: var(--text-sm);
     --iiif-viewer-metadata-width: 20rem;
     /* -- end exposed -- */
 
@@ -227,16 +236,27 @@
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     min-height: var(--iiif-viewer-header-height);
-    padding: var(--space-2) var(--space-3);
-    gap: var(--space-3);
+    padding: var(--iiif-viewer-header-padding-block) var(--iiif-viewer-header-padding-inline);
+    gap: var(--iiif-viewer-header-gap);
     border-bottom: 1px solid var(--color-border);
+  }
+
+  :global(.iiif-viewer__header .button) {
+    --button-height: var(--iiif-viewer-header-control-height);
+    --button-padding-inline: var(--iiif-viewer-header-control-padding-inline);
+    --button-gap: var(--iiif-viewer-header-control-gap);
+    --button-font-size: var(--iiif-viewer-header-control-font-size);
+  }
+
+  :global(.iiif-viewer__header .button--icon-only) {
+    --button-flex-shrink: 0;
   }
 
   .iiif-viewer__header-left,
   .iiif-viewer__header-right {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--iiif-viewer-header-control-gap);
   }
 
   .iiif-viewer__header-right {
@@ -244,8 +264,8 @@
   }
 
   .iiif-viewer__header-icon {
-    width: 1rem;
-    height: 1rem;
+    width: var(--iiif-viewer-header-icon-size);
+    height: var(--iiif-viewer-header-icon-size);
     fill: none;
     stroke: currentColor;
     stroke-width: 1.75;
@@ -268,7 +288,7 @@
     overflow: hidden;
     color: var(--color-text-primary);
     font-family: var(--font-readable);
-    font-size: var(--text-sm);
+    font-size: var(--iiif-viewer-header-title-font-size);
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;

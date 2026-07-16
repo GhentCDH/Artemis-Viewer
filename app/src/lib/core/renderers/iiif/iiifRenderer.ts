@@ -62,6 +62,8 @@ export function iiifSublayerLayerIds(paneId: string, sublayerId: string): string
     iiifLayerId(paneId, sublayerId, 'allmaps-warp'),
     // Keep the transparent interaction surface above every visible representation.
     iiifLayerId(paneId, sublayerId, 'masks'),
+    iiifLayerId(paneId, sublayerId, 'mask-active-fill'),
+    iiifLayerId(paneId, sublayerId, 'mask-active-outline'),
     iiifLayerId(paneId, sublayerId, 'mask-outline'),
   ];
 }

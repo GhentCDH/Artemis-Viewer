@@ -1,6 +1,6 @@
 import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
 import { canRenderIiifSublayer, iiifSublayerLayerIds, removeIiifSublayer, renderIiifSublayer } from './iiif/iiifRenderer';
-import { IiifMaskInteraction, type IiifMaskHit } from './iiif/iiifMaskInteraction';
+import { IiifMaskInteraction, type ActiveIiifMask, type IiifMaskHit } from './iiif/iiifMaskInteraction';
 import { canRenderPmVectorSublayer, pmVectorSublayerLayerIds, renderPmVectorSublayer, removePmVectorSublayer } from './pmVectorRenderer';
 import { canRenderRemoteSublayer, remoteSublayerLayerIds, renderRemoteSublayer, removeRemoteSublayer } from './remoteRenderer';
 import type { AllmapsRenderOptions, SublayerRenderContext } from './types';
@@ -21,6 +21,7 @@ export class SublayerRendererManager {
   private allmapsRenderRevision: number;
   private appliedLayerOrderSignature = '';
   private readonly iiifMaskInteraction: IiifMaskInteraction;
+  private activeIiifMask: ActiveIiifMask | null = null;
 
   constructor(
     context: SublayerRenderContext,
@@ -42,6 +43,11 @@ export class SublayerRendererManager {
       removeIiifSublayer(this.context, sublayerId);
     }
     this.activeIiifSublayerIds.clear();
+  }
+
+  setActiveIiifMask(active: ActiveIiifMask | null): void {
+    this.activeIiifMask = active;
+    this.iiifMaskInteraction.setActive(active);
   }
 
   reconcile(layers: LayerSummary[], state: SublayerRendererState): void {
@@ -111,6 +117,7 @@ export class SublayerRendererManager {
       this.renderedPmVectorSublayerIds.add(sublayerId);
     }
     this.iiifMaskInteraction.updateSublayers([...desiredIiifSublayerIds]);
+    this.iiifMaskInteraction.setActive(this.activeIiifMask);
 
     this.applyLayerOrder(enabledSublayerIds);
     this.iiifMaskInteraction.moveOutlineToFront();

@@ -12,7 +12,7 @@
   import { SublayerRendererManager } from '$lib/core/renderers/sublayerRendererManager';
   import type { AllmapsRenderOptions } from '$lib/core/renderers/types';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
-  import type { IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
+  import type { ActiveIiifMask, IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
   import { hasImagePinAt, restoreImagePins } from '$lib/features/images/imagePins';
   import { queryOverlayAtPoint } from '$lib/features/basemap/overlayQuery';
   import { format, t } from '$lib/shared/i18n/i18n.svelte';
@@ -33,6 +33,7 @@
     initialCamera,
     onMapReady,
     onIiifMaskSelect,
+    activeIiifMask,
     onOverlayFeature,
     onOverlayQueryError,
   }: {
@@ -52,6 +53,7 @@
     initialCamera?: MapLibreInitCamera;
     onMapReady?: (map: maplibregl.Map) => void;
     onIiifMaskSelect?: (hit: IiifMaskHit) => void;
+    activeIiifMask?: ActiveIiifMask | null;
     onOverlayFeature?: (result: {
       map: maplibregl.Map;
       lngLat: [number, number];
@@ -76,6 +78,10 @@
 
   $effect(() => {
     reconcile();
+  });
+
+  $effect(() => {
+    rendererManager?.setActiveIiifMask(activeIiifMask ?? null);
   });
 
   $effect(() => {

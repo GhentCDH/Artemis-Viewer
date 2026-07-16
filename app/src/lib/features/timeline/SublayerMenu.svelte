@@ -142,7 +142,7 @@
   :global(.sublayer-detail-window) {
     --window-radius: var(--radius-lg);
 
-    flex: 0 0 min(19.8rem, max(15.4rem, calc(100vw - 24.8rem)));
+    flex: 0 0 min(21.8rem, max(15.4rem, calc(100vw - 24.8rem)));
     max-height: 19.8rem;
   }
 

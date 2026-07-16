@@ -7,6 +7,8 @@ export interface IiifMaskHit {
   sublayerId: string;
 }
 
+export type ActiveIiifMask = Pick<IiifMaskHit, 'manifestUrl' | 'imageId'>;
+
 function geometryBboxArea(geometry: maplibregl.MapGeoJSONFeature['geometry']): number {
   let minX = Infinity;
   let minY = Infinity;
@@ -98,6 +100,28 @@ export class IiifMaskInteraction {
   updateSublayers(sublayerIds: string[]): void {
     this.sublayerIds = sublayerIds;
     if (sublayerIds.length === 0) this.setHover(null);
+  }
+
+  setActive(active: ActiveIiifMask | null): void {
+    try {
+      for (const sublayerId of this.sublayerIds) {
+        const filter: maplibregl.FilterSpecification = active
+          ? active.imageId
+            ? [
+                'all',
+                ['==', ['get', 'manifestUrl'], active.manifestUrl],
+                ['>=', ['index-of', active.imageId, ['to-string', ['get', 'imageId']]], 0],
+              ]
+            : ['==', ['get', 'manifestUrl'], active.manifestUrl]
+          : ['==', ['get', 'manifestUrl'], ''];
+        for (const role of ['mask-active-fill', 'mask-active-outline']) {
+          const layerId = iiifLayerId(this.paneId, sublayerId, role);
+          if (this.map.getLayer(layerId)) this.map.setFilter(layerId, filter);
+        }
+      }
+    } catch {
+      // The style may be swapping; reconciliation reapplies the active selection.
+    }
   }
 
   /** Renderer reconciliation moves its own layers; keep the visible hover outline above them. */

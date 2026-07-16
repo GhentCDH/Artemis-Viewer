@@ -16,9 +16,11 @@
   let {
     map,
     onOpenImage,
+    showControls = true,
   }: {
     map: maplibregl.Map | null;
     onOpenImage?: (image: ImageResult) => void;
+    showControls?: boolean;
   } = $props();
 
   let loading = $state(true);
@@ -174,23 +176,25 @@
 </script>
 
 <div class="image-browser">
-  <Button
-    variant="prominent"
-    active={imageBrowser.panelOpen}
-    class="image-browser-trigger"
-    aria-label={format(t().images.inViewAria, { count: imagesInView.length })}
-    aria-expanded={imageBrowser.panelOpen}
-    onclick={() => setOpen(!imageBrowser.panelOpen)}
-  >
-    <svg class="image-browser-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
-      <circle cx="8.2" cy="9.3" r="1.7"></circle>
-      <path d="m5.5 16.5 4.2-4.2 3.2 3 2.3-2.2 3.3 3.4"></path>
-    </svg>
-    <span class="image-browser-trigger-text">{t().images.trigger}</span>
-  </Button>
+  {#if showControls}
+    <Button
+      variant="prominent"
+      active={imageBrowser.panelOpen}
+      class="image-browser-trigger"
+      aria-label={format(t().images.inViewAria, { count: imagesInView.length })}
+      aria-expanded={imageBrowser.panelOpen}
+      onclick={() => setOpen(!imageBrowser.panelOpen)}
+    >
+      <svg class="image-browser-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
+        <circle cx="8.2" cy="9.3" r="1.7"></circle>
+        <path d="m5.5 16.5 4.2-4.2 3.2 3 2.3-2.2 3.3 3.4"></path>
+      </svg>
+      <span class="image-browser-trigger-text">{t().images.trigger}</span>
+    </Button>
+  {/if}
 
-  {#if imageBrowser.panelOpen}
+  {#if showControls && imageBrowser.panelOpen}
     <div class="image-browser-panel-layer">
       {#if openInfoCollection}
         <div class="collection-detail-layer">
@@ -202,7 +206,7 @@
             sources={openInfoCollection.sources}
             closeOnPointerDistance={detailCloseDistance}
             onclose={() => (openInfoCollectionId = null)}
-            style="--window-width: min(19rem, calc(100vw - var(--image-browser-width) - (3 * var(--space-3)))); --window-max-height: var(--image-browser-max-height); --window-header-border-width: 0px;"
+            style="--window-width: min(21rem, calc(100vw - var(--image-browser-width) - (3 * var(--space-3)))); --window-max-height: var(--image-browser-max-height); --window-header-border-width: 0px;"
           />
         </div>
       {/if}
@@ -284,6 +288,14 @@
                     {@const infoOpen = openInfoCollectionId === collection.id}
                     {@const hasDetails = collectionDetails.some((detail) => detail.id === collection.id)}
                     <div class="collection-option-row">
+                      <label class="collection-option">
+                        <input
+                          type="checkbox"
+                          checked={!excludedCollections.has(collection.id)}
+                          onchange={() => toggleCollection(collection.id)}
+                        />
+                        <span>{collection.label}</span>
+                      </label>
                       {#if hasDetails}
                         <Button
                           class="collection-info-button"
@@ -300,14 +312,6 @@
                           </svg>
                         </Button>
                       {/if}
-                      <label class="collection-option">
-                        <span>{collection.label}</span>
-                        <input
-                          type="checkbox"
-                          checked={!excludedCollections.has(collection.id)}
-                          onchange={() => toggleCollection(collection.id)}
-                        />
-                      </label>
                     </div>
                   {/each}
                 </div>
@@ -358,10 +362,7 @@
         {map}
         image={imageBrowser.preview}
         onclose={() => imageBrowser.closePreview()}
-        onopen={(image) => {
-          imageBrowser.closePreview();
-          onOpenImage?.(image);
-        }}
+        onopen={(image) => onOpenImage?.(image)}
       />
     {/key}
   {/if}
@@ -486,10 +487,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    border: 1px solid var(--color-border-subtle);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     padding: var(--space-2);
-    background: var(--color-surface-control);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-shadow-ink) 16%, transparent);
+    background: var(--color-surface-tint);
   }
 
   .collection-option-row {
@@ -498,13 +500,11 @@
     gap: var(--space-1);
   }
 
-  /* Mirrors the detail window opening to the left: info button on the left
-     edge, label text flowing toward the checkbox on the right edge. */
   .collection-option {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: var(--space-2);
     min-width: 0;
     min-height: 1.75rem;
@@ -539,9 +539,10 @@
   }
 
   .collection-option span {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    text-align: right;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -621,6 +622,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .image-title {
+    font-family: var(--font-readable);
+    font-size: var(--text-xs);
+    font-weight: 400;
   }
 
   .image-meta {

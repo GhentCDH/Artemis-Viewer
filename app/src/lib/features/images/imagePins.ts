@@ -94,6 +94,7 @@ function createLandscapeIcon(clusterCount?: number): ImageData {
   if (!context) throw new Error('Could not create the image-pin icon');
 
   const accent = readThemeColor('--color-map-image-pin', '#425d6e');
+  const outline = readThemeColor('--color-map-image-pin-outline', '#888888');
   const surface = readThemeColor('--color-surface-control', '#fbf8f1');
   const shadow = readThemeColor('--color-map-image-pin-shadow', '#000000');
   context.fillStyle = accent;
@@ -105,6 +106,9 @@ function createLandscapeIcon(clusterCount?: number): ImageData {
   context.roundRect(4, 4, width - 8, 40, 5);
   context.fill();
   context.shadowColor = 'transparent';
+  context.strokeStyle = outline;
+  context.lineWidth = 1;
+  context.stroke();
 
   context.strokeStyle = surface;
   context.lineWidth = 3;

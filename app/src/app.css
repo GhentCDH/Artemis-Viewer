@@ -77,6 +77,7 @@
   --color-map-water: var(--palette-slate-500);
   --color-map-border: var(--palette-gray-500);
   --color-map-image-pin: var(--palette-slate-700);
+  --color-map-image-pin-outline: color-mix(in srgb, var(--palette-gray-500) 65%, transparent);
   --color-map-image-pin-shadow: color-mix(in srgb, var(--color-shadow-ink) 40%, transparent);
   --opacity-map-border: .2;
   --opacity-iiif-active-mask: .22;

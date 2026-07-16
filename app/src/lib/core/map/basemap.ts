@@ -26,6 +26,13 @@ export interface OverlayOption {
   longLabel?: string;
   kind: 'raster' | 'wfs';
   url: string;
+  /**
+   * Resolved service protocol (matches ResolvedCustomBasemap.serviceType). Registry overlays
+   * carry it so their query capability can be probed lazily on first selection instead of a
+   * GetCapabilities fetch per WMS overlay at startup; absent on legacy persisted overlays.
+   */
+  serviceType?: 'xyz' | 'wmts' | 'wms' | 'wfs' | 'geojson';
+  /** Feature-info capability. Undefined until probed (see serviceType). */
   query?: OverlayQueryCapability;
 }
 

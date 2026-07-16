@@ -12,6 +12,7 @@
     type OverlayOption,
   } from '$lib/core/map/basemap';
   import BasemapMenu from '$lib/features/basemap/BasemapMenu.svelte';
+  import { discoverOverlayQueryCapability } from '$lib/features/basemap/customBasemap';
   import { i18n, t, LOCALE_SHORT_LABELS, type Locale } from '$lib/shared/i18n/i18n.svelte';
   import { loadMapServiceRegistry } from '$lib/features/basemap/mapServiceRegistry';
   import OverlayFeatureBubble from '$lib/features/basemap/OverlayFeatureBubble.svelte';
@@ -181,6 +182,30 @@
     if (selectedOverlay?.query?.status === 'supported') {
       selectedOverlay = { ...selectedOverlay, query: { ...selectedOverlay.query, error: reason } };
     }
+  }
+
+  /**
+   * Registry overlays arrive without a probed query capability (probing every WMS overlay
+   * at startup cost a GetCapabilities fetch each — see mapServiceRegistry). The probe runs on
+   * first selection and the result is written back into the registered list, so it happens at
+   * most once per overlay per session. Overlays without a serviceType (legacy persisted custom
+   * overlays, or ones probed eagerly on creation) are left as they are.
+   */
+  function handleOverlaySelect(overlay: OverlayOption | null): void {
+    selectedOverlay = overlay;
+    overlayFeature = null;
+    if (!overlay || overlay.query || !overlay.serviceType) return;
+    void discoverOverlayQueryCapability({
+      kind: overlay.kind,
+      url: overlay.url,
+      serviceType: overlay.serviceType,
+    }).then((query) => {
+      const probed: OverlayOption = { ...overlay, query };
+      registeredOverlays = registeredOverlays.map((candidate) =>
+        candidate.id === overlay.id ? probed : candidate
+      );
+      if (selectedOverlay?.id === overlay.id) selectedOverlay = probed;
+    });
   }
 
   // Hard camera lock only makes sense with both panes on screen; dropping either
@@ -378,7 +403,7 @@
           onselect={(basemap) => { selectedBasemap = basemap; }}
           selectedOverlay={selectedOverlay}
           {registeredOverlays}
-          onOverlaySelect={(overlay) => { selectedOverlay = overlay; overlayFeature = null; }}
+          onOverlaySelect={handleOverlaySelect}
           {overlayOpacity}
           onOverlayOpacityChange={(opacity) => { overlayOpacity = opacity; }}
         />

@@ -7,7 +7,9 @@
   let zoomLevel = $state('');
 
   function updateZoomLevel(): void {
-    zoomLevel = map ? map.getZoom().toFixed(1) : '';
+    // Runs per move frame; skip the write while the displayed one-decimal value is stable.
+    const next = map ? map.getZoom().toFixed(1) : '';
+    if (next !== zoomLevel) zoomLevel = next;
   }
 
   $effect(() => {

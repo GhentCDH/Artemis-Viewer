@@ -1,6 +1,6 @@
 import { parse } from 'yaml';
 import type { BasemapOption, OverlayOption } from '$lib/core/map/basemap';
-import { discoverOverlayQueryCapability, resolveCustomBasemap } from './customBasemap';
+import { resolveCustomBasemap } from './customBasemap';
 
 interface MapServiceEntry {
   id?: unknown;
@@ -54,16 +54,19 @@ export async function loadMapServiceRegistry(url: string): Promise<MapServiceReg
     return { ...entry, kind: resolved.kind, url: resolved.url };
   });
 
-  const overlays = await Promise.all((document.overlays ?? []).map(async (rawEntry): Promise<OverlayOption> => {
+  // Query capability is NOT probed here: doing so cost one GetCapabilities fetch per WMS
+  // overlay during startup for menus the user may never open. The serviceType is kept on the
+  // option and the probe happens on first selection (see Canvas.svelte's overlay handler).
+  const overlays = (document.overlays ?? []).map((rawEntry): OverlayOption => {
     const entry = normalizeEntry(rawEntry);
     const resolved = resolveCustomBasemap(entry.url);
     return {
       ...entry,
       kind: resolved.kind,
       url: resolved.url,
-      query: await discoverOverlayQueryCapability(resolved),
+      serviceType: resolved.serviceType,
     };
-  }));
+  });
 
   return { basemaps, overlays };
 }

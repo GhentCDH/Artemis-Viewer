@@ -40,6 +40,7 @@
   {@const tip = tooltipStore.content}
   <div
     bind:this={element}
+    role="tooltip"
     class="tooltip"
     class:tooltip--above={placement === 'above'}
     class:tooltip--below={placement === 'below'}

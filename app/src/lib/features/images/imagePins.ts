@@ -234,9 +234,15 @@ function pinIdAt(map: maplibregl.Map, point: { x: number; y: number }): string |
   return typeof id === 'string' ? id : null;
 }
 
-/** Whether a visible image pin renders at this screen point — mask interaction yields to pins. */
+/**
+ * Whether a visible image pin renders at this screen point — mask interaction yields to pins.
+ * One query across both pin layers: this runs per mousemove frame (mask shouldYield and the
+ * hover cursor below), where the previous pin-then-cluster pair doubled the hit-test cost.
+ */
 export function hasImagePinAt(map: maplibregl.Map, point: { x: number; y: number }): boolean {
-  return pinIdAt(map, point) !== null || clusterAt(map, point) !== null;
+  const layers = [LAYER_ID, CLUSTER_LAYER_ID].filter((layerId) => map.getLayer(layerId));
+  if (layers.length === 0) return false;
+  return map.queryRenderedFeatures([point.x, point.y], { layers }).length > 0;
 }
 
 /**
@@ -274,7 +280,7 @@ export function attachImagePinInteraction(
     const point = { x: event.point.x, y: event.point.y };
     frame = requestAnimationFrame(() => {
       frame = null;
-      const next = pinIdAt(map, point) !== null || clusterAt(map, point) !== null;
+      const next = hasImagePinAt(map, point);
       if (next) map.getCanvas().style.cursor = 'pointer';
       else if (hovering) map.getCanvas().style.cursor = '';
       hovering = next;

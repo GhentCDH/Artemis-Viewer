@@ -40,6 +40,31 @@ const stateByMap = new WeakMap<maplibregl.Map, ImagePinState>();
 // applied revision per map is what keeps the steady state mutation-free.
 const appliedRevisionByMap = new WeakMap<maplibregl.Map, number>();
 const legacyIconsPurgedMaps = new WeakSet<maplibregl.Map>();
+// Cluster icons carry their count baked into the bitmap (the style has no glyphs endpoint, so
+// a symbol text-field is not an option). Generating them ahead of time meant one canvas raster
+// + texture upload per possible count (2..images.length); instead they are created on demand
+// through `styleimagemissing`, which fires only for counts a rendered cluster actually shows.
+const clusterIconHandlerByMap = new WeakMap<maplibregl.Map, (event: maplibregl.MapStyleImageMissingEvent) => void>();
+const clusterIconIdsByMap = new WeakMap<maplibregl.Map, Set<string>>();
+
+function ensureClusterIconFactory(map: maplibregl.Map): void {
+  if (clusterIconHandlerByMap.has(map)) return;
+  const handler = (event: maplibregl.MapStyleImageMissingEvent) => {
+    const { id } = event;
+    if (!id.startsWith(CLUSTER_ICON_PREFIX) || map.hasImage(id)) return;
+    const count = Number.parseInt(id.slice(CLUSTER_ICON_PREFIX.length), 10);
+    if (!Number.isFinite(count)) return;
+    map.addImage(id, createLandscapeIcon(count), { pixelRatio: 2 });
+    let ids = clusterIconIdsByMap.get(map);
+    if (!ids) {
+      ids = new Set();
+      clusterIconIdsByMap.set(map, ids);
+    }
+    ids.add(id);
+  };
+  map.on('styleimagemissing', handler);
+  clusterIconHandlerByMap.set(map, handler);
+}
 
 /** MapLibre pixels do not inherit rem sizing; use a slightly steeper version of the root scale. */
 function responsivePinScale(): number {
@@ -141,12 +166,7 @@ export function restoreImagePins(map: maplibregl.Map): void {
   if (!map.hasImage(ICON_ID)) {
     map.addImage(ICON_ID, createLandscapeIcon(), { pixelRatio: 2 });
   }
-  for (let count = 2; count <= state.images.length; count += 1) {
-    const clusterIconId = `${CLUSTER_ICON_PREFIX}${count}`;
-    if (!map.hasImage(clusterIconId)) {
-      map.addImage(clusterIconId, createLandscapeIcon(count), { pixelRatio: 2 });
-    }
-  }
+  ensureClusterIconFactory(map);
 
   const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (source) {
@@ -329,16 +349,23 @@ export function attachImagePinInteraction(
 }
 
 export function removeImagePins(map: maplibregl.Map): void {
-  const imageCount = stateByMap.get(map)?.images.length ?? 0;
   stateByMap.delete(map);
   appliedRevisionByMap.delete(map);
+  const clusterIconHandler = clusterIconHandlerByMap.get(map);
+  if (clusterIconHandler) {
+    map.off('styleimagemissing', clusterIconHandler);
+    clusterIconHandlerByMap.delete(map);
+  }
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getLayer(CLUSTER_LAYER_ID)) map.removeLayer(CLUSTER_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   if (map.hasImage(ICON_ID)) map.removeImage(ICON_ID);
-  for (let count = 2; count <= imageCount; count += 1) {
-    const clusterIconId = `${CLUSTER_ICON_PREFIX}${count}`;
-    if (map.hasImage(clusterIconId)) map.removeImage(clusterIconId);
+  const clusterIconIds = clusterIconIdsByMap.get(map);
+  if (clusterIconIds) {
+    for (const clusterIconId of clusterIconIds) {
+      if (map.hasImage(clusterIconId)) map.removeImage(clusterIconId);
+    }
+    clusterIconIdsByMap.delete(map);
   }
   for (const legacyIconId of LEGACY_ICON_IDS) {
     if (map.hasImage(legacyIconId)) map.removeImage(legacyIconId);

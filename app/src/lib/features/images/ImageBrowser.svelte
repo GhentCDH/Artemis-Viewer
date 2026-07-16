@@ -48,11 +48,25 @@
     collectionDetails.find((collection) => collection.id === openInfoCollectionId) ?? null
   );
 
-  if (browser) {
+  // Deferred until the panel first opens: the collection indexes, sprite metadata, and pin
+  // resources serve only this panel and its pins, so a session that never opens it skips the
+  // fetches and map-style work entirely. Search results reach pins via imageBrowser.showPreview,
+  // which opens the panel and therefore triggers the same load.
+  let collectionsRequested = $state(false);
+  $effect(() => {
+    if (!imageBrowser.panelOpen || collectionsRequested) return;
+    collectionsRequested = true;
     void loadImageCollectionDetails().then((details) => {
       collectionDetails = details;
     });
-  }
+    void loadImageCollections().then((loaded) => {
+      images = loaded;
+      const years = loaded.map((image) => Number.parseInt(image.year, 10)).filter((year) => Number.isFinite(year));
+      filterStart = years.length > 0 ? Math.min(...years) : 0;
+      filterEnd = years.length > 0 ? Math.max(...years) : 0;
+      loading = false;
+    });
+  });
 
   const datedYears = $derived(
     images
@@ -82,54 +96,37 @@
     })
   );
 
-  if (browser) {
-    void loadImageCollections().then((loaded) => {
-      images = loaded;
-      const years = loaded.map((image) => Number.parseInt(image.year, 10)).filter((year) => Number.isFinite(year));
-      filterStart = years.length > 0 ? Math.min(...years) : 0;
-      filterEnd = years.length > 0 ? Math.max(...years) : 0;
-      loading = false;
-    });
-  }
-
   function updateImagesInView(): void {
     if (!map) {
       imagesInView = [];
       return;
     }
     const bounds = map.getBounds();
+    // Decorate-sort-undecorate keeps year parsing at O(n) instead of per comparison.
     imagesInView = images
-      .filter((image) => image.lon !== null && image.lat !== null && bounds.contains([image.lon, image.lat]))
-      .sort((a, b) => {
-        const aYear = Number.parseInt(a.year, 10);
-        const bYear = Number.parseInt(b.year, 10);
-        const yearDifference = (Number.isFinite(aYear) ? aYear : Number.POSITIVE_INFINITY) -
-          (Number.isFinite(bYear) ? bYear : Number.POSITIVE_INFINITY);
-        return yearDifference || a.title.localeCompare(b.title);
-      });
+      .flatMap((image) => {
+        if (image.lon === null || image.lat === null || !bounds.contains([image.lon, image.lat])) return [];
+        const year = Number.parseInt(image.year, 10);
+        return [{ image, year: Number.isFinite(year) ? year : Number.POSITIVE_INFINITY }];
+      })
+      .sort((a, b) => (a.year - b.year) || a.image.title.localeCompare(b.image.title))
+      .map((entry) => entry.image);
   }
 
+  // The in-view list only feeds the open panel, so it recomputes on settled cameras
+  // (moveend) while the panel is showing — not on every move frame of every gesture.
   $effect(() => {
-    if (!map) return;
+    if (!map || !imageBrowser.panelOpen) return;
     images;
     updateImagesInView();
-    let frame: number | null = null;
-    const scheduleUpdate = () => {
-      if (frame !== null) return;
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        updateImagesInView();
-      });
-    };
-    map.on('move', scheduleUpdate);
+    map.on('moveend', updateImagesInView);
     return () => {
-      map.off('move', scheduleUpdate);
-      if (frame !== null) cancelAnimationFrame(frame);
+      map.off('moveend', updateImagesInView);
     };
   });
 
   $effect(() => {
-    if (!map) return;
+    if (!map || !collectionsRequested) return;
     const sync = () => syncImagePins(map, images, imageBrowser.panelOpen);
     sync();
     map.on('styledata', sync);
@@ -140,7 +137,7 @@
   });
 
   $effect(() => {
-    if (!map) return;
+    if (!map || !collectionsRequested) return;
     return attachImagePinInteraction(map, (imageId) => {
       const image = imageId === null ? undefined : images.find((candidate) => candidate.id === imageId);
       if (image) imageBrowser.showPreview(image);
@@ -235,7 +232,9 @@
       variant="prominent"
       active={imageBrowser.panelOpen}
       class="image-browser-trigger"
-      aria-label={format(t().images.inViewAria, { count: imagesInView.length })}
+      aria-label={imageBrowser.panelOpen
+        ? format(t().images.inViewAria, { count: imagesInView.length })
+        : t().images.trigger}
       aria-expanded={imageBrowser.panelOpen}
       onclick={() => setOpen(!imageBrowser.panelOpen)}
     >
@@ -672,6 +671,14 @@
     gap: var(--space-1);
     padding: var(--space-2);
     overflow: auto;
+  }
+
+  /* Rows scrolled out of view skip layout and paint entirely; the intrinsic size
+     placeholder matches a row's natural height (thumbnail + the list button's block
+     padding) so the scrollbar doesn't jump as rows enter the viewport. */
+  .image-list > :global(.button) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto calc(var(--image-thumbnail-height) + 2 * var(--space-1));
   }
 
   .image-row {

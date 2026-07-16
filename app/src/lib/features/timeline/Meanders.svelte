@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import { showTooltip, hideTooltip } from '$lib/shared/tooltip.svelte';
+  import { format, t } from '$lib/shared/i18n/i18n.svelte';
   import { DEFAULT_AXIS_RANGE, yearToPercent, type AxisRange } from './timelineScale';
   import { layoutMeanders, type MeanderPill } from './meanderLayout';
   import TimelineScanPath, {
@@ -60,7 +61,7 @@
       class:is-active={active}
       class:is-inactive={!active}
       style="left: {left}%; width: {width}%"
-      aria-label="{active ? 'Deactivate' : 'Activate'} {pill.label} · {pill.startYear}–{pill.endYear}"
+      aria-label={format(active ? t().timeline.pillDeactivate : t().timeline.pillActivate, { label: pill.label, startYear: pill.startYear, endYear: pill.endYear })}
       aria-pressed={active}
       onclick={() => onLayerClick?.(pill.id)}
     >

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
+  import { format, t } from '$lib/shared/i18n/i18n.svelte';
 
   let { map }: { map: maplibregl.Map | null } = $props();
 
@@ -23,7 +24,7 @@
 </script>
 
 {#if zoomLevel}
-  <div class="zoom-indicator" role="img" aria-label={`Zoom level ${zoomLevel}`}>
+  <div class="zoom-indicator" role="img" aria-label={format(t().controls.zoomLevel, { level: zoomLevel })}>
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="10.5" cy="10.5" r="6.5"></circle>
       <path d="m15.5 15.5 5 5"></path>

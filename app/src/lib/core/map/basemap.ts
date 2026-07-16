@@ -15,6 +15,7 @@ export const BASELAYER_BOUNDS: LngLatBoundsLike = [
 export interface BasemapOption {
   id: string;
   label: string;
+  longLabel?: string;
   kind: 'artemis' | 'raster' | 'wfs';
   url: string | null;
 }
@@ -22,6 +23,7 @@ export interface BasemapOption {
 export interface OverlayOption {
   id: string;
   label: string;
+  longLabel?: string;
   kind: 'raster' | 'wfs';
   url: string;
   query?: OverlayQueryCapability;
@@ -51,7 +53,9 @@ export const OPENSTREETMAP_BASEMAP: BasemapOption = {
   url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
 };
 
-export const BUILT_IN_BASEMAPS = [ARTEMIS_BASEMAP, OPENSTREETMAP_BASEMAP] as const;
+// The project basemap is the only hardcoded choice. Other shipped services,
+// including OpenStreetMap, come from the dataset's map-services.yaml.
+export const BUILT_IN_BASEMAPS = [ARTEMIS_BASEMAP] as const;
 
 const OSM_SOURCE_ID = 'background-openstreetmap';
 const OSM_LAYER_ID = 'background-openstreetmap';
@@ -186,7 +190,7 @@ export function createBaselayerStyle(
         filter: ['==', ['get', 'scale'], 'major'],
         paint: {
           'line-color': readThemeColor('--color-map-grid', '#757575'),
-          'line-opacity': 0.12,
+          'line-opacity': 0.18,
           'line-width': 1,
         },
       },
@@ -194,7 +198,6 @@ export function createBaselayerStyle(
         id: 'background-grid-minor',
         type: 'line',
         source: 'background-grid',
-        minzoom: 9,
         filter: ['==', ['get', 'scale'], 'minor'],
         paint: {
           'line-color': readThemeColor('--color-map-grid', '#757575'),
@@ -206,7 +209,6 @@ export function createBaselayerStyle(
         id: 'background-grid-micro',
         type: 'line',
         source: 'background-grid',
-        minzoom: 12,
         filter: ['==', ['get', 'scale'], 'micro'],
         paint: {
           'line-color': readThemeColor('--color-map-grid', '#757575'),

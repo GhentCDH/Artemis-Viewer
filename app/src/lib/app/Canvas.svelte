@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import type maplibregl from 'maplibre-gl';
   import { datasetBaseUrl, datasetUrl } from '$lib/core/dataset/dataSource';
   import { loadLayerRegistry, type LayerSummary } from '$lib/core/dataset/layerRegistry';
-  import { loadSiteMetadata, type SiteMetadata } from '$lib/core/dataset/siteMetadata';
   import { syncPaneCameras } from '$lib/core/map/paneSync';
   import {
     ARTEMIS_BASEMAP,
@@ -12,6 +12,8 @@
     type OverlayOption,
   } from '$lib/core/map/basemap';
   import BasemapMenu from '$lib/features/basemap/BasemapMenu.svelte';
+  import { i18n, t, LOCALE_SHORT_LABELS, type Locale } from '$lib/shared/i18n/i18n.svelte';
+  import { loadMapServiceRegistry } from '$lib/features/basemap/mapServiceRegistry';
   import OverlayFeatureBubble from '$lib/features/basemap/OverlayFeatureBubble.svelte';
   import Timeline from '$lib/features/timeline/Timeline.svelte';
   import PaneSublayerMenu from '$lib/features/timeline/PaneSublayerMenu.svelte';
@@ -55,14 +57,6 @@
   });
 
   let layers = $state<LayerSummary[]>([]);
-  let siteMetadata = $state<SiteMetadata>({
-    title: 'About Artemis',
-    info: [],
-    attribution: '',
-    pipeline: { title: 'Data pipeline', info: [], links: [] },
-    team: [],
-    logos: []
-  });
   let workspaceElement = $state<HTMLElement | null>(null);
   let leftMap = $state<maplibregl.Map | null>(null);
   let rightMap = $state<maplibregl.Map | null>(null);
@@ -82,6 +76,8 @@
   let isMobile = $state(false);
   let selectedBasemap = $state<BasemapOption>(ARTEMIS_BASEMAP);
   let selectedOverlay = $state<OverlayOption | null>(null);
+  let registeredBasemaps = $state<BasemapOption[]>([]);
+  let registeredOverlays = $state<OverlayOption[]>([]);
   let overlayOpacity = $state(0.6);
   let overlayFeature = $state<{
     map: maplibregl.Map;
@@ -163,6 +159,10 @@
     showTooltip({ text, x: rect.left + rect.width / 2, y: rect.top, placement: 'above' });
   }
 
+  // The button label reflects the platform's active language; activating it
+  // still switches to the other supported locale.
+  const targetLocale: Locale = $derived(i18n.locale === 'nl' ? 'en' : 'nl');
+
   function handleOverlayFeature(result: {
     map: maplibregl.Map;
     lngLat: [number, number];
@@ -235,13 +235,20 @@
     }
   });
 
-  void loadLayerRegistry(datasetUrl('layers.yaml', selectedDatasetBaseUrl)).then((nextLayers) => {
-    layers = nextLayers;
-  });
+  // Browser-only: these fetches contribute nothing to the prerendered HTML and
+  // the map-service capability probes need window (they fail on every SSR pass).
+  if (browser) {
+    void loadLayerRegistry(datasetUrl('layers.yaml', selectedDatasetBaseUrl)).then((nextLayers) => {
+      layers = nextLayers;
+    });
 
-  void loadSiteMetadata((path) => datasetUrl(path, selectedDatasetBaseUrl)).then((nextSiteMetadata) => {
-    siteMetadata = nextSiteMetadata;
-  });
+    void loadMapServiceRegistry(datasetUrl('map-services.yaml', selectedDatasetBaseUrl))
+      .then((registry) => {
+        registeredBasemaps = registry.basemaps;
+        registeredOverlays = registry.overlays;
+      })
+      .catch((error) => console.error('Failed to load map service registry', error));
+  }
 </script>
 
 {#snippet documentViewer(doc: NonNullable<typeof openDocument>)}
@@ -320,7 +327,7 @@
   <div class="overlay-layer">
     <div class="window-slot branding-slot">
       <div class="branding-slot-inner">
-        <BrandingPanel {siteMetadata} style="--branding-scale: 1.6;" />
+        <BrandingPanel resolveDatasetUrl={(path) => datasetUrl(path, selectedDatasetBaseUrl)} style="--branding-scale: 1.6;" />
       </div>
     </div>
 
@@ -330,7 +337,7 @@
           variant="prominent"
           active={isCompare}
           class="compare-toggle"
-          aria-label="Toggle compare mode"
+          aria-label={t().controls.compareToggle}
           disabled={isMobile}
           onclick={() => {
             if (!isMobile) timelineSelection.toggleCompareMode();
@@ -340,7 +347,7 @@
             <rect x="9" y="9" width="13" height="13" rx="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          <span class="compare-toggle-text">{isCompare ? 'Exit Compare' : 'Compare'}</span>
+          <span class="compare-toggle-text">{isCompare ? t().controls.exitCompare : t().controls.compare}</span>
         </Button>
         <SearchMenu {leftMap} {rightMap} />
       </div>
@@ -350,10 +357,23 @@
       <div class="bottom-right-controls">
         <ZoomIndicator map={leftMap ?? rightMap} />
         <ScaleIndicator map={leftMap ?? rightMap} />
+        <div class="language-control">
+          <Button
+            aria-label={t().controls.changeLanguage}
+            onmouseenter={(event) => showControlTooltip(t().controls.changeLanguage, event)}
+            onmouseleave={hideTooltip}
+            onfocus={(event) => showControlTooltip(t().controls.changeLanguage, event)}
+            onblur={hideTooltip}
+            onclick={() => i18n.setLocale(targetLocale)}
+            style="--button-height: var(--canvas-primary-control-height);"
+          >{LOCALE_SHORT_LABELS[i18n.locale]}</Button>
+        </div>
         <BasemapMenu
           selected={selectedBasemap}
+          {registeredBasemaps}
           onselect={(basemap) => { selectedBasemap = basemap; }}
           selectedOverlay={selectedOverlay}
+          {registeredOverlays}
           onOverlaySelect={(overlay) => { selectedOverlay = overlay; overlayFeature = null; }}
           {overlayOpacity}
           onOverlayOpacityChange={(opacity) => { overlayOpacity = opacity; }}
@@ -362,10 +382,10 @@
           <Button
             iconOnly
             disabled={isCapturingScreenshot}
-            aria-label="Screenshot without UI"
-            onmouseenter={(event) => showControlTooltip('Screenshot without UI', event)}
+            aria-label={t().controls.screenshot}
+            onmouseenter={(event) => showControlTooltip(t().controls.screenshot, event)}
             onmouseleave={hideTooltip}
-            onfocus={(event) => showControlTooltip('Screenshot without UI', event)}
+            onfocus={(event) => showControlTooltip(t().controls.screenshot, event)}
             onblur={hideTooltip}
             onclick={captureScreenshot}
             style="--button-height: var(--canvas-primary-control-height);"
@@ -520,7 +540,8 @@
     gap: var(--space-3);
   }
 
-  .screenshot-control {
+  .screenshot-control,
+  .language-control {
     display: flex;
   }
 

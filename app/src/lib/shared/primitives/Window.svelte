@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import Button from './Button.svelte';
+  import { t } from '$lib/shared/i18n/i18n.svelte';
 
   interface Props {
     title?: string;
@@ -27,7 +28,7 @@
     placement = 'left',
     backdrop = false,
     showClose = false,
-    closeLabel = 'Close',
+    closeLabel = undefined,
     closeOnEscape = false,
     closeOnPointerDistance = 0,
     class: className = '',
@@ -75,7 +76,7 @@
 
 {#if backdrop}
   <Button
-    aria-label={closeLabel}
+    aria-label={closeLabel ?? t().window.close}
     onclick={close}
     style="position:fixed;inset:0;z-index:var(--z-window-backdrop);margin:0;border:0;border-radius:0;padding:0;min-height:0;background:var(--color-overlay-backdrop);cursor:default;"
   />
@@ -100,7 +101,7 @@
         <div class="window-actions">
           {@render actions?.()}
           {#if showClose}
-            <Button iconOnly aria-label={closeLabel} onclick={close}>×</Button>
+            <Button iconOnly aria-label={closeLabel ?? t().window.close} onclick={close}>×</Button>
           {/if}
         </div>
       {/if}

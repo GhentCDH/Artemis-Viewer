@@ -1,5 +1,6 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
+  import { format, t } from '$lib/shared/i18n/i18n.svelte';
 
   let { map }: { map: maplibregl.Map | null } = $props();
 
@@ -76,7 +77,7 @@
 <div
   class="scale-indicator"
   role="img"
-  aria-label={distanceLabel ? `Map scale: ${distanceLabel} in the real world` : undefined}
+  aria-label={distanceLabel ? format(t().controls.mapScale, { distance: distanceLabel }) : undefined}
 >
   {#if distanceLabel}
     <span class="scale-indicator-distance">{distanceLabel}</span>

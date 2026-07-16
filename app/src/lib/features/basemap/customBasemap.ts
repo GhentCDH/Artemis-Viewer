@@ -1,3 +1,4 @@
+import { format, t } from '$lib/shared/i18n/i18n.svelte';
 import type {
   BasemapOption,
   OverlayOption,
@@ -105,10 +106,10 @@ function requireHttpUrl(value: string): URL {
   try {
     url = new URL(value.trim());
   } catch {
-    throw new Error('Enter a valid HTTP(S) URL.');
+    throw new Error(t().basemap.errors.invalidUrl);
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('The tile URL must use HTTP or HTTPS.');
+    throw new Error(t().basemap.errors.notHttp);
   }
   return url;
 }
@@ -182,7 +183,7 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
   if (isWmts) {
     const layer = queryValue(parsedUrl, 'LAYER');
     if (!layer) {
-      throw new Error('This looks like WMTS, but the URL has no LAYER parameter. Paste a complete GetTile request URL.');
+      throw new Error(t().basemap.errors.wmtsNoLayer);
     }
     const style = queryValue(parsedUrl, 'STYLE') || 'default';
     const format = queryValue(parsedUrl, 'FORMAT') || 'image/png';
@@ -206,7 +207,7 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
   if (isWms) {
     const layers = queryValue(parsedUrl, 'LAYERS');
     if (!layers) {
-      throw new Error('This looks like WMS, but the URL has no LAYERS parameter. Paste a complete GetMap request URL.');
+      throw new Error(t().basemap.errors.wmsNoLayers);
     }
     const version = queryValue(parsedUrl, 'VERSION') || '1.3.0';
     const styles = queryValue(parsedUrl, 'STYLES') || '';
@@ -239,7 +240,7 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
   if (isWfs) {
     const typeNames = queryValue(parsedUrl, 'TYPENAMES') || queryValue(parsedUrl, 'TYPENAME');
     if (!typeNames) {
-      throw new Error('This looks like WFS, but the URL has no TYPENAMES parameter. Paste a complete GetFeature request URL.');
+      throw new Error(t().basemap.errors.wfsNoTypenames);
     }
     const version = queryValue(parsedUrl, 'VERSION') || '2.0.0';
     setQueryValue(parsedUrl, 'SERVICE', 'WFS');
@@ -261,9 +262,7 @@ export function resolveCustomBasemap(value: string): ResolvedCustomBasemap {
     return { kind: 'wfs', url: original, serviceType: 'geojson' };
   }
 
-  throw new Error(
-    'We could not identify this map URL. XYZ/TMS URLs need {z}, {x}, and {y}; WMTS, WMS, or WFS URLs need SERVICE plus a layer or type-name parameter.'
-  );
+  throw new Error(t().basemap.errors.unrecognizedUrl);
 }
 
 function directChildText(element: Element, localName: string): string | null {
@@ -282,6 +281,11 @@ function inheritedQueryable(layer: Element): boolean {
 }
 
 async function discoverWmsQueryCapability(url: string, timeoutMs = 6000): Promise<OverlayQueryCapability> {
+  // Never reached from the UI on the server, but callers that slip into SSR
+  // must not crash on window; the client re-discovers with a real answer.
+  if (typeof window === 'undefined') {
+    return { status: 'unavailable', reason: 'Query discovery requires a browser context.' };
+  }
   const mapUrl = new URL(url);
   const layerNames = (queryValue(mapUrl, 'LAYERS') ?? '').split(',').filter(Boolean);
   setQueryValue(mapUrl, 'SERVICE', 'WMS');
@@ -295,11 +299,11 @@ async function discoverWmsQueryCapability(url: string, timeoutMs = 6000): Promis
   try {
     const response = await fetch(mapUrl, { signal: controller.signal });
     if (!response.ok) {
-      return { status: 'unavailable', reason: `Capabilities request returned HTTP ${response.status}.` };
+      return { status: 'unavailable', reason: format(t().basemap.errors.capabilitiesHttpStatus, { status: response.status }) };
     }
     const document = new DOMParser().parseFromString(await response.text(), 'application/xml');
     if (document.querySelector('parsererror')) {
-      return { status: 'unavailable', reason: 'The service returned malformed capabilities XML.' };
+      return { status: 'unavailable', reason: t().basemap.errors.capabilitiesMalformed };
     }
     const layers = [...document.getElementsByTagNameNS('*', 'Layer')];
     const requestedLayers = layerNames.map((name) =>
@@ -307,16 +311,16 @@ async function discoverWmsQueryCapability(url: string, timeoutMs = 6000): Promis
     );
     const missingLayer = layerNames.find((_name, index) => !requestedLayers[index]);
     if (missingLayer) {
-      return { status: 'unsupported', reason: `Layer “${missingLayer}” was not found in GetCapabilities.` };
+      return { status: 'unsupported', reason: format(t().basemap.errors.layerNotFound, { layer: missingLayer }) };
     }
     const nonQueryableLayer = layerNames.find((_name, index) => !inheritedQueryable(requestedLayers[index]!));
     if (nonQueryableLayer) {
-      return { status: 'unsupported', reason: `Layer “${nonQueryableLayer}” is not marked queryable.` };
+      return { status: 'unsupported', reason: format(t().basemap.errors.layerNotQueryable, { layer: nonQueryableLayer }) };
     }
 
     const getFeatureInfo = [...document.getElementsByTagNameNS('*', 'GetFeatureInfo')][0];
     if (!getFeatureInfo) {
-      return { status: 'unsupported', reason: 'The service does not advertise GetFeatureInfo.' };
+      return { status: 'unsupported', reason: t().basemap.errors.noGetFeatureInfo };
     }
     const formats = [...getFeatureInfo.getElementsByTagNameNS('*', 'Format')]
       .map((format) => format.textContent?.trim() ?? '')
@@ -325,13 +329,13 @@ async function discoverWmsQueryCapability(url: string, timeoutMs = 6000): Promis
       ?? formats.find((format) => /text\/html/i.test(format))
       ?? formats.find((format) => /text\/plain/i.test(format));
     if (!infoFormat) {
-      return { status: 'unsupported', reason: 'GetFeatureInfo has no JSON, HTML, or plain-text response format.' };
+      return { status: 'unsupported', reason: t().basemap.errors.noSupportedFormat };
     }
     return { status: 'supported', strategy: 'wms-get-feature-info', infoFormat };
   } catch (reason) {
     const detail = reason instanceof DOMException && reason.name === 'AbortError'
-      ? 'The capabilities request timed out.'
-      : 'Capabilities could not be loaded; the server may block browser requests.';
+      ? t().basemap.errors.capabilitiesTimeout
+      : t().basemap.errors.capabilitiesBlocked;
     return { status: 'unavailable', reason: detail };
   } finally {
     window.clearTimeout(timeout);
@@ -346,9 +350,9 @@ export async function discoverOverlayQueryCapability(
   }
   if (resolved.serviceType === 'wms') return discoverWmsQueryCapability(resolved.url);
   if (resolved.serviceType === 'wmts') {
-    return { status: 'unsupported', reason: 'This viewer does not yet support WMTS feature-info queries.' };
+    return { status: 'unsupported', reason: t().basemap.errors.wmtsQueriesUnsupported };
   }
-  return { status: 'unsupported', reason: 'XYZ/TMS tiles do not advertise a standard feature-info operation.' };
+  return { status: 'unsupported', reason: t().basemap.errors.xyzQueriesUnsupported };
 }
 
 export function tileUrlForValidation(tileUrl: string): string {
@@ -365,7 +369,7 @@ export function validateTileImage(tileUrl: string, timeoutMs = 6000): Promise<vo
     const image = new Image();
     const timeout = window.setTimeout(() => {
       image.src = '';
-      reject(new Error('The tile server did not respond within 6 seconds.'));
+      reject(new Error(t().basemap.errors.tileTimeout));
     }, timeoutMs);
 
     image.onload = () => {
@@ -374,7 +378,7 @@ export function validateTileImage(tileUrl: string, timeoutMs = 6000): Promise<vo
     };
     image.onerror = () => {
       window.clearTimeout(timeout);
-      reject(new Error('The tile server did not return an image for the test location.'));
+      reject(new Error(t().basemap.errors.tileNotImage));
     };
     image.src = tileUrlForValidation(tileUrl);
   });
@@ -385,17 +389,17 @@ export async function validateWfsGeoJson(url: string, timeoutMs = 6000): Promise
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) throw new Error(`The WFS server returned HTTP ${response.status}.`);
+    if (!response.ok) throw new Error(format(t().basemap.errors.wfsHttpStatus, { status: response.status }));
     const document = await response.json() as { type?: string };
     if (document.type !== 'FeatureCollection' && document.type !== 'Feature') {
-      throw new Error('The WFS response is not GeoJSON. Check that the service supports JSON output.');
+      throw new Error(t().basemap.errors.wfsNotGeoJson);
     }
   } catch (reason) {
     if (reason instanceof DOMException && reason.name === 'AbortError') {
-      throw new Error('The WFS server did not respond within 6 seconds.');
+      throw new Error(t().basemap.errors.wfsTimeout);
     }
     if (reason instanceof TypeError) {
-      throw new Error('The WFS response could not be loaded. The server may block browser requests or may not provide GeoJSON.');
+      throw new Error(t().basemap.errors.wfsBlocked);
     }
     throw reason;
   } finally {

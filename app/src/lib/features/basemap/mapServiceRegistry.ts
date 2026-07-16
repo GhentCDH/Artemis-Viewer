@@ -1,0 +1,69 @@
+import { parse } from 'yaml';
+import type { BasemapOption, OverlayOption } from '$lib/core/map/basemap';
+import { discoverOverlayQueryCapability, resolveCustomBasemap } from './customBasemap';
+
+interface MapServiceEntry {
+  id?: unknown;
+  shortLabel?: unknown;
+  longLabel?: unknown;
+  url?: unknown;
+}
+
+interface MapServicesDocument {
+  basemaps?: MapServiceEntry[];
+  overlays?: MapServiceEntry[];
+}
+
+export interface MapServiceRegistry {
+  basemaps: BasemapOption[];
+  overlays: OverlayOption[];
+}
+
+function requiredText(value: unknown, field: string, id: string): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Map service “${id}” has no ${field}.`);
+  }
+  return value.trim();
+}
+
+function normalizeEntry(entry: MapServiceEntry): {
+  id: string;
+  label: string;
+  longLabel: string;
+  url: string;
+} {
+  const id = requiredText(entry.id, 'id', 'unknown');
+  return {
+    id,
+    label: requiredText(entry.shortLabel, 'shortLabel', id),
+    longLabel: requiredText(entry.longLabel, 'longLabel', id),
+    url: requiredText(entry.url, 'url', id),
+  };
+}
+
+export async function loadMapServiceRegistry(url: string): Promise<MapServiceRegistry> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch map service registry: ${response.status} ${url}`);
+  }
+  const document = parse(await response.text()) as MapServicesDocument;
+
+  const basemaps = (document.basemaps ?? []).map((rawEntry): BasemapOption => {
+    const entry = normalizeEntry(rawEntry);
+    const resolved = resolveCustomBasemap(entry.url);
+    return { ...entry, kind: resolved.kind, url: resolved.url };
+  });
+
+  const overlays = await Promise.all((document.overlays ?? []).map(async (rawEntry): Promise<OverlayOption> => {
+    const entry = normalizeEntry(rawEntry);
+    const resolved = resolveCustomBasemap(entry.url);
+    return {
+      ...entry,
+      kind: resolved.kind,
+      url: resolved.url,
+      query: await discoverOverlayQueryCapability(resolved),
+    };
+  }));
+
+  return { basemaps, overlays };
+}

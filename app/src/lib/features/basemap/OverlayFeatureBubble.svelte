@@ -2,6 +2,7 @@
   import type maplibregl from 'maplibre-gl';
   import type { OverlayFeatureInfo } from '$lib/core/map/basemap';
   import Window from '$lib/shared/primitives/Window.svelte';
+  import { t } from '$lib/shared/i18n/i18n.svelte';
 
   let {
     map,
@@ -82,13 +83,13 @@
     placement="anchored"
     title={info.title}
     showClose
-    closeLabel="Close feature information"
+    closeLabel={t().basemap.closeFeatureInfo}
     closeOnEscape
     {onclose}
     style="--window-width: min(24rem, calc(100dvw - 2 * var(--space-3))); --window-max-height: min(28rem, calc(100dvh - 2 * var(--space-3)));"
   >
     {#if entries.length === 0}
-      <p class="feature-empty">No feature attributes were returned.</p>
+      <p class="feature-empty">{t().basemap.noFeatureAttributes}</p>
     {:else}
       <dl class="feature-properties">
         {#each entries as [name, value] (name)}

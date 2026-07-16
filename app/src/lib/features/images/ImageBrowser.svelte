@@ -1,9 +1,12 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
+  import { browser } from '$app/environment';
+  import { format, t } from '$lib/shared/i18n/i18n.svelte';
+  import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
-  import { loadImageCollections } from '$lib/features/search/searchIndex';
+  import { loadImageCollectionDetails, loadImageCollections, type ImageCollectionDetails } from '$lib/features/search/searchIndex';
   import type { ImageResult } from '$lib/features/search/searchTypes';
   import { attachImagePinInteraction, removeImagePins, syncImagePins } from './imagePins';
   import { imageBrowser } from './imageBrowserState.svelte';
@@ -23,6 +26,25 @@
   let imagesInView = $state<ImageResult[]>([]);
   let filterStart = $state(0);
   let filterEnd = $state(0);
+  let collectionsOpen = $state(false);
+  // Unchecked collections; new collections default to checked. Reassigned as a
+  // whole on toggle since Set contents aren't deeply reactive.
+  let excludedCollections = $state<ReadonlySet<string>>(new Set());
+  let collectionDetails = $state<ImageCollectionDetails[]>([]);
+  let openInfoCollectionId = $state<string | null>(null);
+  /* Match sublayer info: dismiss once the pointer moves more than 6rem away. */
+  const detailCloseDistance =
+    6 * (browser ? parseFloat(getComputedStyle(document.documentElement).fontSize) : 16);
+
+  const openInfoCollection = $derived(
+    collectionDetails.find((collection) => collection.id === openInfoCollectionId) ?? null
+  );
+
+  if (browser) {
+    void loadImageCollectionDetails().then((details) => {
+      collectionDetails = details;
+    });
+  }
 
   const datedYears = $derived(
     images
@@ -32,20 +54,35 @@
   const yearMin = $derived(datedYears.length > 0 ? Math.min(...datedYears) : 0);
   const yearMax = $derived(datedYears.length > 0 ? Math.max(...datedYears) : 0);
   const hasYearRange = $derived(yearMin !== yearMax);
+  const collections = $derived.by(() => {
+    const byId = new Map<string, string>();
+    for (const image of images) {
+      if (!byId.has(image.collectionId)) byId.set(image.collectionId, image.collectionLabel);
+    }
+    return [...byId.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+  const selectedCollectionCount = $derived(
+    collections.filter((collection) => !excludedCollections.has(collection.id)).length
+  );
   const filteredImages = $derived(
     imagesInView.filter((image) => {
+      if (excludedCollections.has(image.collectionId)) return false;
       const year = Number.parseInt(image.year, 10);
       return !Number.isFinite(year) || !hasYearRange || (year >= filterStart && year <= filterEnd);
     })
   );
 
-  void loadImageCollections().then((loaded) => {
-    images = loaded;
-    const years = loaded.map((image) => Number.parseInt(image.year, 10)).filter((year) => Number.isFinite(year));
-    filterStart = years.length > 0 ? Math.min(...years) : 0;
-    filterEnd = years.length > 0 ? Math.max(...years) : 0;
-    loading = false;
-  });
+  if (browser) {
+    void loadImageCollections().then((loaded) => {
+      images = loaded;
+      const years = loaded.map((image) => Number.parseInt(image.year, 10)).filter((year) => Number.isFinite(year));
+      filterStart = years.length > 0 ? Math.min(...years) : 0;
+      filterEnd = years.length > 0 ? Math.max(...years) : 0;
+      loading = false;
+    });
+  }
 
   function updateImagesInView(): void {
     if (!map) {
@@ -110,11 +147,23 @@
 
   function setOpen(nextOpen: boolean): void {
     imageBrowser.setPanelOpen(nextOpen);
+    if (!nextOpen) openInfoCollectionId = null;
+  }
+
+  function toggleCollectionInfo(collectionId: string): void {
+    openInfoCollectionId = openInfoCollectionId === collectionId ? null : collectionId;
   }
 
   function setFilterEnd(value: number): void {
     if (!Number.isFinite(value)) return;
     filterEnd = Math.max(Math.min(value, yearMax), filterStart);
+  }
+
+  function toggleCollection(collectionId: string): void {
+    const next = new Set(excludedCollections);
+    if (next.has(collectionId)) next.delete(collectionId);
+    else next.add(collectionId);
+    excludedCollections = next;
   }
 
   function focusImage(image: ImageResult): void {
@@ -129,7 +178,7 @@
     variant="prominent"
     active={imageBrowser.panelOpen}
     class="image-browser-trigger"
-    aria-label="Landscapes in view ({imagesInView.length})"
+    aria-label={format(t().images.inViewAria, { count: imagesInView.length })}
     aria-expanded={imageBrowser.panelOpen}
     onclick={() => setOpen(!imageBrowser.panelOpen)}
   >
@@ -138,68 +187,142 @@
       <circle cx="8.2" cy="9.3" r="1.7"></circle>
       <path d="m5.5 16.5 4.2-4.2 3.2 3 2.3-2.2 3.3 3.4"></path>
     </svg>
-    <span class="image-browser-trigger-text">Landscapes</span>
+    <span class="image-browser-trigger-text">{t().images.trigger}</span>
   </Button>
 
   {#if imageBrowser.panelOpen}
     <div class="image-browser-panel-layer">
+      {#if openInfoCollection}
+        <div class="collection-detail-layer">
+          <MetadataInfoWindow
+            title={openInfoCollection.label}
+            subtitle={openInfoCollection.provider}
+            description={openInfoCollection.description}
+            furtherReading={openInfoCollection.furtherReading}
+            sources={openInfoCollection.sources}
+            closeOnPointerDistance={detailCloseDistance}
+            onclose={() => (openInfoCollectionId = null)}
+            style="--window-width: min(19rem, calc(100vw - var(--image-browser-width) - (3 * var(--space-3)))); --window-max-height: var(--image-browser-max-height); --window-header-border-width: 0px;"
+          />
+        </div>
+      {/if}
       <Window
-        title="Landscapes in view"
-        subtitle={`${filteredImages.length} of ${imagesInView.length} visible images`}
+        title={t().images.windowTitle}
+        subtitle={format(t().images.visibleCount, { shown: filteredImages.length, total: imagesInView.length })}
         placement="right"
         showClose
         closeOnEscape={imageBrowser.preview === null}
         onclose={() => setOpen(false)}
-        style="--window-width: var(--image-browser-width); --window-max-height: var(--image-browser-max-height); --window-header-border-width: 0px;"
+        style="--window-width: var(--image-browser-width); --window-height: var(--image-browser-panel-height); --window-max-height: var(--image-browser-panel-height); --window-header-border-width: 0px;"
       >
         <div class="image-browser-body">
           <WaveSeparator />
           {#if hasYearRange}
-            <div class="year-filter" aria-label="Filter images by year">
+            <div class="year-filter" aria-label={t().images.yearFilterAria}>
               <div class="year-control">
-                <span>From</span>
+                <span>{t().images.from}</span>
                 <div class="year-input-row">
                   <output aria-live="polite">{filterStart}</output>
                   <Button
                     iconOnly
-                    aria-label="Increase start year"
+                    aria-label={t().images.increaseStartYear}
                     disabled={filterStart >= filterEnd}
                     onclick={() => setFilterStart(filterStart + 1)}
                   >↑</Button>
                   <Button
                     iconOnly
-                    aria-label="Decrease start year"
+                    aria-label={t().images.decreaseStartYear}
                     disabled={filterStart <= yearMin}
                     onclick={() => setFilterStart(filterStart - 1)}
                   >↓</Button>
                 </div>
               </div>
               <div class="year-control">
-                <span>To</span>
+                <span>{t().images.to}</span>
                 <div class="year-input-row">
                   <output aria-live="polite">{filterEnd}</output>
                   <Button
                     iconOnly
-                    aria-label="Increase end year"
+                    aria-label={t().images.increaseEndYear}
                     disabled={filterEnd >= yearMax}
                     onclick={() => setFilterEnd(filterEnd + 1)}
                   >↑</Button>
                   <Button
                     iconOnly
-                    aria-label="Decrease end year"
+                    aria-label={t().images.decreaseEndYear}
                     disabled={filterEnd <= filterStart}
                     onclick={() => setFilterEnd(filterEnd - 1)}
                   >↓</Button>
                 </div>
               </div>
             </div>
+          {/if}
+
+          {#if collections.length > 0}
+            <div class="collection-filter">
+              <Button
+                class="collection-filter-trigger"
+                active={collectionsOpen}
+                aria-expanded={collectionsOpen}
+                onclick={() => {
+                  collectionsOpen = !collectionsOpen;
+                  if (!collectionsOpen) openInfoCollectionId = null;
+                }}
+              >
+                <span class="collection-filter-label">
+                  {selectedCollectionCount === collections.length
+                    ? t().images.collections
+                    : format(t().images.collectionsFiltered, { selected: selectedCollectionCount, total: collections.length })}
+                </span>
+                <svg class="collection-filter-chevron" class:collection-filter-chevron--open={collectionsOpen} viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="m4 6 4 4 4-4"></path>
+                </svg>
+              </Button>
+              {#if collectionsOpen}
+                <div class="collection-options" role="group" aria-label={t().images.collectionFilterAria}>
+                  {#each collections as collection (collection.id)}
+                    {@const infoOpen = openInfoCollectionId === collection.id}
+                    {@const hasDetails = collectionDetails.some((detail) => detail.id === collection.id)}
+                    <div class="collection-option-row">
+                      {#if hasDetails}
+                        <Button
+                          class="collection-info-button"
+                          iconOnly
+                          aria-expanded={infoOpen}
+                          aria-label={format(infoOpen ? t().images.collectionInfoHide : t().images.collectionInfoShow, { name: collection.label })}
+                          onclick={() => toggleCollectionInfo(collection.id)}
+                          style="--button-bg: transparent; --button-bg-hover: transparent; --button-border: transparent; --button-border-hover: transparent; --button-text: var(--color-text-muted); --button-height: 1.75rem;"
+                        >
+                          <svg class="collection-info-icon" viewBox="0 0 16 16" aria-hidden="true">
+                            <circle cx="8" cy="8" r="6"></circle>
+                            <path d="M8 7.2v3.8"></path>
+                            <path d="M8 4.9h.01"></path>
+                          </svg>
+                        </Button>
+                      {/if}
+                      <label class="collection-option">
+                        <span>{collection.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={!excludedCollections.has(collection.id)}
+                          onchange={() => toggleCollection(collection.id)}
+                        />
+                      </label>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          {#if hasYearRange || collections.length > 0}
             <div class="section-separator"><WaveSeparator /></div>
           {/if}
 
           {#if loading}
-            <p class="image-status">Loading images…</p>
+            <p class="image-status">{t().images.loading}</p>
           {:else if filteredImages.length === 0}
-            <p class="image-status">No images are visible in the current map area.</p>
+            <p class="image-status">{t().images.noneVisible}</p>
           {:else}
             <div class="image-list">
               {#each filteredImages as image (image.id)}
@@ -208,7 +331,7 @@
                     <span
                       class="image-thumbnail"
                       role="img"
-                      aria-label={`Preview of ${image.title}`}
+                      aria-label={format(t().images.previewOf, { title: image.title })}
                       style:background-image={`url("${image.sprite.imageUrl.replaceAll('"', '%22')}")`}
                       style:background-size={spriteBackgroundSize(image.sprite)}
                       style:background-position={spriteBackgroundPosition(image.sprite)}
@@ -249,10 +372,12 @@
     /* -- exposed -- */
     --image-browser-width: min(22rem, calc(100vw - (2 * var(--space-3))));
     --image-browser-trigger-height: var(--canvas-primary-control-height);
-    --image-browser-max-height: calc(
-      100dvh - var(--canvas-timeline-bottom) - var(--canvas-timeline-height) - var(--space-4) -
-        var(--image-browser-trigger-height) - var(--space-4)
+    --image-browser-panel-available-height: calc(
+      100dvh - var(--canvas-timeline-bottom) - var(--canvas-timeline-height) - (2 * var(--space-4)) -
+        (2 * var(--image-browser-trigger-height)) - var(--space-2) - var(--space-3)
     );
+    --image-browser-panel-height: var(--image-browser-panel-available-height);
+    --image-browser-max-height: var(--image-browser-panel-height);
     --image-thumbnail-width: 3rem;
     --image-thumbnail-height: 2.25rem;
     /* -- end exposed -- */
@@ -288,9 +413,20 @@
     right: 0;
   }
 
+  /* Own wrapper element anchored beside the Landscapes window, so the detail
+     never participates in the panel layer's flow (positioning the Window
+     itself via a :global class ties with Window's own position rule at equal
+     specificity and is unreliable — see the branding trigger's note). */
+  .collection-detail-layer {
+    position: absolute;
+    top: 0;
+    right: calc(100% + var(--space-3));
+  }
+
   .image-browser-body {
     position: relative;
     display: flex;
+    height: 100%;
     min-height: 0;
     flex-direction: column;
   }
@@ -305,6 +441,109 @@
     position: relative;
     flex: 0 0 1rem;
     height: 1rem;
+  }
+
+  .collection-filter {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: 0 var(--space-4) var(--space-2);
+  }
+
+  .collection-filter :global(.collection-filter-trigger) {
+    --button-width: 100%;
+    --button-height: 2rem;
+  }
+
+  /* Spreads the trigger's own content (label left, chevron right) without
+     overriding Button's internal layout. */
+  .collection-filter-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .collection-filter-chevron {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 150ms ease;
+  }
+
+  .collection-filter-chevron--open {
+    transform: rotate(180deg);
+  }
+
+  .collection-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2);
+    background: var(--color-surface-control);
+  }
+
+  .collection-option-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  /* Mirrors the detail window opening to the left: info button on the left
+     edge, label text flowing toward the checkbox on the right edge. */
+  .collection-option {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    min-width: 0;
+    min-height: 1.75rem;
+    color: var(--color-text-secondary);
+    font-family: var(--font-readable);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .collection-info-icon {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .collection-option input[type='checkbox'] {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+  }
+
+  .collection-option input[type='checkbox']:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 1px;
+  }
+
+  .collection-option span {
+    min-width: 0;
+    overflow: hidden;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .year-control {
@@ -429,13 +668,11 @@
     }
   }
 
-  @media (orientation: landscape) {
-    .image-browser {
-      --image-browser-max-height: 50dvh;
-    }
-  }
-
   @media (max-width: 40rem) {
+    .image-browser {
+      --image-browser-panel-height: min(50dvh, var(--image-browser-panel-available-height));
+    }
+
     .image-browser-panel-layer {
       position: fixed;
       top: calc(var(--space-3) + var(--image-browser-trigger-height) + var(--space-2));

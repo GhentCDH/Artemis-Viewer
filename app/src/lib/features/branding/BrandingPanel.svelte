@@ -4,7 +4,6 @@
   import Toggle from '$lib/shared/primitives/Toggle.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import type { DatasetSource } from '$lib/core/dataset/dataSource';
-  import type { SiteMetadata } from '$lib/core/dataset/siteMetadata';
   import type {
     AllmapsOverviewTilesSelection,
     AllmapsTransformation,
@@ -12,8 +11,13 @@
     IiifLoadingMode,
   } from '$lib/core/renderers/types';
   import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
+  import { i18n, paragraphs, t, LOCALES, LOCALE_NAMES, LOCALE_SHORT_LABELS } from '$lib/shared/i18n/i18n.svelte';
+  import { SITE_TITLE, TEAM, PARTNER_LOGOS, PIPELINE_URL } from './aboutData';
 
-  let { siteMetadata, style = '' }: { siteMetadata: SiteMetadata; style?: string } = $props();
+  let {
+    resolveDatasetUrl,
+    style = '',
+  }: { resolveDatasetUrl: (path: string) => string; style?: string } = $props();
 
   type Tab = 'about' | 'pipeline';
   type TuningNumberKey = Exclude<keyof AllmapsTuningOptions, 'overviewTilesMaxResolution' | 'overviewTilesSelection'>;
@@ -44,9 +48,6 @@
     }
   }
 
-  const pipeline = $derived(siteMetadata.pipeline);
-  const hasPipeline = $derived(pipeline.info.length > 0 || pipeline.links.length > 0);
-
   function open(): void {
     isOpen = true;
     activeTab = 'about';
@@ -61,7 +62,7 @@
   <div class="branding-trigger-scale">
     <Button
       class="branding-trigger"
-      aria-label="Open project information"
+      aria-label={t().branding.openInfo}
       aria-expanded={isOpen}
       onclick={open}
       style="--button-height: var(--branding-button-height); --button-padding-inline: var(--branding-button-padding-inline); --button-gap: var(--branding-button-gap);"
@@ -71,7 +72,7 @@
       </svg>
       <span class="branding-text">
         <span class="branding-title">ARTEMIS</span>
-        <span class="branding-subtitle">Schelde Gemapt</span>
+        <span class="branding-subtitle">{SITE_TITLE}</span>
       </span>
     </Button>
   </div>
@@ -85,72 +86,66 @@
         backdrop
         closeOnEscape
         showClose
-        closeLabel="Close panel"
+        closeLabel={t().branding.closePanel}
         onclose={close}
         style="--window-width: var(--branding-modal-width); --window-height: var(--branding-modal-height);"
       >
         {#snippet header()}
-          <div class="branding-tabs">
-            <Button active={activeTab === 'about'} onclick={() => (activeTab = 'about')}>About</Button>
-            {#if hasPipeline}
-              <Button active={activeTab === 'pipeline'} onclick={() => (activeTab = 'pipeline')}>{pipeline.title}</Button>
-            {/if}
+          <div class="branding-header">
+            <div class="branding-tabs">
+              <Button active={activeTab === 'about'} onclick={() => (activeTab = 'about')}>{t().branding.aboutTab}</Button>
+              <Button active={activeTab === 'pipeline'} onclick={() => (activeTab = 'pipeline')}>{t().branding.pipeline.title}</Button>
+            </div>
+            <div class="branding-lang" role="group" aria-label={t().branding.language}>
+              {#each LOCALES as locale (locale)}
+                <Button
+                  active={i18n.locale === locale}
+                  aria-label={LOCALE_NAMES[locale]}
+                  onclick={() => i18n.setLocale(locale)}
+                >{LOCALE_SHORT_LABELS[locale]}</Button>
+              {/each}
+            </div>
           </div>
         {/snippet}
 
         <div class="branding-body">
           {#if activeTab === 'about'}
-            <h3>{siteMetadata.title}</h3>
-            {#each siteMetadata.info as paragraph (paragraph)}
+            <h3>{SITE_TITLE}</h3>
+            {#each paragraphs(t().branding.info) as paragraph (paragraph)}
               <p>{paragraph}</p>
             {/each}
 
-            {#if siteMetadata.team.length > 0}
-              <section class="branding-section">
-                <WaveSeparator />
-                <h4>Team</h4>
-                {#each siteMetadata.team as institution (institution.institution)}
-                  <div class="team-institution">
-                    <strong>{institution.institution}</strong>
-                    {#each institution.units as unit, index (index)}
-                      <div class="team-unit">
-                        {#if unit.unit}
-                          <span class="team-unit-name">{unit.unit}</span>
-                        {/if}
-                        {#if unit.members.length > 0}
-                          <ul>
-                            {#each unit.members as member (member)}
-                              <li>{member}</li>
-                            {/each}
-                          </ul>
-                        {/if}
-                      </div>
-                    {/each}
-                  </div>
-                {/each}
-              </section>
-            {/if}
-
-            {#if siteMetadata.logos.length > 0}
-              <section class="branding-section">
-                <WaveSeparator />
-                <h4>Partners</h4>
-                <div class="logo-grid">
-                  {#each siteMetadata.logos as logo (logo.src)}
-                    <a href={logo.href ?? undefined} title={logo.label} target="_blank" rel="noopener noreferrer">
-                      <img src={logo.src} alt={logo.alt} />
-                    </a>
+            <section class="branding-section">
+              <WaveSeparator />
+              <h4>{t().branding.team}</h4>
+              {#each TEAM as institution (institution.name)}
+                <div class="team-institution">
+                  <strong>{institution.name}</strong>
+                  {#each institution.units as unit (unit.name)}
+                    <div class="team-unit">
+                      <span class="team-unit-name">{unit.name}</span>
+                      <ul>
+                        {#each unit.members as member (member.name)}
+                          <li>{member.name}, {t().branding.roles[member.role]}</li>
+                        {/each}
+                      </ul>
+                    </div>
                   {/each}
                 </div>
-              </section>
-            {/if}
+              {/each}
+            </section>
 
-            {#if siteMetadata.attribution}
-              <section class="branding-section branding-attribution">
-                <WaveSeparator />
-                <p>{siteMetadata.attribution}</p>
-              </section>
-            {/if}
+            <section class="branding-section">
+              <WaveSeparator />
+              <h4>{t().branding.partners}</h4>
+              <div class="logo-grid">
+                {#each PARTNER_LOGOS as logo (logo.src)}
+                  <a href={logo.href} title={logo.name} target="_blank" rel="noopener noreferrer">
+                    <img src={resolveDatasetUrl(logo.src)} alt={logo.alt} />
+                  </a>
+                {/each}
+              </div>
+            </section>
 
             <section class="branding-section developer-section">
               <WaveSeparator />
@@ -212,6 +207,33 @@
                       label="Allmaps performance diagnostics"
                       checked={developerSettings.allmapsDiagnostics}
                       onclick={() => developerSettings.setAllmapsDiagnostics(!developerSettings.allmapsDiagnostics)}
+                    />
+                  </div>
+
+                  <div class="developer-control">
+                    <span>Allmaps tile cache log</span>
+                    <Toggle
+                      label="Allmaps tile cache log"
+                      checked={developerSettings.allmapsTileCacheLog}
+                      onclick={() => developerSettings.setAllmapsTileCacheLog(!developerSettings.allmapsTileCacheLog)}
+                    />
+                  </div>
+
+                  <div class="developer-control">
+                    <span>Allmaps GPU texture log</span>
+                    <Toggle
+                      label="Allmaps GPU texture log"
+                      checked={developerSettings.allmapsTextureLog}
+                      onclick={() => developerSettings.setAllmapsTextureLog(!developerSettings.allmapsTextureLog)}
+                    />
+                  </div>
+
+                  <div class="developer-control">
+                    <span>Allmaps PBO log</span>
+                    <Toggle
+                      label="Allmaps PBO log"
+                      checked={developerSettings.allmapsPboLog}
+                      onclick={() => developerSettings.setAllmapsPboLog(!developerSettings.allmapsPboLog)}
                     />
                   </div>
 
@@ -315,13 +337,11 @@
               </details>
             </section>
           {:else}
-            <h3>{pipeline.title}</h3>
-            {#each pipeline.info as paragraph (paragraph)}
+            <h3>{t().branding.pipeline.title}</h3>
+            {#each paragraphs(t().branding.pipeline.info) as paragraph (paragraph)}
               <p>{paragraph}</p>
             {/each}
-            {#each pipeline.links as link (link.url)}
-              <p><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a></p>
-            {/each}
+            <p><a href={PIPELINE_URL} target="_blank" rel="noopener noreferrer">{t().branding.pipeline.linkLabel}</a></p>
           {/if}
         </div>
       </Window>
@@ -410,7 +430,19 @@
     overflow: auto;
   }
 
-  .branding-tabs {
+  /* Fills the window header's leading area so the language switcher can sit
+     opposite the tabs, just before the window's close button. */
+  .branding-header {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  .branding-tabs,
+  .branding-lang {
     display: flex;
     gap: var(--space-1);
   }
@@ -507,12 +539,6 @@
     max-width: 100%;
     max-height: 3.5rem;
     object-fit: contain;
-  }
-
-  .branding-attribution p {
-    margin: 0;
-    color: var(--color-text-muted);
-    font-size: var(--text-xs);
   }
 
   .developer-section summary {

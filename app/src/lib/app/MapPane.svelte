@@ -15,6 +15,7 @@
   import type { IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
   import { hasImagePinAt, restoreImagePins } from '$lib/features/images/imagePins';
   import { queryOverlayAtPoint } from '$lib/features/basemap/overlayQuery';
+  import { format, t } from '$lib/shared/i18n/i18n.svelte';
 
   let {
     paneId,
@@ -101,7 +102,7 @@
         onOverlayFeature?.({ map: map!, lngLat: [event.lngLat.lng, event.lngLat.lat], info });
       } catch (reason) {
         if (revision !== requestRevision) return;
-        const message = reason instanceof Error ? reason.message : 'The feature-info request failed.';
+        const message = reason instanceof Error ? reason.message : t().basemap.featureInfoFailed;
         onOverlayQueryError?.(message);
       }
     };
@@ -171,7 +172,7 @@
   });
 </script>
 
-<section class="workspace-pane" aria-label="Map workspace ({paneId})" bind:this={container}></section>
+<section class="workspace-pane" aria-label={format(t().controls.mapWorkspace, { pane: paneId === 'left' ? t().controls.paneLeft : t().controls.paneRight })} bind:this={container}></section>
 
 <style>
   .workspace-pane {

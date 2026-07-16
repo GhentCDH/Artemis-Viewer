@@ -1,6 +1,8 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { format, localize, t } from '$lib/shared/i18n/i18n.svelte';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
+  import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
@@ -20,7 +22,6 @@
     ontoggle,
   }: Props = $props();
 
-  let copiedSublayerId = $state<string | null>(null);
   let openInfoSublayerId = $state<string | null>(null);
   /* 6rem in px; the root font-size is fluid, so read it instead of assuming 16px */
   const detailCloseDistance =
@@ -36,18 +37,6 @@
 
   function formatKind(kind: string): string {
     return kind.trim().toUpperCase();
-  }
-
-  function copyDownloadUrl(sublayerId: string, downloadUrl: string): void {
-    if (!downloadUrl || typeof navigator === 'undefined' || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(downloadUrl).then(() => {
-      copiedSublayerId = sublayerId;
-      window.setTimeout(() => {
-        if (copiedSublayerId === sublayerId) {
-          copiedSublayerId = null;
-        }
-      }, 1200);
-    });
   }
 
   function toggleInfo(sublayerId: string): void {
@@ -72,7 +61,7 @@
         </div>
         <Button
           iconOnly
-          aria-label={`Close ${layer.label} sublayer menu`}
+          aria-label={format(t().sublayers.closeMenu, { layer: layer.label })}
           onclick={() => onclose?.()}
           style="--button-bg: transparent; --button-bg-hover: transparent; --button-border: transparent; --button-border-hover: transparent; --button-text: var(--color-text-muted); --button-height: 2rem;"
         >
@@ -80,25 +69,25 @@
         </Button>
       {/snippet}
 
-      <div class="sublayer-menu" aria-label={`${layer.label} sublayers`}>
+      <div class="sublayer-menu" aria-label={format(t().sublayers.menuAria, { layer: layer.label })}>
         <WaveSeparator />
         {#each layer.sublayers as sublayer (sublayer.id)}
           {@const enabled = sublayerState[sublayer.id] ?? false}
           {@const infoOpen = openInfoSublayerId === sublayer.id}
           <div class="sublayer-row">
             <div class="sublayer-copy">
-              <span class="sublayer-name">{sublayer.name}</span>
+              <span class="sublayer-name">{localize(sublayer.name)}</span>
             </div>
             <Toggle
               checked={enabled}
-              label={`${enabled ? 'Hide' : 'Show'} ${sublayer.name}`}
+              label={format(enabled ? t().sublayers.hide : t().sublayers.show, { name: localize(sublayer.name) })}
               onclick={() => ontoggle?.(sublayer.id)}
             />
             <Button
               class="info-button"
               iconOnly
               aria-expanded={infoOpen}
-              aria-label={`${infoOpen ? 'Hide' : 'Show'} ${sublayer.name} info`}
+              aria-label={format(infoOpen ? t().sublayers.hideInfo : t().sublayers.showInfo, { name: localize(sublayer.name) })}
               onclick={() => toggleInfo(sublayer.id)}
               style="--button-bg: transparent; --button-bg-hover: transparent; --button-border: transparent; --button-border-hover: transparent; --button-text: var(--color-text-muted); --button-height: 1.75rem;"
             >
@@ -114,70 +103,18 @@
     </Window>
 
     {#if openInfoSublayer}
-      <Window
+      <MetadataInfoWindow
         class="sublayer-detail-window"
-        variant="popover"
-        placement="anchored"
         title={openInfoSublayer.name}
         subtitle={formatKind(openInfoSublayer.kind)}
+        description={openInfoSublayer.description}
+        furtherReading={openInfoSublayer.furtherReading}
+        sources={openInfoSublayer.sources}
         closeOnPointerDistance={detailCloseDistance}
         onclose={() => {
           openInfoSublayerId = null;
         }}
-      >
-        <div class="sublayer-detail">
-          <WaveSeparator />
-          {#if openInfoSublayer.description}
-            {#each openInfoSublayer.description.split(/\n\s*\n/).filter(Boolean) as paragraph}
-              <p>{paragraph}</p>
-            {/each}
-          {/if}
-          {#if openInfoSublayer.citation}
-            <section class="detail-section" aria-label={`${openInfoSublayer.name} citation`}>
-              <WaveSeparator />
-              <h3>Citation</h3>
-              <p>{openInfoSublayer.citation}</p>
-            </section>
-          {/if}
-          {#if openInfoSublayer.readingList.length > 0}
-            <section class="detail-section" aria-label={`${openInfoSublayer.name} reading list`}>
-              <WaveSeparator />
-              <h3>Reading list</h3>
-              <ul class="reading-list">
-                {#each openInfoSublayer.readingList as entry (entry.label)}
-                  <li><a href={entry.url} target="_blank" rel="noreferrer">{entry.label}</a></li>
-                {/each}
-              </ul>
-            </section>
-          {/if}
-          {#if openInfoSublayer.downloadUrl}
-            <section class="detail-section" aria-label={`${openInfoSublayer.name} download`}>
-              <WaveSeparator />
-              <h3>Download</h3>
-              <div class="download-row">
-                <a href={openInfoSublayer.downloadUrl} target="_blank" rel="noreferrer">
-                  {openInfoSublayer.downloadFile || 'Download'}
-                </a>
-                <Button
-                  class="download-copy-button"
-                  iconOnly
-                  aria-label={`Copy ${openInfoSublayer.name} download link`}
-                  onclick={() => copyDownloadUrl(openInfoSublayer.id, openInfoSublayer.downloadUrl)}
-                  style="--button-bg: transparent; --button-bg-hover: transparent; --button-border: transparent; --button-border-hover: transparent; --button-text: var(--color-accent); --button-height: 1.5rem;"
-                >
-                  <svg class="copy-icon" viewBox="0 0 16 16" aria-hidden="true">
-                    <rect x="5" y="5" width="8" height="8" rx="1.2"></rect>
-                    <path d="M3 10.5V3.8C3 3.4 3.4 3 3.8 3h6.7"></path>
-                  </svg>
-                </Button>
-                {#if copiedSublayerId === openInfoSublayer.id}
-                  <span class="copy-status">Copied</span>
-                {/if}
-              </div>
-            </section>
-          {/if}
-        </div>
-      </Window>
+      />
     {/if}
   </div>
 {/if}
@@ -317,67 +254,6 @@
     stroke-linejoin: round;
   }
 
-  .sublayer-detail {
-    position: relative;
-    padding: var(--space-3);
-  }
-
-  .sublayer-detail p {
-    margin: 0;
-    color: var(--color-text-secondary);
-    font-family: var(--font-readable);
-    font-size: var(--text-xs);
-    line-height: 1.6;
-    user-select: text;
-  }
-
-  .sublayer-detail p + p {
-    margin-top: var(--space-3);
-  }
-
-  .detail-section {
-    position: relative;
-    margin-top: var(--space-4);
-    padding-top: var(--space-3);
-  }
-
-  .detail-section h3 {
-    margin: 0 0 var(--space-2);
-    color: var(--color-text-muted);
-    font-size: var(--text-2xs);
-    font-weight: 700;
-    line-height: 1.2;
-    text-transform: uppercase;
-  }
-
-  .reading-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin: 0;
-    padding-left: var(--space-4);
-  }
-
-  .reading-list li {
-    color: var(--color-text-secondary);
-    font-family: var(--font-readable);
-    font-size: var(--text-xs);
-    line-height: 1.4;
-  }
-
-  .reading-list a {
-    color: var(--color-accent);
-    overflow-wrap: anywhere;
-    user-select: text;
-  }
-
-  .download-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
-  }
-
   @media (max-width: 40rem) {
     .sublayer-menu-stack {
       width: 100%;
@@ -395,31 +271,6 @@
     .sublayer-menu {
       padding: var(--space-2) var(--space-3);
     }
-  }
-
-  .download-row a {
-    min-width: 0;
-    color: var(--color-accent);
-    font-size: var(--text-xs);
-    line-height: 1.3;
-    overflow-wrap: anywhere;
-    user-select: text;
-  }
-
-  .copy-icon {
-    width: 1rem;
-    height: 1rem;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.7;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .copy-status {
-    color: var(--color-text-muted);
-    font-size: var(--text-2xs);
-    line-height: 1.2;
   }
 
   @media (max-width: 56rem) {

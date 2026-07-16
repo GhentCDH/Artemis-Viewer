@@ -14,6 +14,9 @@ interface PersistedDeveloperSettings {
   showHighStretch: boolean;
   iiifLoadingMode: IiifLoadingMode;
   allmapsDiagnostics: boolean;
+  allmapsTileCacheLog: boolean;
+  allmapsTextureLog: boolean;
+  allmapsPboLog: boolean;
   allmapsSprites: boolean;
   dataSource: DatasetSource;
   allmapsTuning: AllmapsTuningOptions;
@@ -37,6 +40,9 @@ const DEFAULTS: PersistedDeveloperSettings = {
   showHighStretch: false,
   iiifLoadingMode: 'sequential',
   allmapsDiagnostics: false,
+  allmapsTileCacheLog: false,
+  allmapsTextureLog: false,
+  allmapsPboLog: false,
   allmapsSprites: true,
   dataSource: 'published',
   allmapsTuning: ALLMAPS_TUNING_DEFAULTS,
@@ -84,6 +90,9 @@ function readPersistedSettings(): PersistedDeveloperSettings {
       showHighStretch: raw.showHighStretch === true,
       iiifLoadingMode: raw.iiifLoadingMode === 'eager' ? 'eager' : 'sequential',
       allmapsDiagnostics: raw.allmapsDiagnostics === true,
+      allmapsTileCacheLog: raw.allmapsTileCacheLog === true,
+      allmapsTextureLog: raw.allmapsTextureLog === true,
+      allmapsPboLog: raw.allmapsPboLog === true,
       allmapsSprites: raw.allmapsSprites !== false,
       dataSource:
         raw.dataSource === 'draft' || window.localStorage.getItem(DATASET_SOURCE_STORAGE_KEY) === 'draft'
@@ -102,6 +111,9 @@ class DeveloperSettingsStore {
   showHighStretch = $state(DEFAULTS.showHighStretch);
   iiifLoadingMode = $state<IiifLoadingMode>(DEFAULTS.iiifLoadingMode);
   allmapsDiagnostics = $state(DEFAULTS.allmapsDiagnostics);
+  allmapsTileCacheLog = $state(DEFAULTS.allmapsTileCacheLog);
+  allmapsTextureLog = $state(DEFAULTS.allmapsTextureLog);
+  allmapsPboLog = $state(DEFAULTS.allmapsPboLog);
   allmapsSprites = $state(DEFAULTS.allmapsSprites);
   dataSource = $state<DatasetSource>(DEFAULTS.dataSource);
   allmapsTuning = $state<AllmapsTuningOptions>(DEFAULTS.allmapsTuning);
@@ -114,6 +126,9 @@ class DeveloperSettingsStore {
     this.showHighStretch = persisted.showHighStretch;
     this.iiifLoadingMode = persisted.iiifLoadingMode;
     this.allmapsDiagnostics = persisted.allmapsDiagnostics;
+    this.allmapsTileCacheLog = persisted.allmapsTileCacheLog;
+    this.allmapsTextureLog = persisted.allmapsTextureLog;
+    this.allmapsPboLog = persisted.allmapsPboLog;
     this.allmapsSprites = persisted.allmapsSprites;
     this.dataSource = persisted.dataSource;
     this.allmapsTuning = persisted.allmapsTuning;
@@ -129,6 +144,9 @@ class DeveloperSettingsStore {
       showHighStretch: this.showHighStretch,
       loadingMode: this.iiifLoadingMode,
       diagnostics: this.allmapsDiagnostics,
+      tileCacheLog: this.allmapsTileCacheLog,
+      textureLog: this.allmapsTextureLog,
+      pboLog: this.allmapsPboLog,
       spritesEnabled: this.allmapsSprites,
       tuning: this.allmapsTuning,
     };
@@ -169,6 +187,27 @@ class DeveloperSettingsStore {
     this.persist();
   }
 
+  setAllmapsTileCacheLog(value: boolean): void {
+    if (this.allmapsTileCacheLog === value) return;
+    this.allmapsTileCacheLog = value;
+    this.renderRevision += 1;
+    this.persist();
+  }
+
+  setAllmapsTextureLog(value: boolean): void {
+    if (this.allmapsTextureLog === value) return;
+    this.allmapsTextureLog = value;
+    this.renderRevision += 1;
+    this.persist();
+  }
+
+  setAllmapsPboLog(value: boolean): void {
+    if (this.allmapsPboLog === value) return;
+    this.allmapsPboLog = value;
+    this.renderRevision += 1;
+    this.persist();
+  }
+
   setAllmapsSprites(value: boolean): void {
     if (this.allmapsSprites === value) return;
     this.allmapsSprites = value;
@@ -199,7 +238,11 @@ class DeveloperSettingsStore {
       this.allmapsSprites !== DEFAULTS.allmapsSprites ||
       !tuningEquals(this.allmapsTuning, DEFAULTS.allmapsTuning);
     const loadingModeChanged = this.iiifLoadingMode !== DEFAULTS.iiifLoadingMode;
-    const diagnosticsChanged = this.allmapsDiagnostics !== DEFAULTS.allmapsDiagnostics;
+    const diagnosticsChanged =
+      this.allmapsDiagnostics !== DEFAULTS.allmapsDiagnostics ||
+      this.allmapsTileCacheLog !== DEFAULTS.allmapsTileCacheLog ||
+      this.allmapsTextureLog !== DEFAULTS.allmapsTextureLog ||
+      this.allmapsPboLog !== DEFAULTS.allmapsPboLog;
     const dataSourceChanged = this.dataSource !== DEFAULTS.dataSource;
 
     this.transformation = DEFAULTS.transformation;
@@ -207,6 +250,9 @@ class DeveloperSettingsStore {
     this.showHighStretch = DEFAULTS.showHighStretch;
     this.iiifLoadingMode = DEFAULTS.iiifLoadingMode;
     this.allmapsDiagnostics = DEFAULTS.allmapsDiagnostics;
+    this.allmapsTileCacheLog = DEFAULTS.allmapsTileCacheLog;
+    this.allmapsTextureLog = DEFAULTS.allmapsTextureLog;
+    this.allmapsPboLog = DEFAULTS.allmapsPboLog;
     this.allmapsSprites = DEFAULTS.allmapsSprites;
     this.dataSource = DEFAULTS.dataSource;
     this.allmapsTuning = DEFAULTS.allmapsTuning;
@@ -224,6 +270,9 @@ class DeveloperSettingsStore {
       showHighStretch: this.showHighStretch,
       iiifLoadingMode: this.iiifLoadingMode,
       allmapsDiagnostics: this.allmapsDiagnostics,
+      allmapsTileCacheLog: this.allmapsTileCacheLog,
+      allmapsTextureLog: this.allmapsTextureLog,
+      allmapsPboLog: this.allmapsPboLog,
       allmapsSprites: this.allmapsSprites,
       dataSource: this.dataSource,
       allmapsTuning: this.allmapsTuning,

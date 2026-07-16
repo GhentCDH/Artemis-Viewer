@@ -9,6 +9,7 @@
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
   import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
+  import { format, t } from '$lib/shared/i18n/i18n.svelte';
   import {
     loadCustomBasemaps,
     loadCustomOverlays,
@@ -22,15 +23,19 @@
 
   let {
     selected,
+    registeredBasemaps,
     onselect,
     selectedOverlay,
+    registeredOverlays,
     onOverlaySelect,
     overlayOpacity,
     onOverlayOpacityChange,
   }: {
     selected: BasemapOption;
+    registeredBasemaps: BasemapOption[];
     onselect: (basemap: BasemapOption) => void;
     selectedOverlay: OverlayOption | null;
+    registeredOverlays: OverlayOption[];
     onOverlaySelect: (overlay: OverlayOption | null) => void;
     overlayOpacity: number;
     onOverlayOpacityChange: (opacity: number) => void;
@@ -106,12 +111,12 @@
 
   function overlayQueryWarning(overlay: OverlayOption): string | null {
     if (overlay.query?.status === 'supported') return overlay.query.error ?? null;
-    return overlay.query?.reason ?? 'Click behaviour was not determined for this saved overlay. Re-add it to check again.';
+    return overlay.query?.reason ?? t().basemap.staleQueryWarning;
   }
 
   function showWarningTooltip(text: string, event: MouseEvent | FocusEvent): void {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    showTooltip({ text: `No click behaviour: ${text}`, x: rect.left + rect.width / 2, y: rect.top, placement: 'above' });
+    showTooltip({ text: format(t().basemap.noClickBehaviour, { warning: text }), x: rect.left + rect.width / 2, y: rect.top, placement: 'above' });
   }
 
   async function addCustomMapService(): Promise<void> {
@@ -152,7 +157,7 @@
       }
     } catch (reason) {
       if (revision !== validationRevision) return;
-      error = reason instanceof Error ? reason.message : 'Unable to add this map service.';
+      error = reason instanceof Error ? reason.message : t().basemap.addFailed;
     } finally {
       if (revision === validationRevision) validating = false;
     }
@@ -165,9 +170,9 @@
       <Window
         variant="popover"
         placement="anchored"
-        title={adding ? `Add ${adding}` : activeSection === 'background' ? 'Background map' : 'Overlay layer'}
+        title={adding ? (adding === 'overlay' ? t().basemap.addOverlayTitle : t().basemap.addBasemapTitle) : activeSection === 'background' ? t().basemap.backgroundTitle : t().basemap.overlayTitle}
         showClose
-        closeLabel="Close map layers menu"
+        closeLabel={t().basemap.closeMenu}
         onclose={closeMenu}
         style="--window-width: min(21rem, calc(100vw - (2 * var(--space-4)))); --window-header-border-width: 0;"
       >
@@ -175,35 +180,35 @@
           <div class="basemap-separator"><WaveSeparator /></div>
           <form class="basemap-form" onsubmit={(event) => { event.preventDefault(); void addCustomMapService(); }}>
             <label>
-              <span>Map service URL</span>
+              <span>{t().basemap.urlLabel}</span>
               <input
                 bind:value={url}
                 autocomplete="off"
                 spellcheck="false"
-                placeholder="XYZ, WMTS, WMS, or WFS URL"
+                placeholder={t().basemap.urlPlaceholder}
               />
             </label>
             <label>
-              <span>Name <small>(optional)</small></span>
-              <input bind:value={label} autocomplete="off" placeholder="Uses the server name by default" />
+              <span>{t().basemap.nameLabel} <small>{t().basemap.nameOptional}</small></span>
+              <input bind:value={label} autocomplete="off" placeholder={t().basemap.namePlaceholder} />
             </label>
             {#if error}<p class="basemap-error" role="alert">{error}</p>{/if}
             <div class="form-actions">
-              <Button type="button" onclick={resetForm}>Back</Button>
+              <Button type="button" onclick={resetForm}>{t().basemap.back}</Button>
               <Button variant="primary" type="submit" disabled={validating}>
-                {validating ? 'Checking…' : 'Add'}
+                {validating ? t().basemap.checking : t().basemap.add}
               </Button>
             </div>
           </form>
         {:else}
-          <div class="layer-tabs" aria-label="Map layer type">
+          <div class="layer-tabs" aria-label={t().basemap.layerTypeGroup}>
             <Button
               class="layer-tab"
               active={activeSection === 'background'}
               aria-pressed={activeSection === 'background'}
               onclick={() => { activeSection = 'background'; }}
             >
-              Background
+              {t().basemap.backgroundTab}
             </Button>
             <Button
               class="layer-tab"
@@ -211,16 +216,21 @@
               aria-pressed={activeSection === 'overlay'}
               onclick={() => { activeSection = 'overlay'; }}
             >
-              Overlay
+              {t().basemap.overlayTab}
             </Button>
           </div>
           <div class="basemap-separator"><WaveSeparator /></div>
 
           {#if activeSection === 'background'}
-            <section class="layer-section" aria-label="Background maps">
+            <section class="layer-section" aria-label={t().basemap.backgroundsSection}>
               <div class="layer-options">
                 {#each BUILT_IN_BASEMAPS as basemap (basemap.id)}
-                  <Button variant="list" active={selected.id === basemap.id} onclick={() => selectBasemap(basemap)}>
+                  <Button variant="list" title={basemap.longLabel ?? basemap.label} active={selected.id === basemap.id} onclick={() => selectBasemap(basemap)}>
+                    {basemap.label}
+                  </Button>
+                {/each}
+                {#each registeredBasemaps as basemap (basemap.id)}
+                  <Button variant="list" title={basemap.longLabel ?? basemap.label} active={selected.id === basemap.id} onclick={() => selectBasemap(basemap)}>
                     {basemap.label}
                   </Button>
                 {/each}
@@ -229,7 +239,7 @@
                     <Button variant="list" active={selected.id === basemap.id} onclick={() => selectBasemap(basemap)}>
                       {basemap.label}
                     </Button>
-                    <Button iconOnly aria-label={`Remove ${basemap.label}`} onclick={() => removeCustomBasemap(basemap)}>
+                    <Button iconOnly aria-label={format(t().basemap.remove, { label: basemap.label })} onclick={() => removeCustomBasemap(basemap)}>
                       <svg class="remove-basemap-icon" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path>
                       </svg>
@@ -239,16 +249,38 @@
               </div>
               <div class="layer-section-action">
               <Button variant="list" onclick={() => { adding = 'basemap'; error = ''; }}>
-                <span aria-hidden="true">＋</span> Add map service…
+                <span aria-hidden="true">＋</span> {t().basemap.addMapService}
               </Button>
               </div>
             </section>
           {:else}
-            <section class="layer-section" aria-label="Overlay layers">
+            <section class="layer-section" aria-label={t().basemap.overlaysSection}>
               <div class="layer-options">
                 <Button variant="list" active={selectedOverlay === null} onclick={() => selectOverlay(null)}>
                   No overlay
                 </Button>
+                {#each registeredOverlays as overlay (overlay.id)}
+                  {@const displayedOverlay = selectedOverlay?.id === overlay.id ? selectedOverlay : overlay}
+                  <div class="custom-basemap-option">
+                    <Button variant="list" title={displayedOverlay.longLabel ?? displayedOverlay.label} active={selectedOverlay?.id === displayedOverlay.id} onclick={() => selectOverlay(displayedOverlay)}>
+                      {displayedOverlay.label}
+                    </Button>
+                    {#if overlayQueryWarning(displayedOverlay) !== null}
+                      {@const warning = overlayQueryWarning(displayedOverlay)!}
+                      <div class="overlay-option-actions">
+                        <Button
+                          iconOnly
+                          class="overlay-warning"
+                          aria-label={format(t().basemap.noClickBehaviourFor, { label: displayedOverlay.label, warning })}
+                          onmouseenter={(event) => showWarningTooltip(warning, event)}
+                          onmouseleave={hideTooltip}
+                          onfocus={(event) => showWarningTooltip(warning, event)}
+                          onblur={hideTooltip}
+                        >!</Button>
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
                 {#each customOverlays as overlay (overlay.id)}
                   {@const displayedOverlay = selectedOverlay?.id === overlay.id ? selectedOverlay : overlay}
                   <div class="custom-basemap-option">
@@ -261,14 +293,14 @@
                         <Button
                           iconOnly
                           class="overlay-warning"
-                          aria-label={`No click behaviour for ${displayedOverlay.label}: ${warning}`}
+                          aria-label={format(t().basemap.noClickBehaviourFor, { label: displayedOverlay.label, warning })}
                           onmouseenter={(event) => showWarningTooltip(warning, event)}
                           onmouseleave={hideTooltip}
                           onfocus={(event) => showWarningTooltip(warning, event)}
                           onblur={hideTooltip}
                         >!</Button>
                       {/if}
-                      <Button iconOnly aria-label={`Remove ${overlay.label}`} onclick={() => removeCustomOverlay(overlay)}>
+                      <Button iconOnly aria-label={format(t().basemap.remove, { label: overlay.label })} onclick={() => removeCustomOverlay(overlay)}>
                         <svg class="remove-basemap-icon" viewBox="0 0 24 24" aria-hidden="true">
                           <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path>
                         </svg>
@@ -279,14 +311,14 @@
               </div>
               {#if selectedOverlay}
                 <label class="opacity-control">
-                  <span>Transparency</span>
+                  <span>{t().basemap.transparency}</span>
                   <input
                     type="range"
                     min="0"
                     max="100"
                     step="1"
                     value={Math.round((1 - overlayOpacity) * 100)}
-                    aria-label="Overlay transparency"
+                    aria-label={t().basemap.transparencyAria}
                     oninput={(event) => {
                       onOverlayOpacityChange(1 - Number(event.currentTarget.value) / 100);
                     }}
@@ -296,7 +328,7 @@
               {/if}
               <div class="layer-section-action">
                 <Button variant="list" onclick={() => { adding = 'overlay'; error = ''; }}>
-                  <span aria-hidden="true">＋</span> Add overlay service…
+                  <span aria-hidden="true">＋</span> {t().basemap.addOverlayService}
                 </Button>
               </div>
             </section>
@@ -309,7 +341,7 @@
   <Button
     iconOnly
     active={open}
-    aria-label="Choose map layers"
+    aria-label={t().basemap.trigger}
     aria-expanded={open}
     onclick={() => { if (open) closeMenu(); else open = true; }}
     style="--button-height: var(--canvas-primary-control-height);"

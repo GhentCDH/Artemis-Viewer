@@ -1,5 +1,6 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
+  import { format, t } from '$lib/shared/i18n/i18n.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Toggle from '$lib/shared/primitives/Toggle.svelte';
@@ -20,7 +21,6 @@
 
   type Tab = 'all' | 'toponyms' | 'sheets' | 'images';
 
-  const INPUT_PLACEHOLDER = 'Search for a place…';
 
   let expanded = $state(false);
   let query = $state('');
@@ -139,12 +139,12 @@
 
 <div class="search-menu">
   <div class="search-trigger-layer">
-    <Button variant="prominent" active={expanded} class="search-trigger" aria-label="Search" aria-expanded={expanded} onclick={toggle}>
+    <Button variant="prominent" active={expanded} class="search-trigger" aria-label={t().search.trigger} aria-expanded={expanded} onclick={toggle}>
       <svg class="search-icon search-trigger-icon" viewBox="0 0 16 16" aria-hidden="true">
         <circle cx="6.8" cy="6.8" r="4.3"></circle>
         <path d="M10.2 10.2 14 14"></path>
       </svg>
-      <span class="search-trigger-text">Search</span>
+      <span class="search-trigger-text">{t().search.trigger}</span>
     </Button>
   </div>
 
@@ -169,41 +169,41 @@
           bind:this={inputElement}
           bind:value={query}
           type="text"
-          placeholder={INPUT_PLACEHOLDER}
-          aria-label="Search toponyms, map sheets, and images"
+          placeholder={t().search.placeholder}
+          aria-label={t().search.inputAria}
         />
       </form>
-      <Button iconOnly aria-label="Close search" onclick={close}>×</Button>
+      <Button iconOnly aria-label={t().search.close} onclick={close}>×</Button>
         {/snippet}
 
     <div class="search-body">
       <div class="search-toolbar">
         <div class="search-tabs">
-          <Button active={activeTab === 'all'} onclick={() => (activeTab = 'all')}>All</Button>
-          <Button active={activeTab === 'toponyms'} onclick={() => (activeTab = 'toponyms')}>Toponyms</Button>
-          <Button active={activeTab === 'sheets'} onclick={() => (activeTab = 'sheets')}>Sheets</Button>
-          <Button active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>Images</Button>
+          <Button active={activeTab === 'all'} onclick={() => (activeTab = 'all')}>{t().search.tabAll}</Button>
+          <Button active={activeTab === 'toponyms'} onclick={() => (activeTab = 'toponyms')}>{t().search.toponyms}</Button>
+          <Button active={activeTab === 'sheets'} onclick={() => (activeTab = 'sheets')}>{t().search.sheets}</Button>
+          <Button active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>{t().search.images}</Button>
         </div>
         <div class="active-only-toggle" class:is-active={activeOnly}>
           <svg class="target-icon" viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="8" cy="8" r="5.6"></circle>
             <circle cx="8" cy="8" r="2.4"></circle>
           </svg>
-          <span>Active layers only</span>
+          <span>{t().search.activeLayersOnly}</span>
           <Toggle checked={activeOnly} label="Limit results to active layers" onclick={() => (activeOnly = !activeOnly)} />
         </div>
       </div>
 
       {#if loading}
-        <p class="search-status">Loading search index…</p>
+        <p class="search-status">{t().search.loadingIndex}</p>
       {:else if !trimmedQuery}
-        <p class="search-status">Type to search historical place names, map sheets, and images.</p>
+        <p class="search-status">{t().search.typeToSearch}</p>
       {:else if totalVisible === 0}
-        <p class="search-status">No results for “{trimmedQuery}”.</p>
+        <p class="search-status">{format(t().search.noResults, { query: trimmedQuery })}</p>
       {:else}
         <div class="search-results">
           {#if showToponyms && groupedToponyms.length > 0}
-            {#if activeTab === 'all'}<h3 class="results-heading">Toponyms</h3>{/if}
+            {#if activeTab === 'all'}<h3 class="results-heading">{t().search.toponyms}</h3>{/if}
             {#each groupedToponyms as [layerLabel, matches] (layerLabel)}
               <section class="result-group">
                 <h4 class="result-group-heading">{layerLabel}</h4>
@@ -221,7 +221,7 @@
           {/if}
 
           {#if showSheets && groupedSheets.length > 0}
-            {#if activeTab === 'all'}<h3 class="results-heading">Sheets</h3>{/if}
+            {#if activeTab === 'all'}<h3 class="results-heading">{t().search.sheets}</h3>{/if}
             {#each groupedSheets as [layerLabel, matches] (layerLabel)}
               <section class="result-group">
                 <h4 class="result-group-heading">{layerLabel}</h4>
@@ -239,7 +239,7 @@
           {/if}
 
           {#if showImages && groupedImages.length > 0}
-            {#if activeTab === 'all'}<h3 class="results-heading">Images</h3>{/if}
+            {#if activeTab === 'all'}<h3 class="results-heading">{t().search.images}</h3>{/if}
             {#each groupedImages as [collectionLabel, matches] (collectionLabel)}
               <section class="result-group">
                 <h4 class="result-group-heading">{collectionLabel}</h4>

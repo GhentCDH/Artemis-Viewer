@@ -1,6 +1,8 @@
 import { loadSearchSources } from '$lib/core/dataset/layerRegistry';
 import { datasetUrl } from '$lib/core/dataset/dataSource';
 import { parse } from 'yaml';
+import type { LocalizedText } from '$lib/shared/i18n/i18n.svelte';
+import type { MetadataLink, MetadataSource } from '$lib/shared/metadata/types';
 import type { ImageResult, ImageSprite, SearchIndex, SheetResult, ToponymResult } from './searchTypes';
 
 interface RawToponymItem {
@@ -33,8 +35,23 @@ interface ImageCollectionRegistry {
   collections?: Array<{
     id?: unknown;
     label?: unknown;
+    provider?: unknown;
+    description?: unknown;
+    sources?: unknown;
+    furtherReading?: unknown;
     artifacts?: { index?: unknown; sprites?: unknown; spritesIndex?: unknown };
   }>;
+}
+
+/** Registry metadata for one image collection, for the collection info popover. */
+export interface ImageCollectionDetails {
+  id: string;
+  label: LocalizedText;
+  provider: string;
+  /** Plain string today; tolerates a localized { nl, en } object if the pipeline migrates. */
+  description: LocalizedText;
+  sources: MetadataSource[];
+  furtherReading: MetadataLink[];
 }
 
 interface RawSprite {
@@ -156,6 +173,58 @@ async function loadImages(
 }
 
 let imageCollectionsPromise: Promise<ImageResult[]> | null = null;
+let imageCollectionRegistryPromise: Promise<ImageCollectionRegistry | null> | null = null;
+
+// Shared by loadImageCollections and loadImageCollectionDetails so the info
+// popover never re-fetches the registry the image list was built from.
+function loadImageCollectionRegistry(): Promise<ImageCollectionRegistry | null> {
+  if (!imageCollectionRegistryPromise) {
+    imageCollectionRegistryPromise = (async () => {
+      try {
+        const response = await fetch(datasetUrl('imagecollection.yaml'));
+        if (!response.ok) return null;
+        return parse(await response.text()) as ImageCollectionRegistry;
+      } catch {
+        // Image collections are optional; their registry must not take down toponym/sheet search.
+        return null;
+      }
+    })();
+  }
+  return imageCollectionRegistryPromise;
+}
+
+function isLocalizedText(value: unknown): value is LocalizedText {
+  if (typeof value === 'string') return true;
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.nl === 'string' || typeof record.en === 'string';
+}
+
+export async function loadImageCollectionDetails(): Promise<ImageCollectionDetails[]> {
+  const registry = await loadImageCollectionRegistry();
+  return (registry?.collections ?? []).flatMap((collection): ImageCollectionDetails[] => {
+    if (typeof collection.id !== 'string') return [];
+    return [{
+      id: collection.id,
+      label: isLocalizedText(collection.label) ? collection.label : collection.id,
+      provider: typeof collection.provider === 'string' ? collection.provider.trim() : '',
+      description: isLocalizedText(collection.description) ? collection.description : '',
+      sources: Array.isArray(collection.sources)
+        ? collection.sources.flatMap((source): MetadataSource[] => {
+            if (!source || typeof source !== 'object') return [];
+            const entry = source as Record<string, unknown>;
+            if (typeof entry.citation !== 'string' || typeof entry.url !== 'string' || !/^https?:\/\//i.test(entry.url)) return [];
+            return [{ citation: entry.citation.trim(), url: entry.url.trim() }];
+          })
+        : [],
+      furtherReading: collection.furtherReading && typeof collection.furtherReading === 'object'
+        ? Object.entries(collection.furtherReading as Record<string, unknown>).flatMap(([label, url]): MetadataLink[] =>
+            typeof url === 'string' && /^https?:\/\//i.test(url) ? [{ label: label.trim(), url: url.trim() }] : []
+          )
+        : [],
+    }];
+  });
+}
 
 export function loadImageCollections(): Promise<ImageResult[]> {
   if (imageCollectionsPromise) return imageCollectionsPromise;
@@ -164,32 +233,25 @@ export function loadImageCollections(): Promise<ImageResult[]> {
 }
 
 async function fetchImageCollections(): Promise<ImageResult[]> {
-  try {
-    const response = await fetch(datasetUrl('imagecollection.yaml'));
-    if (!response.ok) return [];
-
-    const registry = parse(await response.text()) as ImageCollectionRegistry;
-    const images: ImageResult[] = [];
-    await Promise.all(
-      (registry.collections ?? []).map(async (collection) => {
-        if (typeof collection.id !== 'string' || typeof collection.artifacts?.index !== 'string') return;
-        const label = typeof collection.label === 'string' ? collection.label : collection.id;
-        await loadImages(
-          datasetUrl(collection.artifacts.index),
-          collection.id,
-          label,
-          typeof collection.artifacts.sprites === 'string' ? collection.artifacts.sprites : undefined,
-          typeof collection.artifacts.spritesIndex === 'string' ? collection.artifacts.spritesIndex : undefined
-        )
-          .then((items) => void images.push(...items))
-          .catch(() => {});
-      })
-    );
-    return images;
-  } catch {
-    // Image collections are optional; their registry must not take down toponym/sheet search.
-    return [];
-  }
+  const registry = await loadImageCollectionRegistry();
+  if (!registry) return [];
+  const images: ImageResult[] = [];
+  await Promise.all(
+    (registry.collections ?? []).map(async (collection) => {
+      if (typeof collection.id !== 'string' || typeof collection.artifacts?.index !== 'string') return;
+      const label = typeof collection.label === 'string' ? collection.label : collection.id;
+      await loadImages(
+        datasetUrl(collection.artifacts.index),
+        collection.id,
+        label,
+        typeof collection.artifacts.sprites === 'string' ? collection.artifacts.sprites : undefined,
+        typeof collection.artifacts.spritesIndex === 'string' ? collection.artifacts.spritesIndex : undefined
+      )
+        .then((items) => void images.push(...items))
+        .catch(() => {});
+    })
+  );
+  return images;
 }
 
 /**

@@ -9,7 +9,7 @@
   --text-base: 0.875rem;
   /* Resolves to 16 CSS px at the minimum root scale, preventing iOS Safari
      from zooming the viewport when a form control receives focus. */
-  --text-mobile-input-min: 1.334rem;
+  --text-mobile-input-min: 2rem;
   --text-md: 1rem;
   --text-lg: 1.25rem;
 
@@ -34,6 +34,7 @@
   --palette-slate-450: #7d9aab;
   --palette-slate-500: #607d91;
   --palette-slate-600: #52697b;
+  --palette-slate-700: #425d6e;
   --palette-white: #ffffff;
   --palette-black: #000000;
 
@@ -72,6 +73,8 @@
   --color-map-grid: var(--palette-gray-500);
   --color-map-water: var(--palette-slate-500);
   --color-map-border: var(--palette-gray-500);
+  --color-map-image-pin: var(--palette-slate-700);
+  --color-map-image-pin-shadow: color-mix(in srgb, var(--color-shadow-ink) 40%, transparent);
   --opacity-map-border: .2;
 
   --color-timeline-axis: var(--palette-slate-450);
@@ -112,8 +115,8 @@
 html {
   /* Fluid root scale: the whole rem-based UI tracks viewport width.
      rem-based bounds keep user font-size preferences in effect.
-     ~12px on phone-sized windows → ~18px on large displays. */
-  font-size: clamp(0.75rem, 0.66rem + 0.45vw, 1.125rem);
+     ~8px on phone-sized windows → ~16px on large displays. */
+  font-size: clamp(0.5rem, 0.382rem + 0.59vw, 1rem);
   box-sizing: border-box;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;

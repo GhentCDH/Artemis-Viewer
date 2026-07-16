@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type maplibregl from 'maplibre-gl';
+  import { t } from '$lib/shared/i18n/i18n.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
   import type { ImageResult } from '$lib/features/search/searchTypes';
@@ -159,7 +160,7 @@
           />
         {/if}
         {#if !image.sprite && !previewLoaded}
-          <p class="image-preview-status">{previewFailed ? 'Preview unavailable' : 'Loading preview…'}</p>
+          <p class="image-preview-status">{previewFailed ? t().images.previewUnavailable : t().images.loadingPreview}</p>
         {/if}
       </div>
       <div class="image-preview-actions">
@@ -167,7 +168,7 @@
           variant="prominent"
           onclick={() => onopen(image)}
           style="--button-width: 100%; --button-height: 2.25rem;"
-        >Open in viewer</Button>
+        >{t().images.openInViewer}</Button>
       </div>
     </Window>
     <div class="image-preview-arrow" style:left="{arrowLeft}px" aria-hidden="true"></div>

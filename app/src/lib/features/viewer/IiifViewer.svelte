@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { t } from '$lib/shared/i18n/i18n.svelte';
   import type OpenSeadragonType from 'openseadragon';
   import Button from '$lib/shared/primitives/Button.svelte';
   import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
@@ -96,7 +97,7 @@
           crossOriginPolicy: 'Anonymous',
         });
       } catch (cause) {
-        if (!cancelled) error = cause instanceof Error ? cause.message : 'Unable to open this IIIF document';
+        if (!cancelled) error = cause instanceof Error ? cause.message : t().iiifViewer.openFailed;
       }
     })();
 
@@ -111,17 +112,17 @@
   });
 </script>
 
-<section class="iiif-viewer" class:iiif-viewer--expanded={expanded || forceExpanded} aria-label="IIIF document viewer">
+<section class="iiif-viewer" class:iiif-viewer--expanded={expanded || forceExpanded} aria-label={t().iiifViewer.viewerAria}>
   <header class="iiif-viewer__header">
     <div class="iiif-viewer__header-left">
       {#if !forceExpanded}
         <Button
           iconOnly
           active={expanded}
-          aria-label={expanded ? 'Exit fullscreen' : 'Fullscreen'}
-          onmouseenter={(event) => showHeaderTooltip(expanded ? 'Exit fullscreen' : 'Fullscreen', event)}
+          aria-label={expanded ? t().iiifViewer.exitFullscreen : t().iiifViewer.fullscreen}
+          onmouseenter={(event) => showHeaderTooltip(expanded ? t().iiifViewer.exitFullscreen : t().iiifViewer.fullscreen, event)}
           onmouseleave={hideTooltip}
-          onfocus={(event) => showHeaderTooltip(expanded ? 'Exit fullscreen' : 'Fullscreen', event)}
+          onfocus={(event) => showHeaderTooltip(expanded ? t().iiifViewer.exitFullscreen : t().iiifViewer.fullscreen, event)}
           onblur={hideTooltip}
           onclick={toggleExpanded}
         >
@@ -141,10 +142,10 @@
     <div class="iiif-viewer__header-right">
       <Button
         iconOnly
-        aria-label={copyStatus === 'copied' ? 'Manifest URL copied' : copyStatus === 'failed' ? 'Copy manifest URL failed' : 'Copy manifest URL'}
-        onmouseenter={(event) => showHeaderTooltip(copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy manifest URL', event)}
+        aria-label={copyStatus === 'copied' ? t().iiifViewer.manifestCopied : copyStatus === 'failed' ? t().iiifViewer.manifestCopyFailed : t().iiifViewer.copyManifest}
+        onmouseenter={(event) => showHeaderTooltip(copyStatus === 'copied' ? t().iiifViewer.copied : copyStatus === 'failed' ? t().iiifViewer.copyFailed : t().iiifViewer.copyManifest, event)}
         onmouseleave={hideTooltip}
-        onfocus={(event) => showHeaderTooltip('Copy manifest URL', event)}
+        onfocus={(event) => showHeaderTooltip(t().iiifViewer.copyManifest, event)}
         onblur={hideTooltip}
         onclick={copyManifestUrl}
       >
@@ -161,10 +162,10 @@
       </Button>
       <Button
         iconOnly
-        aria-label="Open in Allmaps Viewer"
-        onmouseenter={(event) => showHeaderTooltip('Open in Allmaps Viewer', event)}
+        aria-label={t().iiifViewer.openInAllmaps}
+        onmouseenter={(event) => showHeaderTooltip(t().iiifViewer.openInAllmaps, event)}
         onmouseleave={hideTooltip}
-        onfocus={(event) => showHeaderTooltip('Open in Allmaps Viewer', event)}
+        onfocus={(event) => showHeaderTooltip(t().iiifViewer.openInAllmaps, event)}
         onblur={hideTooltip}
         onclick={openInAllmapsViewer}
       >
@@ -174,9 +175,9 @@
         </svg>
       </Button>
       <Button active={metadataOpen} aria-expanded={metadataOpen} aria-controls="iiif-viewer-metadata" onclick={() => (metadataOpen = !metadataOpen)}>
-        Metadata
+        {t().iiifViewer.metadata}
       </Button>
-      <Button iconOnly aria-label="Close document viewer" onclick={onclose}>×</Button>
+      <Button iconOnly aria-label={t().iiifViewer.closeViewer} onclick={onclose}>×</Button>
     </div>
   </header>
   <div class="iiif-viewer__main">
@@ -184,8 +185,8 @@
       {#if error}<p class="iiif-viewer__error" role="alert">{error}</p>{/if}
     </div>
     {#if metadataOpen}
-      <aside id="iiif-viewer-metadata" class="iiif-viewer__metadata" aria-label="Manifest metadata">
-        <h2>Metadata</h2>
+      <aside id="iiif-viewer-metadata" class="iiif-viewer__metadata" aria-label={t().iiifViewer.metadataAria}>
+        <h2>{t().iiifViewer.metadata}</h2>
         {#if metadata.length > 0}
           <dl>
             {#each metadata as field}
@@ -196,7 +197,7 @@
             {/each}
           </dl>
         {:else if !error}
-          <p>Loading metadata…</p>
+          <p>{t().iiifViewer.loadingMetadata}</p>
         {/if}
       </aside>
     {/if}

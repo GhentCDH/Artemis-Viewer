@@ -2,6 +2,7 @@
   import type maplibregl from 'maplibre-gl';
   import { browser } from '$app/environment';
   import { format, t } from '$lib/shared/i18n/i18n.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
   import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
@@ -34,9 +35,14 @@
   let excludedCollections = $state<ReadonlySet<string>>(new Set());
   let collectionDetails = $state<ImageCollectionDetails[]>([]);
   let openInfoCollectionId = $state<string | null>(null);
+  let yearTooltipTimer: ReturnType<typeof setTimeout> | null = null;
   /* Match sublayer info: dismiss once the pointer moves more than 6rem away. */
   const detailCloseDistance =
     6 * (browser ? parseFloat(getComputedStyle(document.documentElement).fontSize) : 16);
+
+  $effect(() => () => {
+    if (yearTooltipTimer !== null) clearTimeout(yearTooltipTimer);
+  });
 
   const openInfoCollection = $derived(
     collectionDetails.find((collection) => collection.id === openInfoCollectionId) ?? null
@@ -161,6 +167,54 @@
     filterEnd = Math.max(Math.min(value, yearMax), filterStart);
   }
 
+  function adjustFilterStart(step: number): void {
+    setFilterStart(filterStart + step);
+  }
+
+  function adjustFilterEnd(step: number): void {
+    setFilterEnd(filterEnd + step);
+  }
+
+  function showYearSanitizedTooltip(input: HTMLInputElement, text: string): void {
+    const rect = input.getBoundingClientRect();
+    showTooltip({ text, x: rect.left + rect.width / 2, y: rect.top, placement: 'above' });
+    if (yearTooltipTimer !== null) clearTimeout(yearTooltipTimer);
+    yearTooltipTimer = setTimeout(() => {
+      hideTooltip();
+      yearTooltipTimer = null;
+    }, 2500);
+  }
+
+  function updateYearInput(event: Event, target: 'start' | 'end'): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const digits = input.value.replace(/\D/g, '').slice(0, 4);
+    input.value = digits;
+    if (digits.length !== 4) return;
+    const value = Number(digits);
+    if (target === 'start') setFilterStart(value);
+    else setFilterEnd(value);
+    const sanitizedValue = target === 'start' ? filterStart : filterEnd;
+    input.value = String(sanitizedValue);
+    if (sanitizedValue !== value) {
+      showYearSanitizedTooltip(
+        input,
+        format(t().images.yearSanitized, { year: sanitizedValue })
+      );
+    }
+  }
+
+  function sanitizeYearInput(event: Event, target: 'start' | 'end'): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const sanitizedValue = target === 'start' ? filterStart : filterEnd;
+    if (input.value.length !== 4) {
+      showYearSanitizedTooltip(
+        input,
+        format(t().images.yearRequiresFourDigits, { year: sanitizedValue })
+      );
+    }
+    input.value = String(sanitizedValue);
+  }
+
   function toggleCollection(collectionId: string): void {
     const next = new Set(excludedCollections);
     if (next.has(collectionId)) next.delete(collectionId);
@@ -226,36 +280,54 @@
               <div class="year-control">
                 <span>{t().images.from}</span>
                 <div class="year-input-row">
-                  <output aria-live="polite">{filterStart}</output>
+                  <input
+                    aria-label={t().images.from}
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    value={filterStart}
+                    oninput={(event) => updateYearInput(event, 'start')}
+                    onchange={(event) => sanitizeYearInput(event, 'start')}
+                  />
                   <Button
                     iconOnly
                     aria-label={t().images.increaseStartYear}
-                    disabled={filterStart >= filterEnd}
-                    onclick={() => setFilterStart(filterStart + 1)}
+                    disabled={filterStart === filterEnd}
+                    onclick={() => adjustFilterStart(1)}
                   >↑</Button>
                   <Button
                     iconOnly
                     aria-label={t().images.decreaseStartYear}
-                    disabled={filterStart <= yearMin}
-                    onclick={() => setFilterStart(filterStart - 1)}
+                    disabled={filterStart === yearMin}
+                    onclick={() => adjustFilterStart(-1)}
                   >↓</Button>
                 </div>
               </div>
               <div class="year-control">
                 <span>{t().images.to}</span>
                 <div class="year-input-row">
-                  <output aria-live="polite">{filterEnd}</output>
+                  <input
+                    aria-label={t().images.to}
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    value={filterEnd}
+                    oninput={(event) => updateYearInput(event, 'end')}
+                    onchange={(event) => sanitizeYearInput(event, 'end')}
+                  />
                   <Button
                     iconOnly
                     aria-label={t().images.increaseEndYear}
-                    disabled={filterEnd >= yearMax}
-                    onclick={() => setFilterEnd(filterEnd + 1)}
+                    disabled={filterEnd === yearMax}
+                    onclick={() => adjustFilterEnd(1)}
                   >↑</Button>
                   <Button
                     iconOnly
                     aria-label={t().images.decreaseEndYear}
-                    disabled={filterEnd <= filterStart}
-                    onclick={() => setFilterEnd(filterEnd - 1)}
+                    disabled={filterEnd === filterStart}
+                    onclick={() => adjustFilterEnd(-1)}
                   >↓</Button>
                 </div>
               </div>
@@ -556,9 +628,10 @@
     font-size: var(--text-2xs);
   }
 
-  .year-control output {
+  .year-control input {
     display: flex;
     align-items: center;
+    width: 100%;
     min-height: 2rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
@@ -569,12 +642,17 @@
     font-size: var(--text-sm);
   }
 
+  .year-control input:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 1px;
+  }
+
   .year-input-row {
     display: flex;
     gap: var(--space-1);
   }
 
-  .year-input-row output {
+  .year-input-row input {
     flex: 1 1 auto;
     min-width: 0;
   }

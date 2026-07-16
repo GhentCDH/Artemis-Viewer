@@ -7,6 +7,9 @@
   let scaleTrack = $state<HTMLDivElement | null>(null);
   let distanceLabel = $state('');
   let barWidth = $state(0);
+  // Written by the ResizeObserver below. updateIndicator runs on every `move` frame during
+  // pans/zooms, and measuring with getBoundingClientRect there forces a layout mid-gesture.
+  let trackWidth = 0;
 
   const EQUATORIAL_METERS_PER_PIXEL = 156543.03392;
 
@@ -42,7 +45,7 @@
     const zoom = map.getZoom();
     const latitudeRadians = (map.getCenter().lat * Math.PI) / 180;
     const metersPerPixel = (EQUATORIAL_METERS_PER_PIXEL * Math.cos(latitudeRadians)) / 2 ** zoom;
-    const maximumWidth = scaleTrack.getBoundingClientRect().width;
+    const maximumWidth = trackWidth;
     const distance = chooseNiceDistance(metersPerPixel * maximumWidth);
 
     if (!Number.isFinite(metersPerPixel) || metersPerPixel <= 0 || maximumWidth <= 0 || distance <= 0) {
@@ -68,7 +71,10 @@
 
   $effect(() => {
     if (!scaleTrack) return;
-    const resizeObserver = new ResizeObserver(updateIndicator);
+    const resizeObserver = new ResizeObserver((entries) => {
+      trackWidth = entries[entries.length - 1]?.contentRect.width ?? 0;
+      updateIndicator();
+    });
     resizeObserver.observe(scaleTrack);
     return () => resizeObserver.disconnect();
   });

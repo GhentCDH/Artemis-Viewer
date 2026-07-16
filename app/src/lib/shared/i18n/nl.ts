@@ -94,6 +94,8 @@ export const nl: Dictionary = {
     windowTitle: 'Landschappen in beeld',
     visibleCount: '{shown} van {total} zichtbare beelden',
     yearFilterAria: 'Filter beelden op jaartal',
+    yearSanitized: 'Aangepast naar {year}: buiten bereik.',
+    yearRequiresFourDigits: 'Gebruik 4 cijfers. Hersteld naar {year}.',
     collections: 'Collecties',
     collectionsFiltered: 'Collecties ({selected}/{total})',
     collectionFilterAria: 'Filter beelden op collectie',

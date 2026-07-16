@@ -111,7 +111,11 @@
 
   function overlayQueryWarning(overlay: OverlayOption): string | null {
     if (overlay.query?.status === 'supported') return overlay.query.error ?? null;
-    return overlay.query?.reason ?? t().basemap.staleQueryWarning;
+    if (overlay.query) return overlay.query.reason;
+    // No probe result yet. Overlays carrying a serviceType are probed on first selection
+    // (Canvas.svelte), so an unknown capability is not worth a warning; only a legacy stored
+    // overlay without one — which nothing will ever probe — keeps the stale-query hint.
+    return overlay.serviceType ? null : t().basemap.staleQueryWarning;
   }
 
   function showWarningTooltip(text: string, event: MouseEvent | FocusEvent): void {
@@ -138,6 +142,7 @@
           label: label.trim() || hostname,
           kind: resolved.kind,
           url: resolved.url,
+          serviceType: resolved.serviceType,
           query,
         };
         customOverlays = [...customOverlays, overlay];

@@ -1,16 +1,14 @@
 // Persistent URL state — hash-based so it works with static hosting.
 //
-// Format:  #c=lng,lat,z&l=<code>&r=<code>&s=1&v=<manifest-ref>&p=l
+// Format:  #c=lng,lat,z&l=<code>&r=<code>&s=1&v=<manifest-ref>&i=<image-id>&p=l
 //
 //   c  — camera: lng (4dp), lat (4dp), zoom (1dp)
 //   l  — left pane active layer (2-char code, see LAYER_CODE_TO_ID)
 //   r  — right pane active layer (2-char code)
 //   s  — split mode: "1" if split, omitted if single
 //   v  — viewer manifest URL; dataset-relative URLs prefixed with "~"
+//   i  — selected IIIF canvas/image id; "~" values are manifest-relative
 //   p  — viewer pane: "l" for left, omitted for right (default)
-//
-// imageId is intentionally not stored. The viewer can resolve the manifest's
-// default canvas when restoring an existing shared link.
 
 export const LAYER_CODE_TO_ID: Record<string, string> = {
   hd: 'HanddrawnCollection',
@@ -37,6 +35,7 @@ export interface UrlAppState {
   rightMainId?: string;
   viewMode?: 'split';
   viewerManifestUrl?: string;
+  viewerImageId?: string;
   viewerPane?: 'left' | 'right';
 }
 
@@ -53,6 +52,26 @@ function decodeManifestRef(ref: string, datasetBaseUrl: string): string {
     const base = datasetBaseUrl.replace(/\/$/, '');
     return base + '/' + ref.slice(1);
   }
+  return ref;
+}
+
+function identifierLeaf(value: string): string {
+  const clean = value.replace(/[?#].*$/, '').replace(/\/$/, '');
+  return clean.slice(Math.max(clean.lastIndexOf('/'), clean.lastIndexOf(':')) + 1);
+}
+
+function encodeImageRef(imageId: string, manifestUrl: string): string {
+  const imageLeaf = identifierLeaf(imageId);
+  const manifestLeaf = identifierLeaf(manifestUrl);
+  if (manifestLeaf && imageLeaf.startsWith(manifestLeaf)) {
+    return `~${imageLeaf.slice(manifestLeaf.length)}`;
+  }
+  return imageLeaf && imageLeaf.length < imageId.length ? `!${imageLeaf}` : imageId;
+}
+
+function decodeImageRef(ref: string, manifestUrl: string): string {
+  if (ref.startsWith('~')) return `${identifierLeaf(manifestUrl)}${ref.slice(1)}`;
+  if (ref.startsWith('!')) return ref.slice(1);
   return ref;
 }
 
@@ -75,6 +94,9 @@ export function encodeAppState(state: UrlAppState, datasetBaseUrl = ''): string 
   if (state.viewerManifestUrl) {
     const ref = encodeManifestRef(state.viewerManifestUrl, datasetBaseUrl);
     parts.push(`v=${encodeURIComponent(ref)}`);
+    if (state.viewerImageId) {
+      parts.push(`i=${encodeURIComponent(encodeImageRef(state.viewerImageId, state.viewerManifestUrl))}`);
+    }
     if (state.viewerPane === 'left') parts.push('p=l');
   }
 
@@ -108,6 +130,7 @@ export function decodeAppState(hash: string, datasetBaseUrl = ''): UrlAppState {
   const lCode = params.get('l');
   const rCode = params.get('r');
   const vRaw = params.get('v');
+  const iRaw = params.get('i');
   const pRaw = params.get('p');
 
   return {
@@ -116,6 +139,7 @@ export function decodeAppState(hash: string, datasetBaseUrl = ''): UrlAppState {
     rightMainId: rCode ? LAYER_CODE_TO_ID[rCode] : undefined,
     viewMode: params.get('s') === '1' ? 'split' : undefined,
     viewerManifestUrl: vRaw ? decodeManifestRef(vRaw, datasetBaseUrl) : undefined,
+    viewerImageId: vRaw && iRaw ? decodeImageRef(iRaw, decodeManifestRef(vRaw, datasetBaseUrl)) : undefined,
     viewerPane: pRaw === 'l' ? 'left' : vRaw ? 'right' : undefined,
   };
 }

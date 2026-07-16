@@ -5,12 +5,13 @@ import type { LngLat } from 'maplibre-gl';
 // overlays (windows, timeline, tooltips) are excluded by construction while everything
 // drawn into a map or viewer canvas (warped sheets, pins, mask outlines) is included.
 //
-// Capture-timing contract (3 parts, spread over 3 files — breaking any one yields blank
+// Capture-timing contract (2 parts, spread over 2 files — breaking either yields blank
 // or partial exports with no error):
-// 1. `preserveDrawingBuffer: true` at map creation (core/map/maplibreInit.ts),
-// 2. each map canvas is read inside its own `render` event after `triggerRepaint()`,
-//    before WebGL could clear the buffer (this file),
-// 3. `crossOriginPolicy: 'Anonymous'` on the OpenSeadragon viewer keeps its canvases
+// 1. each map canvas is read inside its own `render` event after `triggerRepaint()`,
+//    before WebGL could clear the buffer (this file). This is what lets the maps run
+//    WITHOUT preserveDrawingBuffer (a per-frame GPU cost — see core/map/maplibreInit.ts);
+//    reading a map canvas at any other moment yields an empty buffer.
+// 2. `crossOriginPolicy: 'Anonymous'` on the OpenSeadragon viewer keeps its canvases
 //    untainted (features/viewer/IiifViewer.svelte).
 
 export interface ScreenshotSources {

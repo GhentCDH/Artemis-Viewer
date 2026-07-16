@@ -2,6 +2,7 @@
   import type maplibregl from 'maplibre-gl';
   import { browser } from '$app/environment';
   import { format, t } from '$lib/shared/i18n/i18n.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
   import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
@@ -16,9 +17,11 @@
   let {
     map,
     onOpenImage,
+    showControls = true,
   }: {
     map: maplibregl.Map | null;
     onOpenImage?: (image: ImageResult) => void;
+    showControls?: boolean;
   } = $props();
 
   let loading = $state(true);
@@ -32,19 +35,38 @@
   let excludedCollections = $state<ReadonlySet<string>>(new Set());
   let collectionDetails = $state<ImageCollectionDetails[]>([]);
   let openInfoCollectionId = $state<string | null>(null);
+  let yearTooltipTimer: ReturnType<typeof setTimeout> | null = null;
   /* Match sublayer info: dismiss once the pointer moves more than 6rem away. */
   const detailCloseDistance =
     6 * (browser ? parseFloat(getComputedStyle(document.documentElement).fontSize) : 16);
+
+  $effect(() => () => {
+    if (yearTooltipTimer !== null) clearTimeout(yearTooltipTimer);
+  });
 
   const openInfoCollection = $derived(
     collectionDetails.find((collection) => collection.id === openInfoCollectionId) ?? null
   );
 
-  if (browser) {
+  // Deferred until the panel first opens: the collection indexes, sprite metadata, and pin
+  // resources serve only this panel and its pins, so a session that never opens it skips the
+  // fetches and map-style work entirely. Search results reach pins via imageBrowser.showPreview,
+  // which opens the panel and therefore triggers the same load.
+  let collectionsRequested = $state(false);
+  $effect(() => {
+    if (!imageBrowser.panelOpen || collectionsRequested) return;
+    collectionsRequested = true;
     void loadImageCollectionDetails().then((details) => {
       collectionDetails = details;
     });
-  }
+    void loadImageCollections().then((loaded) => {
+      images = loaded;
+      const years = loaded.map((image) => Number.parseInt(image.year, 10)).filter((year) => Number.isFinite(year));
+      filterStart = years.length > 0 ? Math.min(...years) : 0;
+      filterEnd = years.length > 0 ? Math.max(...years) : 0;
+      loading = false;
+    });
+  });
 
   const datedYears = $derived(
     images
@@ -74,54 +96,37 @@
     })
   );
 
-  if (browser) {
-    void loadImageCollections().then((loaded) => {
-      images = loaded;
-      const years = loaded.map((image) => Number.parseInt(image.year, 10)).filter((year) => Number.isFinite(year));
-      filterStart = years.length > 0 ? Math.min(...years) : 0;
-      filterEnd = years.length > 0 ? Math.max(...years) : 0;
-      loading = false;
-    });
-  }
-
   function updateImagesInView(): void {
     if (!map) {
       imagesInView = [];
       return;
     }
     const bounds = map.getBounds();
+    // Decorate-sort-undecorate keeps year parsing at O(n) instead of per comparison.
     imagesInView = images
-      .filter((image) => image.lon !== null && image.lat !== null && bounds.contains([image.lon, image.lat]))
-      .sort((a, b) => {
-        const aYear = Number.parseInt(a.year, 10);
-        const bYear = Number.parseInt(b.year, 10);
-        const yearDifference = (Number.isFinite(aYear) ? aYear : Number.POSITIVE_INFINITY) -
-          (Number.isFinite(bYear) ? bYear : Number.POSITIVE_INFINITY);
-        return yearDifference || a.title.localeCompare(b.title);
-      });
+      .flatMap((image) => {
+        if (image.lon === null || image.lat === null || !bounds.contains([image.lon, image.lat])) return [];
+        const year = Number.parseInt(image.year, 10);
+        return [{ image, year: Number.isFinite(year) ? year : Number.POSITIVE_INFINITY }];
+      })
+      .sort((a, b) => (a.year - b.year) || a.image.title.localeCompare(b.image.title))
+      .map((entry) => entry.image);
   }
 
+  // The in-view list only feeds the open panel, so it recomputes on settled cameras
+  // (moveend) while the panel is showing — not on every move frame of every gesture.
   $effect(() => {
-    if (!map) return;
+    if (!map || !imageBrowser.panelOpen) return;
     images;
     updateImagesInView();
-    let frame: number | null = null;
-    const scheduleUpdate = () => {
-      if (frame !== null) return;
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        updateImagesInView();
-      });
-    };
-    map.on('move', scheduleUpdate);
+    map.on('moveend', updateImagesInView);
     return () => {
-      map.off('move', scheduleUpdate);
-      if (frame !== null) cancelAnimationFrame(frame);
+      map.off('moveend', updateImagesInView);
     };
   });
 
   $effect(() => {
-    if (!map) return;
+    if (!map || !collectionsRequested) return;
     const sync = () => syncImagePins(map, images, imageBrowser.panelOpen);
     sync();
     map.on('styledata', sync);
@@ -132,7 +137,7 @@
   });
 
   $effect(() => {
-    if (!map) return;
+    if (!map || !collectionsRequested) return;
     return attachImagePinInteraction(map, (imageId) => {
       const image = imageId === null ? undefined : images.find((candidate) => candidate.id === imageId);
       if (image) imageBrowser.showPreview(image);
@@ -159,6 +164,54 @@
     filterEnd = Math.max(Math.min(value, yearMax), filterStart);
   }
 
+  function adjustFilterStart(step: number): void {
+    setFilterStart(filterStart + step);
+  }
+
+  function adjustFilterEnd(step: number): void {
+    setFilterEnd(filterEnd + step);
+  }
+
+  function showYearSanitizedTooltip(input: HTMLInputElement, text: string): void {
+    const rect = input.getBoundingClientRect();
+    showTooltip({ text, x: rect.left + rect.width / 2, y: rect.top, placement: 'above' });
+    if (yearTooltipTimer !== null) clearTimeout(yearTooltipTimer);
+    yearTooltipTimer = setTimeout(() => {
+      hideTooltip();
+      yearTooltipTimer = null;
+    }, 2500);
+  }
+
+  function updateYearInput(event: Event, target: 'start' | 'end'): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const digits = input.value.replace(/\D/g, '').slice(0, 4);
+    input.value = digits;
+    if (digits.length !== 4) return;
+    const value = Number(digits);
+    if (target === 'start') setFilterStart(value);
+    else setFilterEnd(value);
+    const sanitizedValue = target === 'start' ? filterStart : filterEnd;
+    input.value = String(sanitizedValue);
+    if (sanitizedValue !== value) {
+      showYearSanitizedTooltip(
+        input,
+        format(t().images.yearSanitized, { year: sanitizedValue })
+      );
+    }
+  }
+
+  function sanitizeYearInput(event: Event, target: 'start' | 'end'): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const sanitizedValue = target === 'start' ? filterStart : filterEnd;
+    if (input.value.length !== 4) {
+      showYearSanitizedTooltip(
+        input,
+        format(t().images.yearRequiresFourDigits, { year: sanitizedValue })
+      );
+    }
+    input.value = String(sanitizedValue);
+  }
+
   function toggleCollection(collectionId: string): void {
     const next = new Set(excludedCollections);
     if (next.has(collectionId)) next.delete(collectionId);
@@ -174,23 +227,27 @@
 </script>
 
 <div class="image-browser">
-  <Button
-    variant="prominent"
-    active={imageBrowser.panelOpen}
-    class="image-browser-trigger"
-    aria-label={format(t().images.inViewAria, { count: imagesInView.length })}
-    aria-expanded={imageBrowser.panelOpen}
-    onclick={() => setOpen(!imageBrowser.panelOpen)}
-  >
-    <svg class="image-browser-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
-      <circle cx="8.2" cy="9.3" r="1.7"></circle>
-      <path d="m5.5 16.5 4.2-4.2 3.2 3 2.3-2.2 3.3 3.4"></path>
-    </svg>
-    <span class="image-browser-trigger-text">{t().images.trigger}</span>
-  </Button>
+  {#if showControls}
+    <Button
+      variant="prominent"
+      active={imageBrowser.panelOpen}
+      class="image-browser-trigger"
+      aria-label={imageBrowser.panelOpen
+        ? format(t().images.inViewAria, { count: imagesInView.length })
+        : t().images.trigger}
+      aria-expanded={imageBrowser.panelOpen}
+      onclick={() => setOpen(!imageBrowser.panelOpen)}
+    >
+      <svg class="image-browser-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="4.5" width="18" height="15" rx="2"></rect>
+        <circle cx="8.2" cy="9.3" r="1.7"></circle>
+        <path d="m5.5 16.5 4.2-4.2 3.2 3 2.3-2.2 3.3 3.4"></path>
+      </svg>
+      <span class="image-browser-trigger-text">{t().images.trigger}</span>
+    </Button>
+  {/if}
 
-  {#if imageBrowser.panelOpen}
+  {#if showControls && imageBrowser.panelOpen}
     <div class="image-browser-panel-layer">
       {#if openInfoCollection}
         <div class="collection-detail-layer">
@@ -202,7 +259,7 @@
             sources={openInfoCollection.sources}
             closeOnPointerDistance={detailCloseDistance}
             onclose={() => (openInfoCollectionId = null)}
-            style="--window-width: min(19rem, calc(100vw - var(--image-browser-width) - (3 * var(--space-3)))); --window-max-height: var(--image-browser-max-height); --window-header-border-width: 0px;"
+            style="--window-width: min(21rem, calc(100vw - var(--image-browser-width) - (3 * var(--space-3)))); --window-max-height: var(--image-browser-max-height); --window-header-border-width: 0px;"
           />
         </div>
       {/if}
@@ -222,36 +279,54 @@
               <div class="year-control">
                 <span>{t().images.from}</span>
                 <div class="year-input-row">
-                  <output aria-live="polite">{filterStart}</output>
+                  <input
+                    aria-label={t().images.from}
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    value={filterStart}
+                    oninput={(event) => updateYearInput(event, 'start')}
+                    onchange={(event) => sanitizeYearInput(event, 'start')}
+                  />
                   <Button
                     iconOnly
                     aria-label={t().images.increaseStartYear}
-                    disabled={filterStart >= filterEnd}
-                    onclick={() => setFilterStart(filterStart + 1)}
+                    disabled={filterStart === filterEnd}
+                    onclick={() => adjustFilterStart(1)}
                   >↑</Button>
                   <Button
                     iconOnly
                     aria-label={t().images.decreaseStartYear}
-                    disabled={filterStart <= yearMin}
-                    onclick={() => setFilterStart(filterStart - 1)}
+                    disabled={filterStart === yearMin}
+                    onclick={() => adjustFilterStart(-1)}
                   >↓</Button>
                 </div>
               </div>
               <div class="year-control">
                 <span>{t().images.to}</span>
                 <div class="year-input-row">
-                  <output aria-live="polite">{filterEnd}</output>
+                  <input
+                    aria-label={t().images.to}
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    value={filterEnd}
+                    oninput={(event) => updateYearInput(event, 'end')}
+                    onchange={(event) => sanitizeYearInput(event, 'end')}
+                  />
                   <Button
                     iconOnly
                     aria-label={t().images.increaseEndYear}
-                    disabled={filterEnd >= yearMax}
-                    onclick={() => setFilterEnd(filterEnd + 1)}
+                    disabled={filterEnd === yearMax}
+                    onclick={() => adjustFilterEnd(1)}
                   >↑</Button>
                   <Button
                     iconOnly
                     aria-label={t().images.decreaseEndYear}
-                    disabled={filterEnd <= filterStart}
-                    onclick={() => setFilterEnd(filterEnd - 1)}
+                    disabled={filterEnd === filterStart}
+                    onclick={() => adjustFilterEnd(-1)}
                   >↓</Button>
                 </div>
               </div>
@@ -284,6 +359,14 @@
                     {@const infoOpen = openInfoCollectionId === collection.id}
                     {@const hasDetails = collectionDetails.some((detail) => detail.id === collection.id)}
                     <div class="collection-option-row">
+                      <label class="collection-option">
+                        <input
+                          type="checkbox"
+                          checked={!excludedCollections.has(collection.id)}
+                          onchange={() => toggleCollection(collection.id)}
+                        />
+                        <span>{collection.label}</span>
+                      </label>
                       {#if hasDetails}
                         <Button
                           class="collection-info-button"
@@ -300,14 +383,6 @@
                           </svg>
                         </Button>
                       {/if}
-                      <label class="collection-option">
-                        <span>{collection.label}</span>
-                        <input
-                          type="checkbox"
-                          checked={!excludedCollections.has(collection.id)}
-                          onchange={() => toggleCollection(collection.id)}
-                        />
-                      </label>
                     </div>
                   {/each}
                 </div>
@@ -358,10 +433,7 @@
         {map}
         image={imageBrowser.preview}
         onclose={() => imageBrowser.closePreview()}
-        onopen={(image) => {
-          imageBrowser.closePreview();
-          onOpenImage?.(image);
-        }}
+        onopen={(image) => onOpenImage?.(image)}
       />
     {/key}
   {/if}
@@ -486,10 +558,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    border: 1px solid var(--color-border-subtle);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
     padding: var(--space-2);
-    background: var(--color-surface-control);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--color-shadow-ink) 16%, transparent);
+    background: var(--color-surface-tint);
   }
 
   .collection-option-row {
@@ -498,13 +571,11 @@
     gap: var(--space-1);
   }
 
-  /* Mirrors the detail window opening to the left: info button on the left
-     edge, label text flowing toward the checkbox on the right edge. */
   .collection-option {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: var(--space-2);
     min-width: 0;
     min-height: 1.75rem;
@@ -539,9 +610,10 @@
   }
 
   .collection-option span {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-    text-align: right;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -555,9 +627,10 @@
     font-size: var(--text-2xs);
   }
 
-  .year-control output {
+  .year-control input {
     display: flex;
     align-items: center;
+    width: 100%;
     min-height: 2rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-sm);
@@ -568,12 +641,17 @@
     font-size: var(--text-sm);
   }
 
+  .year-control input:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 1px;
+  }
+
   .year-input-row {
     display: flex;
     gap: var(--space-1);
   }
 
-  .year-input-row output {
+  .year-input-row input {
     flex: 1 1 auto;
     min-width: 0;
   }
@@ -593,6 +671,14 @@
     gap: var(--space-1);
     padding: var(--space-2);
     overflow: auto;
+  }
+
+  /* Rows scrolled out of view skip layout and paint entirely; the intrinsic size
+     placeholder matches a row's natural height (thumbnail + the list button's block
+     padding) so the scrollbar doesn't jump as rows enter the viewport. */
+  .image-list > :global(.button) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto calc(var(--image-thumbnail-height) + 2 * var(--space-1));
   }
 
   .image-row {
@@ -621,6 +707,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .image-title {
+    font-family: var(--font-readable);
+    font-size: var(--text-xs);
+    font-weight: 400;
   }
 
   .image-meta {

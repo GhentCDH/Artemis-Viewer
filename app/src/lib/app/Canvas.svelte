@@ -12,6 +12,7 @@
     type OverlayOption,
   } from '$lib/core/map/basemap';
   import BasemapMenu from '$lib/features/basemap/BasemapMenu.svelte';
+  import { discoverOverlayQueryCapability } from '$lib/features/basemap/customBasemap';
   import { i18n, t, LOCALE_SHORT_LABELS, type Locale } from '$lib/shared/i18n/i18n.svelte';
   import { loadMapServiceRegistry } from '$lib/features/basemap/mapServiceRegistry';
   import OverlayFeatureBubble from '$lib/features/basemap/OverlayFeatureBubble.svelte';
@@ -64,7 +65,7 @@
     initialUrlState.viewerManifestUrl
       ? {
           manifestUrl: initialUrlState.viewerManifestUrl,
-          imageId: '',
+          imageId: initialUrlState.viewerImageId ?? '',
           pane: initialUrlState.viewerPane ?? 'right',
         }
       : null
@@ -110,6 +111,7 @@
       rightMainId: timelineSelection.rightLayerId ?? undefined,
       viewMode: timelineSelection.mode === 'compare' ? 'split' : undefined,
       viewerManifestUrl: openDocument?.manifestUrl,
+      viewerImageId: openDocument?.imageId,
       viewerPane: openDocument?.pane,
     };
   }
@@ -182,6 +184,30 @@
     }
   }
 
+  /**
+   * Registry overlays arrive without a probed query capability (probing every WMS overlay
+   * at startup cost a GetCapabilities fetch each — see mapServiceRegistry). The probe runs on
+   * first selection and the result is written back into the registered list, so it happens at
+   * most once per overlay per session. Overlays without a serviceType (legacy persisted custom
+   * overlays, or ones probed eagerly on creation) are left as they are.
+   */
+  function handleOverlaySelect(overlay: OverlayOption | null): void {
+    selectedOverlay = overlay;
+    overlayFeature = null;
+    if (!overlay || overlay.query || !overlay.serviceType) return;
+    void discoverOverlayQueryCapability({
+      kind: overlay.kind,
+      url: overlay.url,
+      serviceType: overlay.serviceType,
+    }).then((query) => {
+      const probed: OverlayOption = { ...overlay, query };
+      registeredOverlays = registeredOverlays.map((candidate) =>
+        candidate.id === overlay.id ? probed : candidate
+      );
+      if (selectedOverlay?.id === overlay.id) selectedOverlay = probed;
+    });
+  }
+
   // Hard camera lock only makes sense with both panes on screen; dropping either
   // reference (pane closed, or compare mode exited below) tears the sync down.
   $effect(() => {
@@ -204,6 +230,7 @@
     timelineSelection.leftLayerId;
     timelineSelection.rightLayerId;
     openDocument?.manifestUrl;
+    openDocument?.imageId;
     openDocument?.pane;
     urlPersistence?.update();
   });
@@ -289,6 +316,7 @@
       initialCamera={cameraFromMap(rightMap) ?? initialMapCamera}
       onMapReady={(map) => (leftMap = map)}
       onIiifMaskSelect={(hit) => openIiifDocument('left', hit)}
+      activeIiifMask={openDocument}
       onOverlayFeature={handleOverlayFeature}
       onOverlayQueryError={handleOverlayQueryError}
     />
@@ -313,6 +341,7 @@
         initialCamera={cameraFromMap(leftMap) ?? initialMapCamera}
         onMapReady={(map) => (rightMap = map)}
         onIiifMaskSelect={(hit) => openIiifDocument('right', hit)}
+        activeIiifMask={openDocument}
         onOverlayFeature={handleOverlayFeature}
         onOverlayQueryError={handleOverlayQueryError}
       />
@@ -327,7 +356,7 @@
   <div class="overlay-layer">
     <div class="window-slot branding-slot">
       <div class="branding-slot-inner">
-        <BrandingPanel resolveDatasetUrl={(path) => datasetUrl(path, selectedDatasetBaseUrl)} style="--branding-scale: 1.6;" />
+        <BrandingPanel style="--branding-scale: 1.6;" />
       </div>
     </div>
 
@@ -374,7 +403,7 @@
           onselect={(basemap) => { selectedBasemap = basemap; }}
           selectedOverlay={selectedOverlay}
           {registeredOverlays}
-          onOverlaySelect={(overlay) => { selectedOverlay = overlay; overlayFeature = null; }}
+          onOverlaySelect={handleOverlaySelect}
           {overlayOpacity}
           onOverlayOpacityChange={(opacity) => { overlayOpacity = opacity; }}
         />
@@ -399,14 +428,13 @@
       </div>
     </div>
 
-    {#if !openDocument}
-      <div class="window-slot image-browser-slot">
-        <ImageBrowser
-          map={leftMap}
-          onOpenImage={(image) => openIiifDocument('left', { manifestUrl: image.manifestUrl, imageId: '' })}
-        />
-      </div>
-    {/if}
+    <div class="window-slot image-browser-slot">
+      <ImageBrowser
+        map={leftMap}
+        showControls={!openDocument}
+        onOpenImage={(image) => openIiifDocument('left', { manifestUrl: image.manifestUrl, imageId: '' })}
+      />
+    </div>
 
     <div class="window-slot sublayer-menu-slot sublayer-menu-slot--left" class:sublayer-menu-slot--split={isCompare}>
       <PaneSublayerMenu layer={leftMenuLayer} />
@@ -610,6 +638,12 @@
 
     .compare-toggle-text {
       display: none;
+    }
+  }
+
+  @media (max-width: 56rem) {
+    .canvas {
+      --canvas-timeline-height: 8.55rem;
     }
   }
 

@@ -3,15 +3,15 @@
   --font-ui: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   --font-readable: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  --text-2xs: 0.625rem;
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.875rem;
+  --text-2xs: 0.8125rem;
+  --text-xs: 0.9375rem;
+  --text-sm: 1rem;
+  --text-base: 1.0625rem;
   /* Resolves to 16 CSS px at the minimum root scale, preventing iOS Safari
      from zooming the viewport when a form control receives focus. */
   --text-mobile-input-min: 2rem;
-  --text-md: 1rem;
-  --text-lg: 1.25rem;
+  --text-md: 1.1875rem;
+  --text-lg: 1.4375rem;
 
   /* --- Palette (primitive) ---------------------------------------------
      Raw values only. Nothing outside this file may reference --palette-*. */
@@ -22,8 +22,11 @@
   --palette-brown-700: #6d5c3a;
   --palette-brown-800: #50442c;
   --palette-gray-500: #757575;
+  --palette-gray-550: #616161;
   --palette-gray-600: #6a6a6a;
+  --palette-gray-650: #595959;
   --palette-gray-700: #555555;
+  --palette-gray-750: #414141;
   --palette-green-600: #4a7a4a;
   --palette-rust-700: #8b3a2a;
   --palette-blue-600: #3f789f;
@@ -40,9 +43,9 @@
 
   /* --- Color (semantic) -------------------------------------------------
      Components reference only these, never --palette-* directly. */
-  --color-text-primary: var(--palette-gray-700);
-  --color-text-secondary: var(--palette-gray-600);
-  --color-text-muted: var(--palette-gray-500);
+  --color-text-primary: var(--palette-gray-750);
+  --color-text-secondary: var(--palette-gray-650);
+  --color-text-muted: var(--palette-gray-550);
   --color-text-ok: var(--palette-green-600);
   --color-text-error: var(--palette-rust-700);
 
@@ -74,8 +77,10 @@
   --color-map-water: var(--palette-slate-500);
   --color-map-border: var(--palette-gray-500);
   --color-map-image-pin: var(--palette-slate-700);
+  --color-map-image-pin-outline: color-mix(in srgb, var(--palette-gray-500) 65%, transparent);
   --color-map-image-pin-shadow: color-mix(in srgb, var(--color-shadow-ink) 40%, transparent);
   --opacity-map-border: .2;
+  --opacity-iiif-active-mask: .22;
 
   --color-timeline-axis: var(--palette-slate-450);
   --color-timeline-active: var(--palette-blue-675);

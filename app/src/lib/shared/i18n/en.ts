@@ -105,6 +105,8 @@ export const en = {
     windowTitle: 'Landscapes in view',
     visibleCount: '{shown} of {total} visible images',
     yearFilterAria: 'Filter images by year',
+    yearSanitized: 'Adjusted to {year}: outside range.',
+    yearRequiresFourDigits: 'Use 4 digits. Restored to {year}.',
     collections: 'Collections',
     collectionsFiltered: 'Collections ({selected}/{total})',
     collectionFilterAria: 'Filter images by collection',

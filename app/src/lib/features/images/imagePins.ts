@@ -29,9 +29,42 @@ const LEGACY_ICON_IDS = [
 interface ImagePinState {
   images: ImageResult[];
   visible: boolean;
+  /** Bumped only when `images` is a new array — the signal that the source data must be resent. */
+  revision: number;
 }
 
 const stateByMap = new WeakMap<maplibregl.Map, ImagePinState>();
+// restoreImagePins runs on every styledata/idle reconcile pass; `setData` has no
+// unchanged-data short-circuit in MapLibre (every call is a worker round-trip, a recluster,
+// and a repaint — which re-fires `idle` and made the reconcile cycle self-sustaining), so the
+// applied revision per map is what keeps the steady state mutation-free.
+const appliedRevisionByMap = new WeakMap<maplibregl.Map, number>();
+const legacyIconsPurgedMaps = new WeakSet<maplibregl.Map>();
+// Cluster icons carry their count baked into the bitmap (the style has no glyphs endpoint, so
+// a symbol text-field is not an option). Generating them ahead of time meant one canvas raster
+// + texture upload per possible count (2..images.length); instead they are created on demand
+// through `styleimagemissing`, which fires only for counts a rendered cluster actually shows.
+const clusterIconHandlerByMap = new WeakMap<maplibregl.Map, (event: maplibregl.MapStyleImageMissingEvent) => void>();
+const clusterIconIdsByMap = new WeakMap<maplibregl.Map, Set<string>>();
+
+function ensureClusterIconFactory(map: maplibregl.Map): void {
+  if (clusterIconHandlerByMap.has(map)) return;
+  const handler = (event: maplibregl.MapStyleImageMissingEvent) => {
+    const { id } = event;
+    if (!id.startsWith(CLUSTER_ICON_PREFIX) || map.hasImage(id)) return;
+    const count = Number.parseInt(id.slice(CLUSTER_ICON_PREFIX.length), 10);
+    if (!Number.isFinite(count)) return;
+    map.addImage(id, createLandscapeIcon(count), { pixelRatio: 2 });
+    let ids = clusterIconIdsByMap.get(map);
+    if (!ids) {
+      ids = new Set();
+      clusterIconIdsByMap.set(map, ids);
+    }
+    ids.add(id);
+  };
+  map.on('styleimagemissing', handler);
+  clusterIconHandlerByMap.set(map, handler);
+}
 
 /** MapLibre pixels do not inherit rem sizing; use a slightly steeper version of the root scale. */
 function responsivePinScale(): number {
@@ -61,6 +94,7 @@ function createLandscapeIcon(clusterCount?: number): ImageData {
   if (!context) throw new Error('Could not create the image-pin icon');
 
   const accent = readThemeColor('--color-map-image-pin', '#425d6e');
+  const outline = readThemeColor('--color-map-image-pin-outline', '#888888');
   const surface = readThemeColor('--color-surface-control', '#fbf8f1');
   const shadow = readThemeColor('--color-map-image-pin-shadow', '#000000');
   context.fillStyle = accent;
@@ -72,6 +106,9 @@ function createLandscapeIcon(clusterCount?: number): ImageData {
   context.roundRect(4, 4, width - 8, 40, 5);
   context.fill();
   context.shadowColor = 'transparent';
+  context.strokeStyle = outline;
+  context.lineWidth = 1;
+  context.stroke();
 
   context.strokeStyle = surface;
   context.lineWidth = 3;
@@ -117,7 +154,9 @@ function featureCollection(images: ImageResult[]): GeoJSON.FeatureCollection<Geo
 }
 
 export function syncImagePins(map: maplibregl.Map, images: ImageResult[], visible: boolean): void {
-  stateByMap.set(map, { images, visible });
+  const previous = stateByMap.get(map);
+  const revision = previous && previous.images === images ? previous.revision : (previous?.revision ?? 0) + 1;
+  stateByMap.set(map, { images, visible, revision });
   restoreImagePins(map);
 }
 
@@ -131,25 +170,23 @@ export function restoreImagePins(map: maplibregl.Map): void {
   if (!map.hasImage(ICON_ID)) {
     map.addImage(ICON_ID, createLandscapeIcon(), { pixelRatio: 2 });
   }
-  for (let count = 2; count <= state.images.length; count += 1) {
-    const clusterIconId = `${CLUSTER_ICON_PREFIX}${count}`;
-    if (!map.hasImage(clusterIconId)) {
-      map.addImage(clusterIconId, createLandscapeIcon(count), { pixelRatio: 2 });
-    }
-  }
+  ensureClusterIconFactory(map);
 
-  const data = featureCollection(state.images);
   const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
   if (source) {
-    source.setData(data);
+    if (appliedRevisionByMap.get(map) !== state.revision) {
+      source.setData(featureCollection(state.images));
+      appliedRevisionByMap.set(map, state.revision);
+    }
   } else {
     map.addSource(SOURCE_ID, {
       type: 'geojson',
-      data,
+      data: featureCollection(state.images),
       cluster: true,
       clusterMaxZoom: 14,
       clusterRadius: 28,
     });
+    appliedRevisionByMap.set(map, state.revision);
   }
 
   if (!map.getLayer(CLUSTER_LAYER_ID)) {
@@ -194,8 +231,11 @@ export function restoreImagePins(map: maplibregl.Map): void {
     }
   }
 
-  for (const legacyIconId of LEGACY_ICON_IDS) {
-    if (map.hasImage(legacyIconId)) map.removeImage(legacyIconId);
+  if (!legacyIconsPurgedMaps.has(map)) {
+    legacyIconsPurgedMaps.add(map);
+    for (const legacyIconId of LEGACY_ICON_IDS) {
+      if (map.hasImage(legacyIconId)) map.removeImage(legacyIconId);
+    }
   }
 
   syncResponsivePinScale(map);
@@ -234,9 +274,15 @@ function pinIdAt(map: maplibregl.Map, point: { x: number; y: number }): string |
   return typeof id === 'string' ? id : null;
 }
 
-/** Whether a visible image pin renders at this screen point — mask interaction yields to pins. */
+/**
+ * Whether a visible image pin renders at this screen point — mask interaction yields to pins.
+ * One query across both pin layers: this runs per mousemove frame (mask shouldYield and the
+ * hover cursor below), where the previous pin-then-cluster pair doubled the hit-test cost.
+ */
 export function hasImagePinAt(map: maplibregl.Map, point: { x: number; y: number }): boolean {
-  return pinIdAt(map, point) !== null || clusterAt(map, point) !== null;
+  const layers = [LAYER_ID, CLUSTER_LAYER_ID].filter((layerId) => map.getLayer(layerId));
+  if (layers.length === 0) return false;
+  return map.queryRenderedFeatures([point.x, point.y], { layers }).length > 0;
 }
 
 /**
@@ -274,7 +320,7 @@ export function attachImagePinInteraction(
     const point = { x: event.point.x, y: event.point.y };
     frame = requestAnimationFrame(() => {
       frame = null;
-      const next = pinIdAt(map, point) !== null || clusterAt(map, point) !== null;
+      const next = hasImagePinAt(map, point);
       if (next) map.getCanvas().style.cursor = 'pointer';
       else if (hovering) map.getCanvas().style.cursor = '';
       hovering = next;
@@ -307,15 +353,23 @@ export function attachImagePinInteraction(
 }
 
 export function removeImagePins(map: maplibregl.Map): void {
-  const imageCount = stateByMap.get(map)?.images.length ?? 0;
   stateByMap.delete(map);
+  appliedRevisionByMap.delete(map);
+  const clusterIconHandler = clusterIconHandlerByMap.get(map);
+  if (clusterIconHandler) {
+    map.off('styleimagemissing', clusterIconHandler);
+    clusterIconHandlerByMap.delete(map);
+  }
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getLayer(CLUSTER_LAYER_ID)) map.removeLayer(CLUSTER_LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   if (map.hasImage(ICON_ID)) map.removeImage(ICON_ID);
-  for (let count = 2; count <= imageCount; count += 1) {
-    const clusterIconId = `${CLUSTER_ICON_PREFIX}${count}`;
-    if (map.hasImage(clusterIconId)) map.removeImage(clusterIconId);
+  const clusterIconIds = clusterIconIdsByMap.get(map);
+  if (clusterIconIds) {
+    for (const clusterIconId of clusterIconIds) {
+      if (map.hasImage(clusterIconId)) map.removeImage(clusterIconId);
+    }
+    clusterIconIdsByMap.delete(map);
   }
   for (const legacyIconId of LEGACY_ICON_IDS) {
     if (map.hasImage(legacyIconId)) map.removeImage(legacyIconId);

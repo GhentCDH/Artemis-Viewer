@@ -1,5 +1,5 @@
 import type maplibregl from 'maplibre-gl';
-import { readThemeColor } from '$lib/core/map/mapColors';
+import { readThemeColor, readThemeNumber } from '$lib/core/map/mapColors';
 import type { SublayerRenderContext, SublayerRenderTarget } from '../types';
 import { iiifLayerId, iiifSourceId, registerIiifCleanup } from './iiifLayerRuntime';
 
@@ -35,6 +35,8 @@ export function renderIiifMasks(context: SublayerRenderContext, target: Sublayer
 
   const sourceId = iiifSourceId(context.paneId, target.sublayer.id, 'masks');
   const layerId = iiifLayerId(context.paneId, target.sublayer.id, 'masks');
+  const activeFillLayerId = iiifLayerId(context.paneId, target.sublayer.id, 'mask-active-fill');
+  const activeOutlineLayerId = iiifLayerId(context.paneId, target.sublayer.id, 'mask-active-outline');
   const outlineLayerId = iiifLayerId(context.paneId, target.sublayer.id, 'mask-outline');
   const usesPmtiles = isPmtilesUrl(url);
 
@@ -64,6 +66,29 @@ export function renderIiifMasks(context: SublayerRenderContext, target: Sublayer
 
     if (!context.map.getLayer(outlineLayerId)) {
       context.map.addLayer({
+        id: activeFillLayerId,
+        type: 'fill',
+        source: sourceId,
+        ...(usesPmtiles ? { 'source-layer': PMTILES_SOURCE_LAYER } : {}),
+        filter: ['==', ['get', 'manifestUrl'], ''],
+        paint: {
+          'fill-color': readThemeColor('--color-accent', '#2f6f99'),
+          'fill-opacity': readThemeNumber('--opacity-iiif-active-mask', 0.22),
+        },
+      });
+      context.map.addLayer({
+        id: activeOutlineLayerId,
+        type: 'line',
+        source: sourceId,
+        ...(usesPmtiles ? { 'source-layer': PMTILES_SOURCE_LAYER } : {}),
+        filter: ['==', ['get', 'manifestUrl'], ''],
+        paint: {
+          'line-color': readThemeColor('--color-accent', '#2f6f99'),
+          'line-width': 2,
+          'line-opacity': 1,
+        },
+      });
+      context.map.addLayer({
         id: outlineLayerId,
         type: 'line',
         source: sourceId,
@@ -79,12 +104,16 @@ export function renderIiifMasks(context: SublayerRenderContext, target: Sublayer
 
     registerIiifCleanup(context.paneId, target.sublayer.id, () => {
       if (context.map.getLayer(outlineLayerId)) context.map.removeLayer(outlineLayerId);
+      if (context.map.getLayer(activeOutlineLayerId)) context.map.removeLayer(activeOutlineLayerId);
+      if (context.map.getLayer(activeFillLayerId)) context.map.removeLayer(activeFillLayerId);
       if (context.map.getLayer(layerId)) context.map.removeLayer(layerId);
       if (context.map.getSource(sourceId)) context.map.removeSource(sourceId);
     });
     return true;
   } catch {
     if (context.map.getLayer(outlineLayerId)) context.map.removeLayer(outlineLayerId);
+    if (context.map.getLayer(activeOutlineLayerId)) context.map.removeLayer(activeOutlineLayerId);
+    if (context.map.getLayer(activeFillLayerId)) context.map.removeLayer(activeFillLayerId);
     if (context.map.getLayer(layerId)) context.map.removeLayer(layerId);
     if (context.map.getSource(sourceId)) context.map.removeSource(sourceId);
     return false;

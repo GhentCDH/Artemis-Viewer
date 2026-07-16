@@ -1,6 +1,5 @@
 import type maplibregl from 'maplibre-gl';
 import type { SublayerRenderContext, SublayerRenderTarget } from '../types';
-import { canRenderIiifAllmapsWarp, renderIiifAllmapsWarp } from './allmapsWarpRenderer';
 import { beginIiifRender, iiifLayerId, isCurrentIiifRender, removeIiifGroup } from './iiifLayerRuntime';
 import { canRenderIiifMasks, renderIiifMasks } from './iiifMaskRenderer';
 import { canRenderIiifRasterPreview, renderIiifRasterPreview } from './iiifRasterPreviewRenderer';
@@ -13,8 +12,18 @@ function canMutateStyle(map: maplibregl.Map): boolean {
   }
 }
 
+/**
+ * Mirrors allmapsWarpRenderer's canRenderIiifAllmapsWarp. Kept local so the availability
+ * check stays synchronous while the warp renderer itself — the only static importer of the
+ * ~560 KB @allmaps vendor chunk — loads via dynamic import the first time a warp actually
+ * renders, keeping it off the startup critical path.
+ */
+function hasGeomapsArtifact(target: SublayerRenderTarget): boolean {
+  return Boolean(target.sublayer.artifacts.geomaps);
+}
+
 export function canRenderIiifSublayer(target: SublayerRenderTarget): boolean {
-  return target.sublayer.kind === 'iiif' && (canRenderIiifRasterPreview(target) || canRenderIiifAllmapsWarp(target));
+  return target.sublayer.kind === 'iiif' && (canRenderIiifRasterPreview(target) || hasGeomapsArtifact(target));
 }
 
 /**
@@ -40,7 +49,7 @@ export async function renderIiifSublayer(context: SublayerRenderContext, target:
       renderedRasterPreview = false;
     }
     if (!renderedRasterPreview) return false;
-  } else if (!canRenderIiifAllmapsWarp(target)) {
+  } else if (!hasGeomapsArtifact(target)) {
     return false;
   }
 
@@ -48,8 +57,17 @@ export async function renderIiifSublayer(context: SublayerRenderContext, target:
     renderIiifMasks(context, target);
   }
 
-  if (canRenderIiifAllmapsWarp(target)) {
-    void renderIiifAllmapsWarp(context, target, token).catch(() => {});
+  if (hasGeomapsArtifact(target)) {
+    // The chunk load introduces an await between token creation and the warp render, so the
+    // token is re-checked before starting: renderIiifAllmapsWarp adds its maplibre layer
+    // synchronously on entry, and a stale call would resurrect a layer whose sublayer was
+    // toggled off while the import was in flight.
+    void import('./allmapsWarpRenderer')
+      .then(({ renderIiifAllmapsWarp }) => {
+        if (!isCurrentIiifRender(context.paneId, target.sublayer.id, token)) return false;
+        return renderIiifAllmapsWarp(context, target, token);
+      })
+      .catch(() => {});
   }
 
   return true;
@@ -62,6 +80,8 @@ export function iiifSublayerLayerIds(paneId: string, sublayerId: string): string
     iiifLayerId(paneId, sublayerId, 'allmaps-warp'),
     // Keep the transparent interaction surface above every visible representation.
     iiifLayerId(paneId, sublayerId, 'masks'),
+    iiifLayerId(paneId, sublayerId, 'mask-active-fill'),
+    iiifLayerId(paneId, sublayerId, 'mask-active-outline'),
     iiifLayerId(paneId, sublayerId, 'mask-outline'),
   ];
 }

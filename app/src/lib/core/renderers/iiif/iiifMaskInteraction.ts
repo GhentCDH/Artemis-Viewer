@@ -7,6 +7,18 @@ export interface IiifMaskHit {
   sublayerId: string;
 }
 
+export type ActiveIiifMask = Pick<IiifMaskHit, 'manifestUrl' | 'imageId'>;
+
+/**
+ * Structural filter comparison against what the style already holds. Guarding on the live
+ * style (rather than a cached "last applied" value) stays correct when reconciliation tears
+ * a mask layer down and recreates it with its default filter. The guard matters because
+ * `Map.setFilter` triggers a full repaint even when `Style.setFilter` no-ops on deepEqual.
+ */
+function filtersEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
 function geometryBboxArea(geometry: maplibregl.MapGeoJSONFeature['geometry']): number {
   let minX = Infinity;
   let minY = Infinity;
@@ -100,13 +112,43 @@ export class IiifMaskInteraction {
     if (sublayerIds.length === 0) this.setHover(null);
   }
 
+  setActive(active: ActiveIiifMask | null): void {
+    try {
+      for (const sublayerId of this.sublayerIds) {
+        const filter: maplibregl.FilterSpecification = active
+          ? active.imageId
+            ? [
+                'all',
+                ['==', ['get', 'manifestUrl'], active.manifestUrl],
+                ['>=', ['index-of', active.imageId, ['to-string', ['get', 'imageId']]], 0],
+              ]
+            : ['==', ['get', 'manifestUrl'], active.manifestUrl]
+          : ['==', ['get', 'manifestUrl'], ''];
+        for (const role of ['mask-active-fill', 'mask-active-outline']) {
+          const layerId = iiifLayerId(this.paneId, sublayerId, role);
+          if (!this.map.getLayer(layerId)) continue;
+          if (filtersEqual(this.map.getFilter(layerId), filter)) continue;
+          this.map.setFilter(layerId, filter);
+        }
+      }
+    } catch {
+      // The style may be swapping; reconciliation reapplies the active selection.
+    }
+  }
+
   /** Renderer reconciliation moves its own layers; keep the visible hover outline above them. */
   moveOutlineToFront(): void {
     try {
-      for (const sublayerId of this.sublayerIds) {
-        const outlineLayerId = iiifLayerId(this.paneId, sublayerId, 'mask-outline');
-        if (this.map.getLayer(outlineLayerId)) this.map.moveLayer(outlineLayerId);
-      }
+      const outlineLayerIds = this.sublayerIds
+        .map((sublayerId) => iiifLayerId(this.paneId, sublayerId, 'mask-outline'))
+        .filter((layerId) => Boolean(this.map.getLayer(layerId)));
+      if (outlineLayerIds.length === 0) return;
+      // Already in final position (the style's topmost layers, in this order)? Then don't
+      // touch the style: `Style.moveLayer` dirties it and schedules a repaint even when the
+      // move is a no-op, and this runs on every reconcile pass.
+      const topOfOrder = this.map.getLayersOrder().slice(-outlineLayerIds.length);
+      if (outlineLayerIds.every((layerId, index) => topOfOrder[index] === layerId)) return;
+      for (const layerId of outlineLayerIds) this.map.moveLayer(layerId);
     } catch {
       // The style may be changing; the next reconciliation retries.
     }
@@ -138,22 +180,25 @@ export class IiifMaskInteraction {
 
   private setHover(hit: IiifMaskHit | null): void {
     try {
+      // This runs per mousemove frame; the filtersEqual guards make the common case (hover
+      // target unchanged, usually null -> null) mutation-free so it schedules no repaint.
+      let changed = false;
       for (const sublayerId of this.sublayerIds) {
         const outlineLayerId = iiifLayerId(this.paneId, sublayerId, 'mask-outline');
         if (!this.map.getLayer(outlineLayerId)) continue;
         const selected = hit?.sublayerId === sublayerId;
-        this.map.setFilter(
-          outlineLayerId,
-          selected
-            ? [
-                'all',
-                ['==', ['get', 'manifestUrl'], hit.manifestUrl],
-                ['==', ['get', 'imageId'], hit.imageId],
-              ]
-            : ['==', ['get', 'manifestUrl'], '']
-        );
+        const filter: maplibregl.FilterSpecification = selected
+          ? [
+              'all',
+              ['==', ['get', 'manifestUrl'], hit.manifestUrl],
+              ['==', ['get', 'imageId'], hit.imageId],
+            ]
+          : ['==', ['get', 'manifestUrl'], ''];
+        if (filtersEqual(this.map.getFilter(outlineLayerId), filter)) continue;
+        this.map.setFilter(outlineLayerId, filter);
+        changed = true;
       }
-      this.moveOutlineToFront();
+      if (changed) this.moveOutlineToFront();
     } catch {
       // The style may be swapping or tearing down; the next pointer move retries.
     }

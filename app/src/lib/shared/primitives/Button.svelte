@@ -55,12 +55,14 @@
     --button-font-family: var(--font-ui);
     --button-font-weight: 400;
     --button-justify: center;
+    --button-flex-shrink: 1;
     --button-shadow: 0 0 3px color-mix(in srgb, var(--color-shadow-ink) 40%, transparent);
     /* -- end exposed -- */
 
     appearance: none;
     -webkit-appearance: none;
     display: inline-flex;
+    flex-shrink: var(--button-flex-shrink);
     align-items: center;
     justify-content: var(--button-justify);
     pointer-events: auto;

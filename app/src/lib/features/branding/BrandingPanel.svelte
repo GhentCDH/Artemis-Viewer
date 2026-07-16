@@ -14,10 +14,7 @@
   import { i18n, paragraphs, t, LOCALES, LOCALE_NAMES, LOCALE_SHORT_LABELS } from '$lib/shared/i18n/i18n.svelte';
   import { SITE_TITLE, TEAM, PARTNER_LOGOS, PIPELINE_URL } from './aboutData';
 
-  let {
-    resolveDatasetUrl,
-    style = '',
-  }: { resolveDatasetUrl: (path: string) => string; style?: string } = $props();
+  let { style = '' }: { style?: string } = $props();
 
   type Tab = 'about' | 'pipeline';
   type TuningNumberKey = Exclude<keyof AllmapsTuningOptions, 'overviewTilesMaxResolution' | 'overviewTilesSelection'>;
@@ -141,7 +138,7 @@
               <div class="logo-grid">
                 {#each PARTNER_LOGOS as logo (logo.src)}
                   <a href={logo.href} title={logo.name} target="_blank" rel="noopener noreferrer">
-                    <img src={resolveDatasetUrl(logo.src)} alt={logo.alt} />
+                    <img src={logo.src} alt={logo.alt} />
                   </a>
                 {/each}
               </div>
@@ -359,8 +356,8 @@
     --branding-logo-width: 1.05rem;
     --branding-logo-height: 2rem;
     --branding-text-gap: 0.08rem;
-    --branding-title-size: 0.6rem;
-    --branding-subtitle-size: 0.51rem;
+    --branding-title-size: 0.7875rem;
+    --branding-subtitle-size: 0.6975rem;
     --branding-modal-width: min(44rem, 92vw);
     --branding-modal-height: min(54rem, 82vh);
     /* -- end exposed -- */

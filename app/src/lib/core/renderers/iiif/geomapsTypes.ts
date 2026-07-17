@@ -1,3 +1,6 @@
+// Runtime (post-normalization) shapes for the geomaps bundle loaded by
+// geomapsLoader.ts. The producer-side on-disk contract lives in Artemis-Data's
+// src/lib/iiif/types.ts (CompactGeomap) — keep the two in sync.
 export interface NormalizedGeomapsCanvas {
   imageId: string;
   label: string;

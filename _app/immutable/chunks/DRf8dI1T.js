@@ -1,0 +1,2 @@
+import{u as o,i as t,l as c,j as l}from"./W7NpPPcg.js";function u(e){throw new Error("https://svelte.dev/e/lifecycle_outside_component")}function r(e){t===null&&u(),c&&t.l!==null?a(t).m.push(e):o(()=>{const n=l(e);if(typeof n=="function")return n})}function a(e){var n=e.l;return n.u??={a:[],b:[],m:[]}}export{r as o};
+//# sourceMappingURL=DRf8dI1T.js.map

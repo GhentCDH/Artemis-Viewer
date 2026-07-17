@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Manual - Deploy viewer
 
 on:
   workflow_dispatch:
@@ -61,3 +61,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: app/build
           publish_branch: live
+          # Publish an exact snapshot so retired viewer assets are removed.
+          keep_files: false

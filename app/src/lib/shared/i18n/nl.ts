@@ -83,7 +83,6 @@ export const nl: Dictionary = {
     tabAll: 'Alles',
     toponyms: 'Toponiemen',
     sheets: 'Kaartbladen',
-    images: 'Beelden',
     activeLayersOnly: 'Enkel actieve lagen',
     loadingIndex: 'Zoekindex laden…',
     typeToSearch: 'Typ om te zoeken naar historische plaatsnamen, kaartbladen en beelden.',

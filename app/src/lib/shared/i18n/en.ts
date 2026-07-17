@@ -94,7 +94,6 @@ export const en = {
     tabAll: 'All',
     toponyms: 'Toponyms',
     sheets: 'Sheets',
-    images: 'Images',
     activeLayersOnly: 'Active layers only',
     loadingIndex: 'Loading search index…',
     typeToSearch: 'Type to search historical place names, map sheets, and images.',

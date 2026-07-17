@@ -185,7 +185,7 @@
           <Button active={activeTab === 'all'} onclick={() => (activeTab = 'all')}>{t().search.tabAll}</Button>
           <Button active={activeTab === 'toponyms'} onclick={() => (activeTab = 'toponyms')}>{t().search.toponyms}</Button>
           <Button active={activeTab === 'sheets'} onclick={() => (activeTab = 'sheets')}>{t().search.sheets}</Button>
-          <Button active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>{t().search.images}</Button>
+          <Button active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>{t().images.trigger}</Button>
         </div>
         <div class="active-only-toggle" class:is-active={activeOnly}>
           <svg class="target-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -246,7 +246,7 @@
           {/if}
 
           {#if showImages && groupedImages.length > 0}
-            {#if activeTab === 'all'}<h3 class="results-heading">{t().search.images}</h3>{/if}
+            {#if activeTab === 'all'}<h3 class="results-heading">{t().images.trigger}</h3>{/if}
             {#each groupedImages as [collectionLabel, matches] (collectionLabel)}
               <section class="result-group" class:is-type-child={activeTab === 'all'}>
                 <h4 class="result-group-heading">{collectionLabel}</h4>
@@ -421,6 +421,7 @@
 
   .search-toolbar {
     display: flex;
+    min-width: 0;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
@@ -430,11 +431,20 @@
 
   .search-tabs {
     display: flex;
+    flex: 1 1 auto;
     gap: var(--space-1);
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .search-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .active-only-toggle {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: var(--space-2);
     border: 0;
@@ -444,6 +454,10 @@
     font-family: var(--font-ui);
     font-size: var(--text-2xs);
     cursor: pointer;
+  }
+
+  .active-only-toggle span {
+    white-space: nowrap;
   }
 
   .active-only-toggle.is-active {

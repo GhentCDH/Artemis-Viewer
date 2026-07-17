@@ -5,7 +5,7 @@ const BELGIUM_BOUNDS = [
 
 const LONGITUDE_PADDING_RATIO = 0.3;
 const SOUTH_PADDING_RATIO = 1.8;
-const NORTH_PADDING_RATIO = 0.35;
+const NORTH_PADDING_RATIO = 0.19;
 
 const [[west, south], [east, north]] = BELGIUM_BOUNDS;
 const longitudeSpan = east - west;

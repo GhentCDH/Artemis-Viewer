@@ -79,23 +79,23 @@
       if (inside) anchorSeen = true;
       else if (anchorSeen) onclose();
     };
-    // Deferred a frame so the movestart racing the opening click can't close it instantly.
+    // Deferred so opening-click movement cannot close instantly, and teardown during
+    // dragstart cannot interrupt MapLibre while it is establishing that drag gesture.
     const closeAfterGestureStarts = () => {
       if (closeFrame !== null) return;
       closeFrame = requestAnimationFrame(() => onclose());
     };
-    const closeOnDrag = () => onclose();
     update();
     map.on('move', update);
     map.on('resize', update);
-    if (closeOn === 'drag') map.on('dragstart', closeOnDrag);
+    if (closeOn === 'drag') map.on('dragstart', closeAfterGestureStarts);
     else map.on('movestart', closeAfterGestureStarts);
     window.addEventListener('resize', update);
     return () => {
       if (closeFrame !== null) cancelAnimationFrame(closeFrame);
       map.off('move', update);
       map.off('resize', update);
-      if (closeOn === 'drag') map.off('dragstart', closeOnDrag);
+      if (closeOn === 'drag') map.off('dragstart', closeAfterGestureStarts);
       else map.off('movestart', closeAfterGestureStarts);
       window.removeEventListener('resize', update);
     };

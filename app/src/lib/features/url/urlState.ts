@@ -27,7 +27,7 @@ export const LAYER_ID_TO_CODE: Record<string, string> = Object.fromEntries(
   Object.entries(LAYER_CODE_TO_ID).map(([code, id]) => [id, code])
 );
 
-export const DEFAULT_URL_CENTER = { lng: 4.3459, lat: 51.1477, zoom: 9.7 };
+export const DEFAULT_URL_CENTER = { lng: 4.184, lat: 51.0656, zoom: 8.9 };
 
 export interface UrlAppState {
   center?: { lng: number; lat: number; zoom: number };

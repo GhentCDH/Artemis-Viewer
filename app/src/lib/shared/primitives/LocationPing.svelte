@@ -42,15 +42,13 @@
     onanimationend={oncomplete}
   >
     <span class="location-ping-ring"></span>
-    <span class="location-ping-core"></span>
   </div>
 {/if}
 
 <style>
   .location-ping {
     /* -- exposed -- */
-    --location-ping-size: 3rem;
-    --location-ping-core-size: var(--space-2);
+    --location-ping-size: 7.5rem;
     --location-ping-duration: 0.7s;
     --location-ping-count: 3;
     /* -- end exposed -- */
@@ -63,8 +61,7 @@
     transform: translate(-50%, -50%);
   }
 
-  .location-ping-ring,
-  .location-ping-core {
+  .location-ping-ring {
     position: absolute;
     inset: 50% auto auto 50%;
     border-radius: 50%;
@@ -76,12 +73,6 @@
     width: 100%;
     height: 100%;
     animation: location-ping var(--location-ping-duration) ease-out var(--location-ping-count);
-  }
-
-  .location-ping-core {
-    width: var(--location-ping-core-size);
-    height: var(--location-ping-core-size);
-    box-shadow: 0 0 0 2px var(--color-accent-contrast);
   }
 
   @keyframes location-ping {

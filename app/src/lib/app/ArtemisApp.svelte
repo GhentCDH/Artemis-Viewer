@@ -39,7 +39,7 @@
   import type { PaneId } from '$lib/core/map/maplibreInit';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Tooltip from '$lib/shared/primitives/Tooltip.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
   import MapPane from './MapPane.svelte';
 
   const selectedDatasetBaseUrl = datasetBaseUrl(developerSettings.dataSource);
@@ -59,6 +59,7 @@
 
   let layers = $state<LayerSummary[]>([]);
   let workspaceElement = $state<HTMLElement | null>(null);
+  let brandingWatermarkElement = $state<HTMLElement | null>(null);
   let leftMap = $state<maplibregl.Map | null>(null);
   let rightMap = $state<maplibregl.Map | null>(null);
   let openDocument = $state<{ manifestUrl: string; imageId: string; pane: PaneId } | null>(
@@ -87,8 +88,8 @@
   } | null>(null);
   const pmtilesUrl = datasetUrl('baselayer.pmtiles', selectedDatasetBaseUrl);
   const isCompare = $derived(timelineSelection.mode === 'compare');
-  const leftMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.leftLayerId) ?? null);
-  const rightMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.rightLayerId) ?? null);
+  const leftMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.paneLayerIds.left) ?? null);
+  const rightMenuLayer = $derived(layers.find((layer) => layer.id === timelineSelection.paneLayerIds.right) ?? null);
   let urlPersistence = $state<UrlPersistence | undefined>();
 
   function cameraFromMap(map: maplibregl.Map | null) {
@@ -107,8 +108,8 @@
     const center = map?.getCenter();
     return {
       center: map && center ? { lng: center.lng, lat: center.lat, zoom: map.getZoom() } : initialCenter,
-      leftMainId: timelineSelection.leftLayerId ?? undefined,
-      rightMainId: timelineSelection.rightLayerId ?? undefined,
+      leftMainId: timelineSelection.paneLayerIds.left ?? undefined,
+      rightMainId: timelineSelection.paneLayerIds.right ?? undefined,
       viewMode: timelineSelection.mode === 'compare' ? 'split' : undefined,
       viewerManifestUrl: openDocument?.manifestUrl,
       viewerImageId: openDocument?.imageId,
@@ -148,7 +149,15 @@
         ),
         documentTitle: openDocument ? openDocumentTitle : '',
       });
-      await captureViewScreenshot({ stage: workspaceElement, maps, viewerHost: viewerCanvasHost }, filename);
+      await captureViewScreenshot(
+        {
+          stage: workspaceElement,
+          maps,
+          viewerHost: viewerCanvasHost,
+          watermark: brandingWatermarkElement?.querySelector<HTMLElement>('.branding-trigger-scale'),
+        },
+        filename
+      );
     } catch (error) {
       console.error('Screenshot export failed', error);
     } finally {
@@ -227,8 +236,8 @@
 
   $effect(() => {
     timelineSelection.mode;
-    timelineSelection.leftLayerId;
-    timelineSelection.rightLayerId;
+    timelineSelection.paneLayerIds.left;
+    timelineSelection.paneLayerIds.right;
     openDocument?.manifestUrl;
     openDocument?.imageId;
     openDocument?.pane;
@@ -292,7 +301,7 @@
   {/key}
 {/snippet}
 
-<main class="canvas">
+<main class="artemis-app">
   <div
     class="workspace-layer"
     class:workspace-layer--viewer-expanded={isViewerExpanded}
@@ -311,7 +320,7 @@
       allmapsOptions={developerSettings.allmapsOptions}
       allmapsRenderRevision={developerSettings.renderRevision}
       {layers}
-      activeLayerId={timelineSelection.leftLayerId}
+      activeLayerId={timelineSelection.paneLayerIds.left}
       sublayersByLayerId={timelineSelection.sublayersByLayerId}
       initialCamera={cameraFromMap(rightMap) ?? initialMapCamera}
       onMapReady={(map) => (leftMap = map)}
@@ -336,7 +345,7 @@
         allmapsOptions={developerSettings.allmapsOptions}
         allmapsRenderRevision={developerSettings.renderRevision}
         {layers}
-        activeLayerId={timelineSelection.rightLayerId}
+        activeLayerId={timelineSelection.paneLayerIds.right}
         sublayersByLayerId={timelineSelection.sublayersByLayerId}
         initialCamera={cameraFromMap(leftMap) ?? initialMapCamera}
         onMapReady={(map) => (rightMap = map)}
@@ -355,7 +364,7 @@
 
   <div class="overlay-layer">
     <div class="window-slot branding-slot">
-      <div class="branding-slot-inner">
+      <div class="branding-slot-inner" bind:this={brandingWatermarkElement}>
         <BrandingPanel style="--branding-scale: 1.6;" />
       </div>
     </div>
@@ -394,7 +403,7 @@
             onfocus={(event) => showControlTooltip(t().controls.changeLanguage, event)}
             onblur={hideTooltip}
             onclick={() => i18n.setLocale(targetLocale)}
-            style="--button-height: var(--canvas-primary-control-height);"
+            style="--button-height: var(--app-primary-control-height);"
           >{LOCALE_SHORT_LABELS[i18n.locale]}</Button>
         </div>
         <BasemapMenu
@@ -417,7 +426,7 @@
             onfocus={(event) => showControlTooltip(t().controls.screenshot, event)}
             onblur={hideTooltip}
             onclick={captureScreenshot}
-            style="--button-height: var(--canvas-primary-control-height);"
+            style="--button-height: var(--app-primary-control-height);"
           >
             <svg class="screenshot-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"></path>
@@ -462,14 +471,14 @@
 </main>
 
 <style>
-  .canvas {
+  .artemis-app {
     /* -- exposed -- */
-    --canvas-timeline-height: 9rem;
-    --canvas-timeline-bottom: var(--space-4);
-    --canvas-primary-control-height: calc(1.75rem * 1.5);
-    --canvas-primary-control-padding-inline: calc(var(--space-3) * 1.5);
-    --canvas-primary-control-gap: calc(var(--space-2) * 1.5);
-    --canvas-primary-control-font-size: calc(var(--text-xs) * 1.5);
+    --app-timeline-height: 9rem;
+    --app-timeline-bottom: var(--space-4);
+    --app-primary-control-height: calc(1.75rem * 1.5);
+    --app-primary-control-padding-inline: calc(var(--space-3) * 1.5);
+    --app-primary-control-gap: calc(var(--space-2) * 1.5);
+    --app-primary-control-font-size: calc(var(--text-xs) * 1.5);
     /* -- end exposed -- */
 
     position: relative;
@@ -510,8 +519,8 @@
   .timeline-slot {
     left: 0;
     right: 0;
-    bottom: var(--canvas-timeline-bottom);
-    height: var(--canvas-timeline-height);
+    bottom: var(--app-timeline-bottom);
+    height: var(--app-timeline-height);
     display: flex;
   }
 
@@ -546,7 +555,7 @@
 
   .compare-control-slot {
     left: var(--space-4);
-    bottom: calc(var(--canvas-timeline-bottom) + var(--canvas-timeline-height) + var(--space-4));
+    bottom: calc(var(--app-timeline-bottom) + var(--app-timeline-height) + var(--space-4));
     display: flex;
   }
 
@@ -558,7 +567,7 @@
   /* Zoom and map scale sit immediately left of the screenshot control. */
   .bottom-right-controls-slot {
     right: var(--space-4);
-    bottom: calc(var(--canvas-timeline-bottom) + var(--canvas-timeline-height) + var(--space-4));
+    bottom: calc(var(--app-timeline-bottom) + var(--app-timeline-height) + var(--space-4));
     display: flex;
   }
 
@@ -581,10 +590,10 @@
   /* Descendant selector (not inline style) so the portrait media query below can
      override these; the extra specificity beats the Button defaults outright. */
   .compare-control :global(.compare-toggle) {
-    --button-height: var(--canvas-primary-control-height);
-    --button-padding-inline: var(--canvas-primary-control-padding-inline);
-    --button-gap: var(--canvas-primary-control-gap);
-    --button-font-size: var(--canvas-primary-control-font-size);
+    --button-height: var(--app-primary-control-height);
+    --button-padding-inline: var(--app-primary-control-padding-inline);
+    --button-gap: var(--app-primary-control-gap);
+    --button-font-size: var(--app-primary-control-font-size);
   }
 
   .compare-icon {
@@ -628,7 +637,7 @@
     }
 
     .compare-control :global(.compare-toggle) {
-      --button-width: var(--canvas-primary-control-height);
+      --button-width: var(--app-primary-control-height);
       --button-padding-inline: 0rem;
     }
 
@@ -642,8 +651,8 @@
   }
 
   @media (max-width: 56rem) {
-    .canvas {
-      --canvas-timeline-height: 8.55rem;
+    .artemis-app {
+      --app-timeline-height: 8.55rem;
     }
   }
 

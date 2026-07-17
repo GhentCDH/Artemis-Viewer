@@ -8,7 +8,7 @@
   import Button from '$lib/shared/primitives/Button.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
   import { format, t } from '$lib/shared/i18n/i18n.svelte';
   import {
     loadCustomBasemaps,
@@ -349,7 +349,7 @@
     aria-label={t().basemap.trigger}
     aria-expanded={open}
     onclick={() => { if (open) closeMenu(); else open = true; }}
-    style="--button-height: var(--canvas-primary-control-height);"
+    style="--button-height: var(--app-primary-control-height);"
   >
     <svg class="basemap-icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"></path>

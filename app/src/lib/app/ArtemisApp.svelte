@@ -60,6 +60,7 @@
   let layers = $state<LayerSummary[]>([]);
   let workspaceElement = $state<HTMLElement | null>(null);
   let brandingWatermarkElement = $state<HTMLElement | null>(null);
+  let brandingCoverWidthRem = $state(0);
   let leftMap = $state<maplibregl.Map | null>(null);
   let rightMap = $state<maplibregl.Map | null>(null);
   let openDocument = $state<{ manifestUrl: string; imageId: string; pane: PaneId } | null>(
@@ -244,6 +245,30 @@
     urlPersistence?.update();
   });
 
+  $effect(() => {
+    const trigger = brandingWatermarkElement?.querySelector<HTMLElement>('.branding-trigger-scale');
+    if (!trigger) return;
+
+    let active = true;
+    const syncBrandingCoverWidth = () => {
+      if (!active) return;
+      const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      brandingCoverWidthRem = trigger.getBoundingClientRect().width / rootFontSize;
+    };
+    const resizeObserver = new ResizeObserver(syncBrandingCoverWidth);
+
+    syncBrandingCoverWidth();
+    resizeObserver.observe(trigger);
+    window.addEventListener('resize', syncBrandingCoverWidth);
+    void document.fonts.ready.then(syncBrandingCoverWidth);
+
+    return () => {
+      active = false;
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', syncBrandingCoverWidth);
+    };
+  });
+
   onMount(() => {
     urlPersistence = createUrlPersistence(selectedDatasetBaseUrl, currentUrlState);
 
@@ -362,7 +387,10 @@
     {/if}
   </div>
 
-  <div class="overlay-layer">
+  <div
+    class="overlay-layer"
+    style:--app-branding-cover-width={`${brandingCoverWidthRem}rem`}
+  >
     <div class="window-slot branding-slot">
       <div class="branding-slot-inner" bind:this={brandingWatermarkElement}>
         <BrandingPanel style="--branding-scale: 1.6;" />

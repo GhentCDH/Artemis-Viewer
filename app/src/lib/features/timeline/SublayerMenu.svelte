@@ -132,11 +132,11 @@
     --window-radius: var(--radius-lg);
 
     flex: 0 1 auto;
-    /* Use the full popup width instead of deriving it from text metrics. This
-       guarantees that the scaled branding trigger underneath cannot peek out
-       when fonts load or render at slightly different widths. */
-    width: min(19.8rem, calc(100vw - (2 * var(--space-3))));
-    max-width: min(19.8rem, calc(100vw - (2 * var(--space-3))));
+    width: fit-content;
+    /* ArtemisApp measures the transformed branding trigger, including the
+       loaded font's real metrics, and publishes its visual width in rem. */
+    min-width: max(19.8rem, calc(var(--app-branding-cover-width, 19.8rem) + var(--space-1)));
+    max-width: calc(100vw - (2 * var(--space-3)));
     max-height: min(19.8rem, calc(100dvh - (2 * var(--space-3))));
   }
 

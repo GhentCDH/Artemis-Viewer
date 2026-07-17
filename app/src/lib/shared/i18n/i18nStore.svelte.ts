@@ -1,4 +1,4 @@
-// App-side localisation. One typed dictionary per locale (en.ts / nl.ts);
+// App-side localisation store. One typed dictionary per locale (en.ts / nl.ts);
 // `t()` reads the current locale rune, so any template that calls it
 // re-renders when the language changes — no reload needed.
 import { en, type Dictionary } from './en';

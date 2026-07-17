@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { LocalizedText } from '$lib/shared/i18n/i18n.svelte';
-  import { format, localize, paragraphs, t } from '$lib/shared/i18n/i18n.svelte';
+  import type { LocalizedText } from '$lib/shared/i18n/i18nStore.svelte';
+  import { format, localize, paragraphs, t } from '$lib/shared/i18n/i18nStore.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';

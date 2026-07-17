@@ -1,8 +1,8 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
   import { browser } from '$app/environment';
-  import { format, t } from '$lib/shared/i18n/i18n.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
+  import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipStore.svelte';
   import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
@@ -10,7 +10,7 @@
   import { loadImageCollectionDetails, loadImageCollections, type ImageCollectionDetails } from '$lib/features/search/searchIndex';
   import type { ImageResult } from '$lib/features/search/searchTypes';
   import { attachImagePinInteraction, removeImagePins, syncImagePins } from './imagePins';
-  import { imageBrowser } from './imageBrowserState.svelte';
+  import { imageBrowser } from './imageBrowserStore.svelte';
   import { spriteBackgroundPosition, spriteBackgroundSize } from './sprites';
   import ImagePreviewBubble from './ImagePreviewBubble.svelte';
 

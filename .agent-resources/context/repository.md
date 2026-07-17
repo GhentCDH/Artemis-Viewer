@@ -41,6 +41,8 @@ in the viewer consumer or the Artemis Data producer before changing either repo.
 ## State and UI
 
 - Cross-feature or cross-pane state belongs in a shared store.
+- Shared reactive store filenames must end in `Store.svelte.ts`; use `*State.ts`
+  only for non-store state types, serialization, or helpers.
 - Parent-to-child feature state uses props and callbacks.
 - Component-local transient state remains local.
 - Left/right pane behavior must be parameterized by pane ID rather than copied.

@@ -8,7 +8,7 @@
   } from '$lib/core/renderers/types';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Toggle from '$lib/shared/primitives/Toggle.svelte';
-  import { developerSettings } from './developerSettings.svelte';
+  import { developerSettings } from './developerSettingsStore.svelte';
 
   type TuningNumberKey = Exclude<keyof AllmapsTuningOptions, 'overviewTilesMaxResolution' | 'overviewTilesSelection'>;
 

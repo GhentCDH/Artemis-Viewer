@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import Button from './Button.svelte';
-  import { t } from '$lib/shared/i18n/i18n.svelte';
+  import { t } from '$lib/shared/i18n/i18nStore.svelte';
 
   interface Props {
     title?: string;

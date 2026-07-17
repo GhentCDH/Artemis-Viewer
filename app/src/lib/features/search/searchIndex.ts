@@ -1,7 +1,7 @@
 import { loadSearchSources } from '$lib/core/dataset/layerRegistry';
 import { datasetUrl } from '$lib/core/dataset/dataSource';
 import { parse } from 'yaml';
-import type { LocalizedText } from '$lib/shared/i18n/i18n.svelte';
+import type { LocalizedText } from '$lib/shared/i18n/i18nStore.svelte';
 import type { MetadataLink, MetadataSource } from '$lib/shared/metadata/types';
 import type { ImageResult, ImageSprite, SearchIndex, SheetResult, ToponymResult } from './searchTypes';
 

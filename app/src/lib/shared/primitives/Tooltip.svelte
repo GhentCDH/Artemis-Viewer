@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tooltip } from './tooltipState.svelte';
+  import { tooltip } from './tooltipStore.svelte';
 
   const VIEWPORT_MARGIN = 4;
 

@@ -13,7 +13,7 @@
   } from '$lib/core/map/basemap';
   import BasemapMenu from '$lib/features/basemap/BasemapMenu.svelte';
   import { discoverOverlayQueryCapability } from '$lib/features/basemap/customBasemap';
-  import { i18n, t, LOCALE_SHORT_LABELS, type Locale } from '$lib/shared/i18n/i18n.svelte';
+  import { i18n, t, LOCALE_SHORT_LABELS, type Locale } from '$lib/shared/i18n/i18nStore.svelte';
   import { loadMapServiceRegistry } from '$lib/features/basemap/mapServiceRegistry';
   import OverlayFeatureBubble from '$lib/features/basemap/OverlayFeatureBubble.svelte';
   import Timeline from '$lib/features/timeline/Timeline.svelte';
@@ -21,12 +21,12 @@
   import {
     DEFAULT_TIMELINE_LAYER_ID,
     timelineSelection,
-  } from '$lib/features/timeline/timelineSelection.svelte';
+  } from '$lib/features/timeline/timelineSelectionStore.svelte';
   import SearchMenu from '$lib/features/search/SearchMenu.svelte';
   import LocationPing from '$lib/shared/primitives/LocationPing.svelte';
   import type { SearchFocusTarget } from '$lib/features/search/searchSelection';
   import BrandingPanel from '$lib/features/branding/BrandingPanel.svelte';
-  import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
+  import { developerSettings } from '$lib/features/developerSettings/developerSettingsStore.svelte';
   import ImageBrowser from '$lib/features/images/ImageBrowser.svelte';
   import ScaleIndicator from '$lib/features/map/ScaleIndicator.svelte';
   import ZoomIndicator from '$lib/features/map/ZoomIndicator.svelte';
@@ -41,7 +41,7 @@
   import type { PaneId } from '$lib/core/map/maplibreInit';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Tooltip from '$lib/shared/primitives/Tooltip.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipStore.svelte';
   import MapPane from './MapPane.svelte';
 
   const selectedDatasetBaseUrl = datasetBaseUrl(developerSettings.dataSource);

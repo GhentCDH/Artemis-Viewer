@@ -2,7 +2,7 @@
   import Window from '$lib/shared/primitives/Window.svelte';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import { computeAxisRange } from './timelineScale';
-  import { timelineSelection } from './timelineSelection.svelte';
+  import { timelineSelection } from './timelineSelectionStore.svelte';
   import TimeAxis from './TimeAxis.svelte';
   import Meanders from './Meanders.svelte';
   import TimelineRiverBackdrop from './TimelineRiverBackdrop.svelte';

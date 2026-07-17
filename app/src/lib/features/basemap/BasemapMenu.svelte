@@ -8,8 +8,8 @@
   import Button from '$lib/shared/primitives/Button.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
-  import { format, t } from '$lib/shared/i18n/i18n.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipStore.svelte';
+  import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
   import {
     loadCustomBasemaps,
     loadCustomOverlays,

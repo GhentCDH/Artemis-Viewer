@@ -1,6 +1,6 @@
 import type maplibregl from 'maplibre-gl';
-import { timelineSelection } from '$lib/features/timeline/timelineSelection.svelte';
-import { imageBrowser } from '$lib/features/images/imageBrowserState.svelte';
+import { timelineSelection } from '$lib/features/timeline/timelineSelectionStore.svelte';
+import { imageBrowser } from '$lib/features/images/imageBrowserStore.svelte';
 import type { SearchResult } from './searchTypes';
 
 const TOPONYM_FOCUS_ZOOM = 15;

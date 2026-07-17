@@ -1,11 +1,11 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
-  import { format, t } from '$lib/shared/i18n/i18n.svelte';
+  import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Toggle from '$lib/shared/primitives/Toggle.svelte';
   import { datasetUrl } from '$lib/core/dataset/dataSource';
-  import { timelineSelection } from '$lib/features/timeline/timelineSelection.svelte';
+  import { timelineSelection } from '$lib/features/timeline/timelineSelectionStore.svelte';
   import { loadSearchIndex } from './searchIndex';
   import { searchByText } from './searchScoring';
   import { focusSearchResult, type SearchFocusTarget } from './searchSelection';

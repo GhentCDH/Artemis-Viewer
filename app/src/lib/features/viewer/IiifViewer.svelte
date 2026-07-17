@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { t } from '$lib/shared/i18n/i18n.svelte';
+  import { t } from '$lib/shared/i18n/i18nStore.svelte';
   import type OpenSeadragonType from 'openseadragon';
   import Button from '$lib/shared/primitives/Button.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipStore.svelte';
   import { loadIiifViewerSource, type IiifMetadataField } from './manifest';
 
   let {

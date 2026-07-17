@@ -2,7 +2,7 @@
 // typed against `Dictionary`, so a missing or extra key there is a type error.
 // Pure data: every entry is a label → text pair (leaves are always strings —
 // `satisfies MessageTree` enforces this). Parameterized messages use {name}
-// placeholders, filled at the call site with `format()` from i18n.svelte.ts.
+// placeholders, filled at the call site with `format()` from i18nStore.svelte.ts.
 // Braces are RESERVED for placeholders: `{...}` must never appear as literal
 // text in any message — if a text genuinely needs a brace, reword it.
 // Multi-paragraph texts are single strings with blank lines between

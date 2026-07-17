@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
-  import { timelineSelection } from './timelineSelection.svelte';
+  import { timelineSelection } from './timelineSelectionStore.svelte';
   import SublayerMenu from './SublayerMenu.svelte';
 
   let {

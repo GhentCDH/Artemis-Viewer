@@ -3,7 +3,7 @@
   import Button from '$lib/shared/primitives/Button.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import DeveloperSettingsPanel from '$lib/features/developerSettings/DeveloperSettingsPanel.svelte';
-  import { i18n, paragraphs, t, LOCALES, LOCALE_NAMES, LOCALE_SHORT_LABELS } from '$lib/shared/i18n/i18n.svelte';
+  import { i18n, paragraphs, t, LOCALES, LOCALE_NAMES, LOCALE_SHORT_LABELS } from '$lib/shared/i18n/i18nStore.svelte';
   import { SITE_TITLE, TEAM, PARTNER_LOGOS, PIPELINE_URL, VIEWER_URL } from './aboutData';
 
   let { style = '' }: { style?: string } = $props();

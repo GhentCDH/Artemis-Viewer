@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { format, localize, t } from '$lib/shared/i18n/i18n.svelte';
+  import { format, localize, t } from '$lib/shared/i18n/i18nStore.svelte';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
-  import { format, t } from '$lib/shared/i18n/i18n.svelte';
+  import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
 
   let { map }: { map: maplibregl.Map | null } = $props();
 

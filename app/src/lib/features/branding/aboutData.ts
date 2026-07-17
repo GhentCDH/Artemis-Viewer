@@ -1,7 +1,7 @@
 // Structural (language-independent) About content: names, institutions, logos,
 // links. The translatable prose lives in the i18n dictionaries; team roles are
 // dictionary keys so the roster is maintained in exactly one place.
-import type { TeamRole } from '$lib/shared/i18n/i18n.svelte';
+import type { TeamRole } from '$lib/shared/i18n/i18nStore.svelte';
 import { base } from '$app/paths';
 
 export const SITE_TITLE = 'Schelde Gemapt';

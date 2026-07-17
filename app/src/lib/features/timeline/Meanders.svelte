@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
-  import { showTooltip, hideTooltip } from '$lib/shared/primitives/tooltipState.svelte';
-  import { format, t } from '$lib/shared/i18n/i18n.svelte';
+  import { showTooltip, hideTooltip } from '$lib/shared/primitives/tooltipStore.svelte';
+  import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
   import { DEFAULT_AXIS_RANGE, yearToPercent, type AxisRange } from './timelineScale';
   import { layoutMeanders, type MeanderPill } from './meanderLayout';
   import TimelineScanPath, {

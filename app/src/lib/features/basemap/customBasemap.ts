@@ -1,4 +1,4 @@
-import { format, t } from '$lib/shared/i18n/i18n.svelte';
+import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
 import type {
   BasemapOption,
   OverlayOption,

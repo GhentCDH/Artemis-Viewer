@@ -1,16 +1,8 @@
-# Artemis Viewer
+<h1><img src="app/static/favicon.svg" alt="Artemis logo" width="40"> <a href="https://kaart.scheldegemapt.be/">Artemis Viewer</a></h1>
 
 Web viewer for the Artemis project, built with SvelteKit. It combines historical
 maps of the Scheldt region with place-name search, IIIF images, and comparison
 tools in an interactive MapLibre map.
-
-Agent-agnostic repository context and frontend conventions are available in
-[`.agent-resources/`](https://github.com/GhentCDH/Artemis-Viewer/tree/main/.agent-resources).
-
-Agent-agnostic repository context and frontend conventions are available in
-[`.agent-resources/`](https://github.com/GhentCDH/Artemis-Viewer/tree/main/.agent-resources).
-
-[Open the viewer](https://ghentcdh.github.io/Artemis-Viewer)
 
 ## What it does
 
@@ -63,9 +55,8 @@ static assets live in `app/static`.
 
 ## Deployment
 
-The `Manual - Deploy viewer` workflow builds the static app and publishes
-`app/build` to the `live` branch. It can be started manually from GitHub Actions.
-The deployment base path is derived from the repository name, or omitted when
-`app/static/CNAME` defines a custom domain.
+The `Manual - Deploy viewer` workflow builds the static app and publishes `app/build`
+to the `live` branch. The deployment base path is derived from the repository name, or
+omitted when `app/static/CNAME` defines a custom domain.
 
 The deployed app uses an SPA fallback and requires no application server.

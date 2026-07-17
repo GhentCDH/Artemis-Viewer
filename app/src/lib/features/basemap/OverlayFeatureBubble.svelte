@@ -2,7 +2,7 @@
   import type maplibregl from 'maplibre-gl';
   import type { OverlayFeatureInfo } from '$lib/core/map/basemap';
   import PreviewBubble from '$lib/shared/primitives/PreviewBubble.svelte';
-  import { t } from '$lib/shared/i18n/i18n.svelte';
+  import { t } from '$lib/shared/i18n/i18nStore.svelte';
 
   let {
     map,

@@ -15,7 +15,7 @@
   import type { ActiveIiifMask, IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
   import { hasImagePinAt, restoreImagePins } from '$lib/features/images/imagePins';
   import { queryOverlayAtPoint } from '$lib/features/basemap/overlayQuery';
-  import { format, t } from '$lib/shared/i18n/i18n.svelte';
+  import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
 
   let {
     paneId,

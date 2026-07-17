@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type maplibregl from 'maplibre-gl';
-  import { t } from '$lib/shared/i18n/i18n.svelte';
+  import { t } from '$lib/shared/i18n/i18nStore.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import PreviewBubble from '$lib/shared/primitives/PreviewBubble.svelte';
   import type { ImageResult } from '$lib/features/search/searchTypes';

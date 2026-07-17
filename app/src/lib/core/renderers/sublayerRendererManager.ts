@@ -4,6 +4,7 @@ import { IiifMaskInteraction, type ActiveIiifMask, type IiifMaskHit } from './ii
 import { canRenderPmVectorSublayer, pmVectorSublayerLayerIds, renderPmVectorSublayer, removePmVectorSublayer } from './pmVectorRenderer';
 import { canRenderRemoteSublayer, remoteSublayerLayerIds, renderRemoteSublayer, removeRemoteSublayer } from './remoteRenderer';
 import type { AllmapsRenderOptions, SublayerRenderContext } from './types';
+import { zoomToWmsVisibility } from './wmsVisibilityZoom';
 
 export interface SublayerRendererState {
   activeLayerIds: string[];
@@ -13,6 +14,7 @@ export interface SublayerRendererState {
 export class SublayerRendererManager {
   private readonly context: SublayerRenderContext;
   private readonly renderedRemoteSublayerIds = new Set<string>();
+  private readonly visibilityZoomCheckedSublayerIds = new Set<string>();
   private readonly renderedPmVectorSublayerIds = new Set<string>();
   // Sublayer ids with an issued (possibly still in-flight) IIIF render. Unlike the
   // remote/pmVector sets, membership here does not imply the render succeeded yet:
@@ -73,6 +75,14 @@ export class SublayerRendererManager {
 
         if (canRenderRemoteSublayer(target) && renderRemoteSublayer(this.context, target)) {
           nextRemoteSublayerIds.add(sublayer.id);
+          if (sublayer.kind === 'wms' && sublayer.source?.url && !this.visibilityZoomCheckedSublayerIds.has(sublayer.id)) {
+            this.visibilityZoomCheckedSublayerIds.add(sublayer.id);
+            void zoomToWmsVisibility(
+              this.context.map,
+              sublayer.source.url,
+              () => this.visibilityZoomCheckedSublayerIds.has(sublayer.id)
+            );
+          }
         }
         if (canRenderPmVectorSublayer(target) && renderPmVectorSublayer(this.context, target)) {
           nextPmVectorSublayerIds.add(sublayer.id);
@@ -94,6 +104,7 @@ export class SublayerRendererManager {
     for (const sublayerId of this.renderedRemoteSublayerIds) {
       if (!nextRemoteSublayerIds.has(sublayerId)) {
         removeRemoteSublayer(this.context, sublayerId);
+        this.visibilityZoomCheckedSublayerIds.delete(sublayerId);
       }
     }
     for (const sublayerId of this.renderedPmVectorSublayerIds) {
@@ -162,6 +173,7 @@ export class SublayerRendererManager {
       removeIiifSublayer(this.context, sublayerId);
     }
     this.renderedRemoteSublayerIds.clear();
+    this.visibilityZoomCheckedSublayerIds.clear();
     this.renderedPmVectorSublayerIds.clear();
     this.activeIiifSublayerIds.clear();
     this.appliedLayerOrderSignature = '';

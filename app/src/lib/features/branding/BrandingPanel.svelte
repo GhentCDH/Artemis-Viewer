@@ -30,10 +30,22 @@
       aria-label={t().branding.openInfo}
       aria-expanded={isOpen}
       onclick={open}
-      style="--button-height: var(--branding-button-height); --button-padding-inline: var(--branding-button-padding-inline); --button-gap: var(--branding-button-gap);"
+      style="--button-height: var(--branding-button-height); --button-padding-inline: var(--branding-button-padding-inline); --button-gap: var(--branding-button-gap); --button-overflow: hidden;"
     >
+      <svg class="branding-gradient" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <rect class="branding-gradient-band branding-gradient-band--1" width="15" height="100" />
+        <rect class="branding-gradient-band branding-gradient-band--2" x="15" width="35" height="100" />
+        <rect class="branding-gradient-band branding-gradient-band--3" x="50" width="50" height="100" />
+      </svg>
       <svg class="branding-logo" viewBox="0 0 26 40" aria-hidden="true">
-        <path d="M13,3 C24,9 3,15 13,21 C20,24 13,31 13,37" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" />
+        <path
+          d="M13,-30 L13,-14 C24,-3 3,11 13,21 C20,28 13,41 13,54 L13,70"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
       </svg>
       <span class="branding-text">
         <span class="branding-title">ARTEMIS</span>
@@ -145,6 +157,7 @@
     --branding-button-gap: 0.55rem;
     --branding-logo-width: 1.05rem;
     --branding-logo-height: 2rem;
+    --branding-gradient-width: 40%;
     --branding-text-gap: 0.08rem;
     --branding-title-size: 0.7875rem;
     --branding-subtitle-size: 0.6975rem;
@@ -170,17 +183,44 @@
   }
 
   .branding-logo {
+    position: relative;
     width: var(--branding-logo-width);
     height: var(--branding-logo-height);
+    overflow: visible;
     color: var(--color-accent);
   }
 
   .branding-text {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--branding-text-gap);
     line-height: 1.1;
+  }
+
+  .branding-gradient {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: var(--branding-gradient-width);
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .branding-gradient-band {
+    stroke: none;
+  }
+
+  .branding-gradient-band--1 {
+    fill: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-control));
+  }
+
+  .branding-gradient-band--2 {
+    fill: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface-control));
+  }
+
+  .branding-gradient-band--3 {
+    fill: color-mix(in srgb, var(--color-accent) 30%, var(--color-surface-control));
   }
 
   .branding-title {

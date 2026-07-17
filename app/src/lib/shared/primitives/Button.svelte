@@ -56,15 +56,18 @@
     --button-font-weight: 400;
     --button-justify: center;
     --button-flex-shrink: 1;
+    --button-overflow: visible;
     --button-shadow: 0 0 3px color-mix(in srgb, var(--color-shadow-ink) 20%, transparent);
     /* -- end exposed -- */
 
     appearance: none;
     -webkit-appearance: none;
+    position: relative;
     display: inline-flex;
     flex-shrink: var(--button-flex-shrink);
     align-items: center;
     justify-content: var(--button-justify);
+    overflow: var(--button-overflow);
     pointer-events: auto;
     gap: var(--button-gap);
     min-height: var(--button-height);

@@ -160,7 +160,7 @@
         backdrop
         closeOnEscape
         onclose={close}
-        style="--window-width: min(44rem, calc(100vw - (2 * var(--space-3)))); --window-height: min(54rem, calc(100dvh - (2 * var(--space-3))));"
+        style="--window-width: min(48rem, calc(100vw - (2 * var(--space-3)))); --window-height: min(54rem, calc(100dvh - (2 * var(--space-3))));"
       >
         {#snippet header()}
       <form class="search-form" onsubmit={(event) => { event.preventDefault(); selectTopMatch(); }}>

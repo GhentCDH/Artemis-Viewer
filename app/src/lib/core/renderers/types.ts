@@ -23,6 +23,8 @@ export interface AllmapsTuningOptions {
 export interface AllmapsRenderOptions {
   transformationType: AllmapsTransformation;
   debugTriangles: boolean;
+  /** Tints sampled IIIF tiles blue and outlines their boundaries using Allmaps' debug shader. */
+  debugTiles: boolean;
   showHighStretch: boolean;
   loadingMode: IiifLoadingMode;
   diagnostics: boolean;

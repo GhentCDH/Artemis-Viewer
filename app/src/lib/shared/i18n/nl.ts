@@ -185,9 +185,21 @@ export const nl: Dictionary = {
       researcher: 'onderzoeker',
     },
     pipeline: {
-      title: 'Datapijplijn',
-      info: `Elke laag in deze viewer wordt aangemaakt door de Artemis-Data-bouwpijplijn: georefereren, tiling en het opbouwen van de zoekindex op basis van bronscans en archiefkaarten.`,
-      linkLabel: 'Bekijk de pijplijn op GitHub',
+      title: 'Achter de schermen',
+      info: `Schelde Gemapt bestaat uit drie onderdelen. De data doorloopt ze in deze volgorde:
+
+      1. Zenodo — brondata
+      Zenodo bewaart de oorspronkelijke kaarten en data op een veilige plaats.
+
+      2. Artemis-Data — dataverwerking
+      Artemis-Data maakt de kaarten en data klaar voor snel online gebruik.
+
+      3. Artemis-Viewer — website
+      Artemis-Viewer brengt alles samen in de interactieve website die je nu gebruikt.
+
+      Samen maken deze drie onderdelen historisch bronmateriaal toegankelijk als interactief platform.`,
+      dataLinkLabel: 'Bekijk Artemis-Data op GitHub',
+      viewerLinkLabel: 'Bekijk Artemis-Viewer op GitHub',
     },
   },
 };

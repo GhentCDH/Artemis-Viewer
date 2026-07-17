@@ -11,6 +11,7 @@ const STORAGE_KEY = 'artemis.developer-settings.v1';
 interface PersistedDeveloperSettings {
   transformation: AllmapsTransformation;
   debugTriangles: boolean;
+  debugTiles: boolean;
   showHighStretch: boolean;
   iiifLoadingMode: IiifLoadingMode;
   allmapsDiagnostics: boolean;
@@ -37,6 +38,7 @@ export const ALLMAPS_TUNING_DEFAULTS: AllmapsTuningOptions = {
 const DEFAULTS: PersistedDeveloperSettings = {
   transformation: 'polynomial1',
   debugTriangles: false,
+  debugTiles: false,
   showHighStretch: false,
   iiifLoadingMode: 'sequential',
   allmapsDiagnostics: false,
@@ -87,6 +89,7 @@ function readPersistedSettings(): PersistedDeveloperSettings {
     return {
       transformation: raw.transformation === 'thinPlateSpline' ? 'thinPlateSpline' : 'polynomial1',
       debugTriangles: raw.debugTriangles === true,
+      debugTiles: raw.debugTiles === true,
       showHighStretch: raw.showHighStretch === true,
       iiifLoadingMode: raw.iiifLoadingMode === 'eager' ? 'eager' : 'sequential',
       allmapsDiagnostics: raw.allmapsDiagnostics === true,
@@ -108,6 +111,7 @@ function readPersistedSettings(): PersistedDeveloperSettings {
 class DeveloperSettingsStore {
   transformation = $state<AllmapsTransformation>(DEFAULTS.transformation);
   debugTriangles = $state(DEFAULTS.debugTriangles);
+  debugTiles = $state(DEFAULTS.debugTiles);
   showHighStretch = $state(DEFAULTS.showHighStretch);
   iiifLoadingMode = $state<IiifLoadingMode>(DEFAULTS.iiifLoadingMode);
   allmapsDiagnostics = $state(DEFAULTS.allmapsDiagnostics);
@@ -123,6 +127,7 @@ class DeveloperSettingsStore {
     const persisted = readPersistedSettings();
     this.transformation = persisted.transformation;
     this.debugTriangles = persisted.debugTriangles;
+    this.debugTiles = persisted.debugTiles;
     this.showHighStretch = persisted.showHighStretch;
     this.iiifLoadingMode = persisted.iiifLoadingMode;
     this.allmapsDiagnostics = persisted.allmapsDiagnostics;
@@ -141,6 +146,7 @@ class DeveloperSettingsStore {
     return {
       transformationType: this.transformation,
       debugTriangles: this.debugTriangles,
+      debugTiles: this.debugTiles,
       showHighStretch: this.showHighStretch,
       loadingMode: this.iiifLoadingMode,
       diagnostics: this.allmapsDiagnostics,
@@ -162,6 +168,13 @@ class DeveloperSettingsStore {
   setDebugTriangles(value: boolean): void {
     if (this.debugTriangles === value) return;
     this.debugTriangles = value;
+    this.renderRevision += 1;
+    this.persist();
+  }
+
+  setDebugTiles(value: boolean): void {
+    if (this.debugTiles === value) return;
+    this.debugTiles = value;
     this.renderRevision += 1;
     this.persist();
   }
@@ -234,6 +247,7 @@ class DeveloperSettingsStore {
     const renderingChanged =
       this.transformation !== DEFAULTS.transformation ||
       this.debugTriangles !== DEFAULTS.debugTriangles ||
+      this.debugTiles !== DEFAULTS.debugTiles ||
       this.showHighStretch !== DEFAULTS.showHighStretch ||
       this.allmapsSprites !== DEFAULTS.allmapsSprites ||
       !tuningEquals(this.allmapsTuning, DEFAULTS.allmapsTuning);
@@ -247,6 +261,7 @@ class DeveloperSettingsStore {
 
     this.transformation = DEFAULTS.transformation;
     this.debugTriangles = DEFAULTS.debugTriangles;
+    this.debugTiles = DEFAULTS.debugTiles;
     this.showHighStretch = DEFAULTS.showHighStretch;
     this.iiifLoadingMode = DEFAULTS.iiifLoadingMode;
     this.allmapsDiagnostics = DEFAULTS.allmapsDiagnostics;
@@ -267,6 +282,7 @@ class DeveloperSettingsStore {
     const settings: PersistedDeveloperSettings = {
       transformation: this.transformation,
       debugTriangles: this.debugTriangles,
+      debugTiles: this.debugTiles,
       showHighStretch: this.showHighStretch,
       iiifLoadingMode: this.iiifLoadingMode,
       allmapsDiagnostics: this.allmapsDiagnostics,

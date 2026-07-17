@@ -101,3 +101,4 @@ export const PARTNER_LOGOS: PartnerLogo[] = [
 ];
 
 export const PIPELINE_URL = 'https://github.com/GhentCDH/Artemis-Data';
+export const VIEWER_URL = 'https://github.com/GhentCDH/Artemis-Viewer';

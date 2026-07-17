@@ -358,6 +358,7 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
             layer.addGeoreferencedMap(canvas.georeferencedMap, {
               transformationType: context.allmapsOptions.transformationType,
               debugTriangles: context.allmapsOptions.debugTriangles,
+              debugTiles: context.allmapsOptions.debugTiles,
             })
           )
         );
@@ -470,6 +471,7 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
         layer.addGeoreferencedMap(canvas.georeferencedMap, {
           transformationType: context.allmapsOptions.transformationType,
           debugTriangles: context.allmapsOptions.debugTriangles,
+          debugTiles: context.allmapsOptions.debugTiles,
         })
       )
     );

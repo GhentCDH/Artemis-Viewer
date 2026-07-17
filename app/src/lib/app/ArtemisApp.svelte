@@ -23,7 +23,7 @@
     timelineSelection,
   } from '$lib/features/timeline/timelineSelection.svelte';
   import SearchMenu from '$lib/features/search/SearchMenu.svelte';
-  import SearchLocationPing from '$lib/features/search/SearchLocationPing.svelte';
+  import LocationPing from '$lib/shared/primitives/LocationPing.svelte';
   import type { SearchFocusTarget } from '$lib/features/search/searchSelection';
   import BrandingPanel from '$lib/features/branding/BrandingPanel.svelte';
   import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
@@ -431,7 +431,7 @@
 
     {#if searchPing}
       {#key searchPing.id}
-        <SearchLocationPing
+        <LocationPing
           map={searchPing.map}
           lngLat={searchPing.lngLat}
           oncomplete={() => { searchPing = null; }}

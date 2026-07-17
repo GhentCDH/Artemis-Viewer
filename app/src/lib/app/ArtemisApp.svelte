@@ -395,11 +395,13 @@
     class="overlay-layer"
     style:--app-branding-cover-width={`${brandingCoverWidthRem}rem`}
   >
-    <div class="window-slot branding-slot">
-      <div class="branding-slot-inner" bind:this={brandingWatermarkElement}>
-        <BrandingPanel style="--branding-scale: 1.6;" />
+    {#if openDocument?.pane !== 'left'}
+      <div class="window-slot branding-slot">
+        <div class="branding-slot-inner" bind:this={brandingWatermarkElement}>
+          <BrandingPanel style="--branding-scale: 1.6;" />
+        </div>
       </div>
-    </div>
+    {/if}
 
     <div class="window-slot compare-control-slot">
       <div class="compare-control">
@@ -493,10 +495,12 @@
       />
     </div>
 
-    <div class="window-slot sublayer-menu-slot sublayer-menu-slot--left" class:sublayer-menu-slot--split={isCompare}>
-      <PaneSublayerMenu layer={leftMenuLayer} />
-    </div>
-    {#if isCompare}
+    {#if !isCompare || openDocument?.pane !== 'left'}
+      <div class="window-slot sublayer-menu-slot sublayer-menu-slot--left" class:sublayer-menu-slot--split={isCompare}>
+        <PaneSublayerMenu layer={leftMenuLayer} />
+      </div>
+    {/if}
+    {#if isCompare && openDocument?.pane !== 'right'}
       <div class="window-slot sublayer-menu-slot sublayer-menu-slot--right">
         <PaneSublayerMenu layer={rightMenuLayer} />
       </div>

@@ -6,7 +6,8 @@
 //   l  — left pane active layer (2-char code, see LAYER_CODE_TO_ID)
 //   r  — right pane active layer (2-char code)
 //   s  — split mode: "1" if split, omitted if single
-//   v  — viewer manifest URL; dataset-relative URLs prefixed with "~"
+//   v  — viewer manifest URL; known prefixes use aliases (for example "pk:"),
+//        dataset-relative URLs are prefixed with "~"
 //   i  — selected IIIF canvas/image id; "~" values are manifest-relative
 //   p  — viewer pane: "l" for left, omitted for right (default)
 
@@ -29,6 +30,10 @@ export const LAYER_ID_TO_CODE: Record<string, string> = Object.fromEntries(
 
 export const DEFAULT_URL_CENTER = { lng: 4.184, lat: 51.0656, zoom: 8.9 };
 
+const MANIFEST_PREFIX_BY_ALIAS: Record<string, string> = {
+  pk: 'https://iiif.ghentcdh.ugent.be/iiif/manifests/primitief_kadaster:',
+};
+
 export interface UrlAppState {
   center?: { lng: number; lat: number; zoom: number };
   leftMainId?: string;
@@ -40,6 +45,10 @@ export interface UrlAppState {
 }
 
 function encodeManifestRef(manifestUrl: string, datasetBaseUrl: string): string {
+  for (const [alias, prefix] of Object.entries(MANIFEST_PREFIX_BY_ALIAS)) {
+    if (manifestUrl.startsWith(prefix)) return `${alias}:${manifestUrl.slice(prefix.length)}`;
+  }
+
   const base = datasetBaseUrl.replace(/\/$/, '');
   if (base && manifestUrl.startsWith(base + '/')) {
     return '~' + manifestUrl.slice(base.length + 1);
@@ -52,7 +61,22 @@ function decodeManifestRef(ref: string, datasetBaseUrl: string): string {
     const base = datasetBaseUrl.replace(/\/$/, '');
     return base + '/' + ref.slice(1);
   }
+
+  const aliasSeparator = ref.indexOf(':');
+  if (aliasSeparator > 0) {
+    const alias = ref.slice(0, aliasSeparator);
+    if (Object.hasOwn(MANIFEST_PREFIX_BY_ALIAS, alias)) {
+      return MANIFEST_PREFIX_BY_ALIAS[alias] + ref.slice(aliasSeparator + 1);
+    }
+  }
+
   return ref;
+}
+
+function encodeManifestParam(ref: string): string {
+  const encoded = encodeURIComponent(ref);
+  const alias = ref.slice(0, ref.indexOf(':'));
+  return Object.hasOwn(MANIFEST_PREFIX_BY_ALIAS, alias) ? encoded.replace('%3A', ':') : encoded;
 }
 
 function identifierLeaf(value: string): string {
@@ -93,7 +117,7 @@ export function encodeAppState(state: UrlAppState, datasetBaseUrl = ''): string 
   if (state.viewMode === 'split') parts.push('s=1');
   if (state.viewerManifestUrl) {
     const ref = encodeManifestRef(state.viewerManifestUrl, datasetBaseUrl);
-    parts.push(`v=${encodeURIComponent(ref)}`);
+    parts.push(`v=${encodeManifestParam(ref)}`);
     if (state.viewerImageId) {
       parts.push(`i=${encodeURIComponent(encodeImageRef(state.viewerImageId, state.viewerManifestUrl))}`);
     }

@@ -3,7 +3,7 @@
   import { t } from '$lib/shared/i18n/i18n.svelte';
   import type OpenSeadragonType from 'openseadragon';
   import Button from '$lib/shared/primitives/Button.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
   import { loadIiifViewerSource, type IiifMetadataField } from './manifest';
 
   let {
@@ -213,7 +213,7 @@
     --iiif-viewer-header-padding-inline: 1.2rem;
     --iiif-viewer-header-gap: 1.2rem;
     --iiif-viewer-header-control-gap: 0.8rem;
-    --iiif-viewer-header-control-height: var(--canvas-primary-control-height);
+    --iiif-viewer-header-control-height: var(--app-primary-control-height);
     --iiif-viewer-header-control-padding-inline: var(--space-3);
     --iiif-viewer-header-control-font-size: var(--text-xs);
     --iiif-viewer-header-icon-size: 1.5rem;

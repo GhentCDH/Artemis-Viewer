@@ -2,7 +2,7 @@
   import type maplibregl from 'maplibre-gl';
   import { browser } from '$app/environment';
   import { format, t } from '$lib/shared/i18n/i18n.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
   import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
@@ -374,7 +374,7 @@
                           aria-expanded={infoOpen}
                           aria-label={format(infoOpen ? t().images.collectionInfoHide : t().images.collectionInfoShow, { name: collection.label })}
                           onclick={() => toggleCollectionInfo(collection.id)}
-                          style="--button-bg: transparent; --button-bg-hover: transparent; --button-border: transparent; --button-border-hover: transparent; --button-text: var(--color-text-muted); --button-height: 1.75rem;"
+                          variant="quiet"
                         >
                           <svg class="collection-info-icon" viewBox="0 0 16 16" aria-hidden="true">
                             <circle cx="8" cy="8" r="6"></circle>
@@ -443,9 +443,9 @@
   .image-browser {
     /* -- exposed -- */
     --image-browser-width: min(22rem, calc(100vw - (2 * var(--space-3))));
-    --image-browser-trigger-height: var(--canvas-primary-control-height);
+    --image-browser-trigger-height: var(--app-primary-control-height);
     --image-browser-panel-available-height: calc(
-      100dvh - var(--canvas-timeline-bottom) - var(--canvas-timeline-height) - (2 * var(--space-4)) -
+      100dvh - var(--app-timeline-bottom) - var(--app-timeline-height) - (2 * var(--space-4)) -
         (2 * var(--image-browser-trigger-height)) - var(--space-2) - var(--space-3)
     );
     --image-browser-panel-height: var(--image-browser-panel-available-height);
@@ -463,9 +463,9 @@
      override these; the extra specificity beats the Button defaults outright. */
   .image-browser :global(.image-browser-trigger) {
     --button-height: var(--image-browser-trigger-height);
-    --button-padding-inline: var(--canvas-primary-control-padding-inline);
-    --button-gap: var(--canvas-primary-control-gap);
-    --button-font-size: var(--canvas-primary-control-font-size);
+    --button-padding-inline: var(--app-primary-control-padding-inline);
+    --button-gap: var(--app-primary-control-gap);
+    --button-font-size: var(--app-primary-control-font-size);
   }
 
   .image-browser-icon {

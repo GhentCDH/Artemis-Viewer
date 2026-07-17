@@ -9,12 +9,12 @@ class TooltipStore {
   content = $state<TooltipContent | null>(null);
 }
 
-export const tooltipStore = new TooltipStore();
+export const tooltip = new TooltipStore();
 
 export function showTooltip(next: TooltipContent): void {
-  tooltipStore.content = next;
+  tooltip.content = next;
 }
 
 export function hideTooltip(): void {
-  tooltipStore.content = null;
+  tooltip.content = null;
 }

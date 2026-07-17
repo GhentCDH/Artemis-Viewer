@@ -63,7 +63,8 @@
           iconOnly
           aria-label={format(t().sublayers.closeMenu, { layer: layer.label })}
           onclick={() => onclose?.()}
-          style="--button-bg: transparent; --button-bg-hover: transparent; --button-border: transparent; --button-border-hover: transparent; --button-text: var(--color-text-muted); --button-height: 2rem;"
+          variant="quiet"
+          style="--button-height: 2rem;"
         >
           <span class="close-glyph" aria-hidden="true">×</span>
         </Button>
@@ -89,7 +90,7 @@
               aria-expanded={infoOpen}
               aria-label={format(infoOpen ? t().sublayers.hideInfo : t().sublayers.showInfo, { name: localize(sublayer.name) })}
               onclick={() => toggleInfo(sublayer.id)}
-              style="--button-bg: transparent; --button-bg-hover: transparent; --button-border: transparent; --button-border-hover: transparent; --button-text: var(--color-text-muted); --button-height: 1.75rem;"
+              variant="quiet"
             >
               <svg class="info-icon" viewBox="0 0 16 16" aria-hidden="true">
                 <circle cx="8" cy="8" r="6"></circle>
@@ -131,10 +132,10 @@
     --window-radius: var(--radius-lg);
 
     flex: 0 1 auto;
-    width: fit-content;
-    /* Must stay wider than the scaled branding trigger it overlays in the
-       top-left slot, so the trigger never peeks out from underneath. */
-    min-width: 15.5rem;
+    /* Use the full popup width instead of deriving it from text metrics. This
+       guarantees that the scaled branding trigger underneath cannot peek out
+       when fonts load or render at slightly different widths. */
+    width: min(19.8rem, calc(100vw - (2 * var(--space-3))));
     max-width: min(19.8rem, calc(100vw - (2 * var(--space-3))));
     max-height: min(19.8rem, calc(100dvh - (2 * var(--space-3))));
   }
@@ -187,6 +188,7 @@
     font-size: var(--text-md);
     font-weight: 400;
     line-height: 1.15;
+    white-space: nowrap;
   }
 
   .collection-heading p {
@@ -229,6 +231,7 @@
     font-size: var(--text-xs);
     font-weight: 700;
     line-height: 1.25;
+    white-space: nowrap;
   }
 
   :global(.sublayer-menu-window .toggle) {

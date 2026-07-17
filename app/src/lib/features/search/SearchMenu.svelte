@@ -291,10 +291,10 @@
   /* Descendant selector (not inline style) so the portrait media query below can
      override these; the extra specificity beats the Button defaults outright. */
   .search-trigger-layer :global(.search-trigger) {
-    --button-height: var(--canvas-primary-control-height);
-    --button-padding-inline: var(--canvas-primary-control-padding-inline);
-    --button-gap: var(--canvas-primary-control-gap);
-    --button-font-size: var(--canvas-primary-control-font-size);
+    --button-height: var(--app-primary-control-height);
+    --button-padding-inline: var(--app-primary-control-padding-inline);
+    --button-gap: var(--app-primary-control-gap);
+    --button-font-size: var(--app-primary-control-font-size);
   }
 
   .search-trigger-text {
@@ -314,7 +314,7 @@
      same). The descendant selector outranks the Button defaults outright. */
   @media (orientation: portrait) {
     .search-trigger-layer :global(.search-trigger) {
-      --button-width: var(--canvas-primary-control-height);
+      --button-width: var(--app-primary-control-height);
       --button-padding-inline: 0rem;
     }
 

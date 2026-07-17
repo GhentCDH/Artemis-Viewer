@@ -3,7 +3,7 @@
   import type { HTMLButtonAttributes } from 'svelte/elements';
 
   interface Props extends Omit<HTMLButtonAttributes, 'class' | 'style'> {
-    variant?: 'default' | 'primary' | 'prominent' | 'list';
+    variant?: 'default' | 'primary' | 'prominent' | 'list' | 'quiet';
     iconOnly?: boolean;
     active?: boolean;
     disabled?: boolean;
@@ -56,7 +56,7 @@
     --button-font-weight: 400;
     --button-justify: center;
     --button-flex-shrink: 1;
-    --button-shadow: 0 0 3px color-mix(in srgb, var(--color-shadow-ink) 40%, transparent);
+    --button-shadow: 0 0 3px color-mix(in srgb, var(--color-shadow-ink) 20%, transparent);
     /* -- end exposed -- */
 
     appearance: none;
@@ -132,6 +132,17 @@
     --button-font-family: var(--font-readable);
     --button-justify: flex-start;
     --button-shadow: none;
+  }
+
+  /* Transparent, borderless, muted-text button for inline actions inside
+     panels; keeps the default shadow token untouched for visual parity with
+     the call sites it replaced. */
+  .button--quiet {
+    --button-bg: transparent;
+    --button-bg-hover: transparent;
+    --button-border: transparent;
+    --button-border-hover: transparent;
+    --button-text: var(--color-text-muted);
   }
 
   .button.is-active {

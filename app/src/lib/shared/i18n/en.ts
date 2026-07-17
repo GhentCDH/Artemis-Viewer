@@ -29,6 +29,7 @@ export const en = {
   },
   basemap: {
     trigger: 'Choose map layers',
+    resetDefaults: 'Reset map layers to defaults',
     closeMenu: 'Close map layers menu',
     layerTypeGroup: 'Map layer type',
     backgroundTab: 'Background',
@@ -93,7 +94,6 @@ export const en = {
     tabAll: 'All',
     toponyms: 'Toponyms',
     sheets: 'Sheets',
-    images: 'Images',
     activeLayersOnly: 'Active layers only',
     loadingIndex: 'Loading search index…',
     typeToSearch: 'Type to search historical place names, map sheets, and images.',
@@ -196,9 +196,21 @@ export const en = {
       researcher: 'researcher',
     },
     pipeline: {
-      title: 'Data pipeline',
-      info: `Every layer in this viewer is produced by the Artemis-Data build pipeline — georeferencing, tiling and search-index generation from source scans and archival maps.`,
-      linkLabel: 'View the pipeline on GitHub',
+      title: 'Behind the scenes',
+      info: `Schelde Gemapt consists of three parts. Data flows through them in this order:
+
+      1. Zenodo — source data
+      Zenodo safely stores the original maps and data.
+
+      2. Artemis-Data — data processing
+      Artemis-Data prepares the maps and data for fast online use.
+
+      3. Artemis-Viewer — website
+      Artemis-Viewer brings everything together in the interactive website you are using now.
+
+      Together, these three parts turn historical source material into an accessible interactive platform.`,
+      dataLinkLabel: 'View Artemis-Data on GitHub',
+      viewerLinkLabel: 'View Artemis-Viewer on GitHub',
     },
   },
 } satisfies MessageTree;

@@ -8,7 +8,7 @@
   import Button from '$lib/shared/primitives/Button.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import Window from '$lib/shared/primitives/Window.svelte';
-  import { hideTooltip, showTooltip } from '$lib/shared/tooltip.svelte';
+  import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipState.svelte';
   import { format, t } from '$lib/shared/i18n/i18n.svelte';
   import {
     loadCustomBasemaps,
@@ -52,6 +52,9 @@
   let error = $state('');
   let controlElement = $state<HTMLElement | null>(null);
   let validationRevision = 0;
+  const hasNonDefaultLayer = $derived(
+    selected.id !== ARTEMIS_BASEMAP.id || selectedOverlay !== null
+  );
 
   $effect(() => {
     if (!selectedOverlay?.query) return;
@@ -123,6 +126,22 @@
     showTooltip({ text: format(t().basemap.noClickBehaviour, { warning: text }), x: rect.left + rect.width / 2, y: rect.top, placement: 'above' });
   }
 
+  function showResetTooltip(event: MouseEvent | FocusEvent): void {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    showTooltip({
+      text: t().basemap.resetDefaults,
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+      placement: 'above',
+    });
+  }
+
+  function resetLayers(): void {
+    onselect(ARTEMIS_BASEMAP);
+    onOverlaySelect(null);
+    hideTooltip();
+  }
+
   async function addCustomMapService(): Promise<void> {
     if (validating) return;
     const revision = ++validationRevision;
@@ -181,6 +200,25 @@
         onclose={closeMenu}
         style="--window-width: min(21rem, calc(100vw - (2 * var(--space-4)))); --window-header-border-width: 0;"
       >
+        {#snippet actions()}
+          {#if hasNonDefaultLayer}
+            <Button
+              iconOnly
+              aria-label={t().basemap.resetDefaults}
+              onmouseenter={showResetTooltip}
+              onmouseleave={hideTooltip}
+              onfocus={showResetTooltip}
+              onblur={hideTooltip}
+              onclick={resetLayers}
+            >
+              <svg class="reset-layers-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+                <path d="M3 3v5h5"></path>
+              </svg>
+            </Button>
+          {/if}
+        {/snippet}
+
         {#if adding !== null}
           <div class="basemap-separator"><WaveSeparator /></div>
           <form class="basemap-form" onsubmit={(event) => { event.preventDefault(); void addCustomMapService(); }}>
@@ -345,11 +383,11 @@
 
   <Button
     iconOnly
-    active={open}
+    active={open || hasNonDefaultLayer}
     aria-label={t().basemap.trigger}
     aria-expanded={open}
     onclick={() => { if (open) closeMenu(); else open = true; }}
-    style="--button-height: var(--canvas-primary-control-height);"
+    style="--button-height: var(--app-primary-control-height);"
   >
     <svg class="basemap-icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"></path>
@@ -503,7 +541,8 @@
     gap: var(--space-2);
   }
 
-  .basemap-icon {
+  .basemap-icon,
+  .reset-layers-icon {
     width: calc(1rem * 1.5);
     height: calc(1rem * 1.5);
     fill: none;
@@ -511,5 +550,10 @@
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+
+  .reset-layers-icon {
+    width: 1rem;
+    height: 1rem;
   }
 </style>

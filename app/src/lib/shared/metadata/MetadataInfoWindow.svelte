@@ -92,7 +92,8 @@
                   iconOnly
                   aria-label={format(t().metadataInfo.copySourceLink, { name: localizedTitle })}
                   onclick={() => copySourceUrl(source.url)}
-                  style="--button-bg: transparent; --button-bg-hover: transparent; --button-border: transparent; --button-border-hover: transparent; --button-text: var(--color-accent); --button-height: 1.5rem;"
+                  variant="quiet"
+                  style="--button-text: var(--color-accent); --button-height: 1.5rem;"
                 >
                   <svg class="copy-icon" viewBox="0 0 16 16" aria-hidden="true">
                     <rect x="5" y="5" width="8" height="8" rx="1.2"></rect>

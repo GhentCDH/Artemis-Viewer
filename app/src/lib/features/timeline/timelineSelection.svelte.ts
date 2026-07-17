@@ -6,51 +6,43 @@ export const DEFAULT_TIMELINE_LAYER_ID = 'GereduceerdeKadaster';
 
 class TimelineSelectionStore {
   mode = $state<TimelineMode>('single');
-  leftLayerId = $state<string | null>(DEFAULT_TIMELINE_LAYER_ID);
-  rightLayerId = $state<string | null>(null);
+  paneLayerIds = $state<Record<PaneId, string | null>>({ left: DEFAULT_TIMELINE_LAYER_ID, right: null });
   nextComparePane = $state<PaneId>('left');
   sublayersByLayerId = $state<Record<string, Record<string, boolean>>>({});
 
   get activeLayerIds(): string[] {
-    const ids = this.mode === 'compare' ? [this.leftLayerId, this.rightLayerId] : [this.leftLayerId];
+    const ids =
+      this.mode === 'compare' ? [this.paneLayerIds.left, this.paneLayerIds.right] : [this.paneLayerIds.left];
     return ids.filter((layerId): layerId is string => layerId !== null);
   }
 
   isLayerActive(layerId: string): boolean {
-    return this.leftLayerId === layerId || this.rightLayerId === layerId;
+    return this.paneOf(layerId) !== null;
+  }
+
+  private paneOf(layerId: string): PaneId | null {
+    return this.paneLayerIds.left === layerId ? 'left' : this.paneLayerIds.right === layerId ? 'right' : null;
   }
 
   private nextTargetPane(): PaneId {
-    return this.leftLayerId === null ? 'left' : this.rightLayerId === null ? 'right' : this.nextComparePane;
+    return this.paneLayerIds.left === null ? 'left' : this.paneLayerIds.right === null ? 'right' : this.nextComparePane;
   }
 
   private activateInPane(layerId: string, pane: PaneId): void {
-    if (pane === 'left') {
-      this.leftLayerId = layerId;
-      this.nextComparePane = 'right';
-    } else {
-      this.rightLayerId = layerId;
-      this.nextComparePane = 'left';
-    }
+    this.paneLayerIds[pane] = layerId;
+    this.nextComparePane = pane === 'left' ? 'right' : 'left';
   }
 
   toggleLayer(layerId: string): void {
     if (this.mode === 'single') {
-      this.leftLayerId = this.leftLayerId === layerId ? null : layerId;
-      this.rightLayerId = null;
+      this.paneLayerIds = { left: this.paneLayerIds.left === layerId ? null : layerId, right: null };
       this.nextComparePane = 'left';
       return;
     }
 
-    if (this.leftLayerId === layerId) {
-      this.leftLayerId = null;
-      this.nextComparePane = 'left';
-      return;
-    }
-
-    if (this.rightLayerId === layerId) {
-      this.rightLayerId = null;
-      this.nextComparePane = 'right';
+    const activePane = this.paneOf(layerId);
+    if (activePane !== null) {
+      this.clearPane(activePane);
       return;
     }
 
@@ -63,11 +55,11 @@ class TimelineSelectionStore {
    * camera to the selected result.
    */
   focusLayer(layerId: string): PaneId {
-    if (this.leftLayerId === layerId) return 'left';
-    if (this.rightLayerId === layerId) return 'right';
+    const activePane = this.paneOf(layerId);
+    if (activePane !== null) return activePane;
 
     if (this.mode === 'single') {
-      this.leftLayerId = layerId;
+      this.paneLayerIds.left = layerId;
       this.nextComparePane = 'left';
       return 'left';
     }
@@ -94,18 +86,13 @@ class TimelineSelectionStore {
     rightLayerId: string | null;
   }): void {
     this.mode = state.mode;
-    this.leftLayerId = state.leftLayerId;
-    this.rightLayerId = state.rightLayerId;
+    this.paneLayerIds = { left: state.leftLayerId, right: state.rightLayerId };
     this.nextComparePane =
       state.leftLayerId === null ? 'left' : state.rightLayerId === null ? 'right' : 'left';
   }
 
   clearPane(paneId: PaneId): void {
-    if (paneId === 'left') {
-      this.leftLayerId = null;
-    } else {
-      this.rightLayerId = null;
-    }
+    this.paneLayerIds[paneId] = null;
     this.nextComparePane = paneId;
   }
 

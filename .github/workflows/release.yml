@@ -1,8 +1,8 @@
-name: Release
+name: Auto - Create release
 
 on:
   workflow_run:
-    workflows: [Deploy to GitHub Pages]
+    workflows: [Manual - Deploy viewer]
     types: [completed]
     branches: [main]
 

@@ -8,15 +8,17 @@
   import { timelineSelection } from '$lib/features/timeline/timelineSelection.svelte';
   import { loadSearchIndex } from './searchIndex';
   import { searchByText } from './searchScoring';
-  import { focusSearchResult } from './searchSelection';
+  import { focusSearchResult, type SearchFocusTarget } from './searchSelection';
   import type { ImageResult, ScoredResult, SearchIndex, SearchResult, SheetResult, ToponymResult } from './searchTypes';
 
   let {
     leftMap,
     rightMap,
+    onfocus,
   }: {
     leftMap: maplibregl.Map | null;
     rightMap: maplibregl.Map | null;
+    onfocus?: (target: SearchFocusTarget) => void;
   } = $props();
 
   type Tab = 'all' | 'toponyms' | 'sheets' | 'images';
@@ -119,7 +121,8 @@
   }
 
   function select(result: SearchResult): void {
-    focusSearchResult(result, { leftMap, rightMap });
+    const target = focusSearchResult(result, { leftMap, rightMap });
+    if (target) onfocus?.(target);
     query = result.kind === 'toponym' ? result.text : result.kind === 'image' ? result.title : result.label;
     close();
   }
@@ -182,7 +185,7 @@
           <Button active={activeTab === 'all'} onclick={() => (activeTab = 'all')}>{t().search.tabAll}</Button>
           <Button active={activeTab === 'toponyms'} onclick={() => (activeTab = 'toponyms')}>{t().search.toponyms}</Button>
           <Button active={activeTab === 'sheets'} onclick={() => (activeTab = 'sheets')}>{t().search.sheets}</Button>
-          <Button active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>{t().search.images}</Button>
+          <Button active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>{t().images.trigger}</Button>
         </div>
         <div class="active-only-toggle" class:is-active={activeOnly}>
           <svg class="target-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -205,17 +208,19 @@
           {#if showToponyms && groupedToponyms.length > 0}
             {#if activeTab === 'all'}<h3 class="results-heading">{t().search.toponyms}</h3>{/if}
             {#each groupedToponyms as [layerLabel, matches] (layerLabel)}
-              <section class="result-group">
+              <section class="result-group" class:is-type-child={activeTab === 'all'}>
                 <h4 class="result-group-heading">{layerLabel}</h4>
-                {#each matches as match (match.item.id)}
-                  <Button variant="list" class="result-row" onclick={() => select(match.item)}>
-                    <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
-                      <path d="M8 1.5c-2.6 0-4.6 2-4.6 4.5 0 3.3 4.6 8.5 4.6 8.5s4.6-5.2 4.6-8.5c0-2.5-2-4.5-4.6-4.5Z"></path>
-                      <circle cx="8" cy="6" r="1.5"></circle>
-                    </svg>
-                    <span class="result-text">{match.item.text}</span>
-                  </Button>
-                {/each}
+                <div class="result-items">
+                  {#each matches as match (match.item.id)}
+                    <Button variant="list" class="result-row" onclick={() => select(match.item)}>
+                      <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M8 1.5c-2.6 0-4.6 2-4.6 4.5 0 3.3 4.6 8.5 4.6 8.5s4.6-5.2 4.6-8.5c0-2.5-2-4.5-4.6-4.5Z"></path>
+                        <circle cx="8" cy="6" r="1.5"></circle>
+                      </svg>
+                      <span class="result-text">{match.item.text}</span>
+                    </Button>
+                  {/each}
+                </div>
               </section>
             {/each}
           {/if}
@@ -223,39 +228,43 @@
           {#if showSheets && groupedSheets.length > 0}
             {#if activeTab === 'all'}<h3 class="results-heading">{t().search.sheets}</h3>{/if}
             {#each groupedSheets as [layerLabel, matches] (layerLabel)}
-              <section class="result-group">
+              <section class="result-group" class:is-type-child={activeTab === 'all'}>
                 <h4 class="result-group-heading">{layerLabel}</h4>
-                {#each matches as match (match.item.id)}
-                  <Button variant="list" class="result-row" onclick={() => select(match.item)}>
-                    <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
-                      <path d="M4 1.8h6l2.2 2.2v10.2H4Z"></path>
-                      <path d="M10 1.8v2.2h2.2"></path>
-                    </svg>
-                    <span class="result-text">{match.item.label}</span>
-                  </Button>
-                {/each}
+                <div class="result-items">
+                  {#each matches as match (match.item.id)}
+                    <Button variant="list" class="result-row" onclick={() => select(match.item)}>
+                      <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M4 1.8h6l2.2 2.2v10.2H4Z"></path>
+                        <path d="M10 1.8v2.2h2.2"></path>
+                      </svg>
+                      <span class="result-text">{match.item.label}</span>
+                    </Button>
+                  {/each}
+                </div>
               </section>
             {/each}
           {/if}
 
           {#if showImages && groupedImages.length > 0}
-            {#if activeTab === 'all'}<h3 class="results-heading">{t().search.images}</h3>{/if}
+            {#if activeTab === 'all'}<h3 class="results-heading">{t().images.trigger}</h3>{/if}
             {#each groupedImages as [collectionLabel, matches] (collectionLabel)}
-              <section class="result-group">
+              <section class="result-group" class:is-type-child={activeTab === 'all'}>
                 <h4 class="result-group-heading">{collectionLabel}</h4>
-                {#each matches as match (match.item.id)}
-                  <Button variant="list" class="result-row" onclick={() => select(match.item)}>
-                    <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
-                      <rect x="2" y="3" width="12" height="10" rx="1"></rect>
-                      <circle cx="5.2" cy="6.2" r="1.2"></circle>
-                      <path d="m3.5 11 3-3 2.2 2 1.5-1.4 2.3 2.4"></path>
-                    </svg>
-                    <span class="result-text-block">
-                      <span class="result-text">{match.item.title}</span>
-                      <span class="result-meta">{[match.item.year, match.item.location].filter(Boolean).join(' · ') || collectionLabel}</span>
-                    </span>
-                  </Button>
-                {/each}
+                <div class="result-items">
+                  {#each matches as match (match.item.id)}
+                    <Button variant="list" class="result-row" onclick={() => select(match.item)}>
+                      <svg class="result-icon" viewBox="0 0 16 16" aria-hidden="true">
+                        <rect x="2" y="3" width="12" height="10" rx="1"></rect>
+                        <circle cx="5.2" cy="6.2" r="1.2"></circle>
+                        <path d="m3.5 11 3-3 2.2 2 1.5-1.4 2.3 2.4"></path>
+                      </svg>
+                      <span class="result-text-block">
+                        <span class="result-text">{match.item.title}</span>
+                        <span class="result-meta">{[match.item.year, match.item.location].filter(Boolean).join(' · ') || collectionLabel}</span>
+                      </span>
+                    </Button>
+                  {/each}
+                </div>
               </section>
             {/each}
           {/if}
@@ -291,10 +300,10 @@
   /* Descendant selector (not inline style) so the portrait media query below can
      override these; the extra specificity beats the Button defaults outright. */
   .search-trigger-layer :global(.search-trigger) {
-    --button-height: var(--canvas-primary-control-height);
-    --button-padding-inline: var(--canvas-primary-control-padding-inline);
-    --button-gap: var(--canvas-primary-control-gap);
-    --button-font-size: var(--canvas-primary-control-font-size);
+    --button-height: var(--app-primary-control-height);
+    --button-padding-inline: var(--app-primary-control-padding-inline);
+    --button-gap: var(--app-primary-control-gap);
+    --button-font-size: var(--app-primary-control-font-size);
   }
 
   .search-trigger-text {
@@ -314,7 +323,7 @@
      same). The descendant selector outranks the Button defaults outright. */
   @media (orientation: portrait) {
     .search-trigger-layer :global(.search-trigger) {
-      --button-width: var(--canvas-primary-control-height);
+      --button-width: var(--app-primary-control-height);
       --button-padding-inline: 0rem;
     }
 
@@ -412,6 +421,7 @@
 
   .search-toolbar {
     display: flex;
+    min-width: 0;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
@@ -421,11 +431,20 @@
 
   .search-tabs {
     display: flex;
+    flex: 1 1 auto;
     gap: var(--space-1);
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .search-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .active-only-toggle {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: var(--space-2);
     border: 0;
@@ -435,6 +454,10 @@
     font-family: var(--font-ui);
     font-size: var(--text-2xs);
     cursor: pointer;
+  }
+
+  .active-only-toggle span {
+    white-space: nowrap;
   }
 
   .active-only-toggle.is-active {
@@ -476,6 +499,14 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+  }
+
+  .result-group.is-type-child {
+    margin-inline-start: var(--space-4);
+  }
+
+  .result-items {
+    margin-inline-start: var(--space-4);
   }
 
   .result-group-heading {

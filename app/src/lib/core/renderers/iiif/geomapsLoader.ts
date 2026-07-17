@@ -1,3 +1,6 @@
+// Loads and normalizes the `IIIF/<mapId>_geomaps.json` bundle (geomapsVersion: 1)
+// produced by Artemis-Data's src/lib/iiif/geomaps.ts — the compact on-disk shape
+// is defined there (CompactGeomap); this file re-derives the runtime shape.
 import type { GeomapsLoadResult, NormalizedGeomapsCanvas, NormalizedIiifImageInfo } from './geomapsTypes';
 
 interface RawGeomapsMap {

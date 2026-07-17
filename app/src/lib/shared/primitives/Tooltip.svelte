@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tooltipStore } from '../tooltip.svelte';
+  import { tooltip } from './tooltipState.svelte';
 
   const VIEWPORT_MARGIN = 4;
 
@@ -13,7 +13,7 @@
   // side when the preferred one would overflow. Neither correction changes the box size,
   // so one measured pass settles it.
   $effect(() => {
-    const tip = tooltipStore.content;
+    const tip = tooltip.content;
     if (!tip || !element) {
       shift = 0;
       flipped = false;
@@ -30,14 +30,14 @@
   });
 
   const placement = $derived.by(() => {
-    const preferred = tooltipStore.content?.placement ?? 'below';
+    const preferred = tooltip.content?.placement ?? 'below';
     if (!flipped) return preferred;
     return preferred === 'above' ? 'below' : 'above';
   });
 </script>
 
-{#if tooltipStore.content}
-  {@const tip = tooltipStore.content}
+{#if tooltip.content}
+  {@const tip = tooltip.content}
   <div
     bind:this={element}
     role="tooltip"

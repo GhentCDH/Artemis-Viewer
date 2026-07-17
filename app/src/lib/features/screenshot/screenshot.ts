@@ -20,6 +20,8 @@ export interface ScreenshotSources {
   maps: maplibregl.Map[];
   /** Root element of an open document viewer; every canvas inside it is composited on top of the maps. */
   viewerHost?: HTMLElement | null;
+  /** Branding lockup to render as a fixed-size bottom-left watermark. */
+  watermark?: HTMLElement | null;
 }
 
 export interface ScreenshotFilenameParts {
@@ -82,7 +84,48 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
-export async function captureViewScreenshot({ stage, maps, viewerHost }: ScreenshotSources, filename: string): Promise<void> {
+function cloneWithComputedStyles(element: HTMLElement): HTMLElement {
+  const clone = element.cloneNode(true) as HTMLElement;
+  const sources = [element, ...element.querySelectorAll<HTMLElement>('*')];
+  const clones = [clone, ...clone.querySelectorAll<HTMLElement>('*')];
+
+  for (let index = 0; index < sources.length; index += 1) {
+    const computed = getComputedStyle(sources[index]);
+    const target = clones[index];
+    for (const property of computed) {
+      target.style.setProperty(property, computed.getPropertyValue(property), computed.getPropertyPriority(property));
+    }
+  }
+
+  return clone;
+}
+
+async function renderElement(element: HTMLElement): Promise<HTMLImageElement> {
+  const width = element.offsetWidth;
+  const height = element.offsetHeight;
+  if (width === 0 || height === 0) throw new Error('Screenshot watermark has no size');
+
+  const clone = cloneWithComputedStyles(element);
+  clone.style.margin = '0';
+  clone.style.transform = 'none';
+  const markup = new XMLSerializer().serializeToString(clone);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${markup}</foreignObject></svg>`;
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    return image;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export async function captureViewScreenshot(
+  { stage, maps, viewerHost, watermark }: ScreenshotSources,
+  filename: string
+): Promise<void> {
   const stageRect = stage.getBoundingClientRect();
   if (stageRect.width === 0 || stageRect.height === 0) throw new Error('Screenshot stage has no size');
 
@@ -142,6 +185,16 @@ export async function captureViewScreenshot({ stage, maps, viewerHost }: Screens
     for (const canvas of viewerHost.querySelectorAll('canvas')) {
       drawCanvas(canvas);
     }
+  }
+
+  if (watermark) {
+    const image = await renderElement(watermark);
+    const rect = watermark.getBoundingClientRect();
+    const scale = rect.width / watermark.offsetWidth;
+    const width = watermark.offsetWidth * scale * dpr;
+    const height = watermark.offsetHeight * scale * dpr;
+    const inset = 16 * dpr;
+    context.drawImage(image, inset, exportCanvas.height - height - inset, width, height);
   }
 
   const blob = await new Promise<Blob | null>((resolve) => exportCanvas.toBlob(resolve, 'image/png'));

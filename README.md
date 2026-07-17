@@ -4,6 +4,12 @@ Web viewer for the Artemis project, built with SvelteKit. It combines historical
 maps of the Scheldt region with place-name search, IIIF images, and comparison
 tools in an interactive MapLibre map.
 
+Agent-agnostic repository context and frontend conventions are available in
+[`.agent-resources/`](https://github.com/GhentCDH/Artemis-Viewer/tree/main/.agent-resources).
+
+Agent-agnostic repository context and frontend conventions are available in
+[`.agent-resources/`](https://github.com/GhentCDH/Artemis-Viewer/tree/main/.agent-resources).
+
 [Open the viewer](https://ghentcdh.github.io/Artemis-Viewer)
 
 ## What it does

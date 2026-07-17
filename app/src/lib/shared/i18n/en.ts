@@ -29,6 +29,7 @@ export const en = {
   },
   basemap: {
     trigger: 'Choose map layers',
+    resetDefaults: 'Reset map layers to defaults',
     closeMenu: 'Close map layers menu',
     layerTypeGroup: 'Map layer type',
     backgroundTab: 'Background',

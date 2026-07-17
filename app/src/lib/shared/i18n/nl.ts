@@ -18,6 +18,7 @@ export const nl: Dictionary = {
   },
   basemap: {
     trigger: 'Kies kaartlagen',
+    resetDefaults: 'Herstel de standaardkaartlagen',
     closeMenu: 'Sluit kaartlagenmenu',
     layerTypeGroup: 'Type kaartlaag',
     backgroundTab: 'Achtergrond',

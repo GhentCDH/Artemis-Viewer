@@ -56,7 +56,7 @@
     --button-font-weight: 400;
     --button-justify: center;
     --button-flex-shrink: 1;
-    --button-shadow: 0 0 3px color-mix(in srgb, var(--color-shadow-ink) 40%, transparent);
+    --button-shadow: 0 0 3px color-mix(in srgb, var(--color-shadow-ink) 20%, transparent);
     /* -- end exposed -- */
 
     appearance: none;

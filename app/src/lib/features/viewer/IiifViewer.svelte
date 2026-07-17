@@ -233,7 +233,7 @@
 
   .iiif-viewer__header {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
     align-items: center;
     min-height: var(--iiif-viewer-header-height);
     padding: var(--iiif-viewer-header-padding-block) var(--iiif-viewer-header-padding-inline);

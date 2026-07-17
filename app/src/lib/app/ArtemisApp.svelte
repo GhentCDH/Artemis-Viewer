@@ -23,6 +23,8 @@
     timelineSelection,
   } from '$lib/features/timeline/timelineSelection.svelte';
   import SearchMenu from '$lib/features/search/SearchMenu.svelte';
+  import SearchLocationPing from '$lib/features/search/SearchLocationPing.svelte';
+  import type { SearchFocusTarget } from '$lib/features/search/searchSelection';
   import BrandingPanel from '$lib/features/branding/BrandingPanel.svelte';
   import { developerSettings } from '$lib/features/developerSettings/developerSettings.svelte';
   import ImageBrowser from '$lib/features/images/ImageBrowser.svelte';
@@ -63,6 +65,8 @@
   let brandingCoverWidthRem = $state(0);
   let leftMap = $state<maplibregl.Map | null>(null);
   let rightMap = $state<maplibregl.Map | null>(null);
+  let searchPing = $state<(SearchFocusTarget & { id: number }) | null>(null);
+  let nextSearchPingId = 0;
   let openDocument = $state<{ manifestUrl: string; imageId: string; pane: PaneId } | null>(
     initialUrlState.viewerManifestUrl
       ? {
@@ -415,9 +419,25 @@
           </svg>
           <span class="compare-toggle-text">{isCompare ? t().controls.exitCompare : t().controls.compare}</span>
         </Button>
-        <SearchMenu {leftMap} {rightMap} />
+        <SearchMenu
+          {leftMap}
+          {rightMap}
+          onfocus={(target) => {
+            searchPing = { ...target, id: ++nextSearchPingId };
+          }}
+        />
       </div>
     </div>
+
+    {#if searchPing}
+      {#key searchPing.id}
+        <SearchLocationPing
+          map={searchPing.map}
+          lngLat={searchPing.lngLat}
+          oncomplete={() => { searchPing = null; }}
+        />
+      {/key}
+    {/if}
 
     <div class="window-slot bottom-right-controls-slot">
       <div class="bottom-right-controls">
@@ -431,7 +451,7 @@
             onfocus={(event) => showControlTooltip(t().controls.changeLanguage, event)}
             onblur={hideTooltip}
             onclick={() => i18n.setLocale(targetLocale)}
-            style="--button-height: var(--app-primary-control-height);"
+            style="--button-height: var(--app-primary-control-height); --button-font-size: var(--text-md);"
           >{LOCALE_SHORT_LABELS[i18n.locale]}</Button>
         </div>
         <BasemapMenu

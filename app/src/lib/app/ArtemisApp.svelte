@@ -497,12 +497,12 @@
 
     {#if !isCompare || openDocument?.pane !== 'left'}
       <div class="window-slot sublayer-menu-slot sublayer-menu-slot--left" class:sublayer-menu-slot--split={isCompare}>
-        <PaneSublayerMenu layer={leftMenuLayer} />
+        <PaneSublayerMenu layer={leftMenuLayer} map={leftMap} />
       </div>
     {/if}
     {#if isCompare && openDocument?.pane !== 'right'}
       <div class="window-slot sublayer-menu-slot sublayer-menu-slot--right">
-        <PaneSublayerMenu layer={rightMenuLayer} />
+        <PaneSublayerMenu layer={rightMenuLayer} map={rightMap} />
       </div>
     {/if}
 

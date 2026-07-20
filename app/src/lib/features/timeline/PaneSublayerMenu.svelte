@@ -1,12 +1,15 @@
 <script lang="ts">
+  import type maplibregl from 'maplibre-gl';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import { timelineSelection } from './timelineSelectionStore.svelte';
   import SublayerMenu from './SublayerMenu.svelte';
 
   let {
     layer,
+    map = null,
   }: {
     layer: LayerSummary | null;
+    map?: maplibregl.Map | null;
   } = $props();
 
   // Local to this pane: dismissing the right pane's menu must not affect the left pane's.
@@ -28,6 +31,7 @@
 
 <SublayerMenu
   layer={menuLayer}
+  {map}
   {sublayerState}
   onclose={() => {
     dismissedLayerId = menuLayer?.id ?? null;

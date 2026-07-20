@@ -12,7 +12,7 @@
     showClose?: boolean;
     closeLabel?: string;
     closeOnEscape?: boolean;
-    closeOnPointerDistance?: number;
+    closeOnPointerEnter?: HTMLElement | null;
     class?: string;
     style?: string;
     onclose?: () => void;
@@ -30,7 +30,7 @@
     showClose = false,
     closeLabel = undefined,
     closeOnEscape = false,
-    closeOnPointerDistance = 0,
+    closeOnPointerEnter = null,
     class: className = '',
     style = '',
     onclose,
@@ -40,6 +40,20 @@
   }: Props = $props();
 
   let windowElement: HTMLElement | undefined;
+  /* A straight-line path from the trigger to this window can graze the target
+     element for a frame or two (e.g. crossing the gap between two panels) without
+     the user meaning to enter it. Require the pointer to stay put briefly before
+     treating it as a real entry. */
+  const POINTER_ENTER_CLOSE_DELAY = 350;
+  let pointerEnterTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearPointerEnterTimer() {
+    if (pointerEnterTimer === null) return;
+    clearTimeout(pointerEnterTimer);
+    pointerEnterTimer = null;
+  }
+
+  $effect(() => () => clearPointerEnterTimer());
 
   function close() {
     onclose?.();
@@ -52,22 +66,19 @@
   }
 
   function handlePointerMove(event: PointerEvent) {
-    if (!closeOnPointerDistance || !windowElement) return;
+    if (!closeOnPointerEnter) return;
 
-    const rect = windowElement.getBoundingClientRect();
-    const horizontalDistance = event.clientX < rect.left
-      ? rect.left - event.clientX
-      : event.clientX > rect.right
-        ? event.clientX - rect.right
-        : 0;
-    const verticalDistance = event.clientY < rect.top
-      ? rect.top - event.clientY
-      : event.clientY > rect.bottom
-        ? event.clientY - rect.bottom
-        : 0;
+    const withinTarget = event.target instanceof Node && closeOnPointerEnter.contains(event.target);
+    if (!withinTarget) {
+      clearPointerEnterTimer();
+      return;
+    }
 
-    if (Math.hypot(horizontalDistance, verticalDistance) > closeOnPointerDistance) {
-      close();
+    if (pointerEnterTimer === null) {
+      pointerEnterTimer = setTimeout(() => {
+        pointerEnterTimer = null;
+        close();
+      }, POINTER_ENTER_CLOSE_DELAY);
     }
   }
 </script>

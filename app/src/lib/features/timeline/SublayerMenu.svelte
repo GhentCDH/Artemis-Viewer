@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import type maplibregl from 'maplibre-gl';
   import { format, localize, t } from '$lib/shared/i18n/i18nStore.svelte';
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
@@ -10,6 +10,7 @@
 
   interface Props {
     layer: LayerSummary | null;
+    map?: maplibregl.Map | null;
     sublayerState?: Record<string, boolean>;
     onclose?: () => void;
     ontoggle?: (sublayerId: string) => void;
@@ -17,15 +18,14 @@
 
   let {
     layer = null,
+    map = null,
     sublayerState = {},
     onclose,
     ontoggle,
   }: Props = $props();
 
   let openInfoSublayerId = $state<string | null>(null);
-  /* 6rem in px; the root font-size is fluid, so read it instead of assuming 16px */
-  const detailCloseDistance =
-    6 * (browser ? parseFloat(getComputedStyle(document.documentElement).fontSize) : 16);
+  const mapCanvas = $derived(map?.getCanvas() ?? null);
   const dateLabel = $derived(layer ? `${layer.startYear}-${layer.endYear}` : '');
   const openInfoSublayer = $derived(layer?.sublayers.find((sublayer) => sublayer.id === openInfoSublayerId) ?? null);
 
@@ -111,7 +111,7 @@
         description={openInfoSublayer.description}
         furtherReading={openInfoSublayer.furtherReading}
         sources={openInfoSublayer.sources}
-        closeOnPointerDistance={detailCloseDistance}
+        closeOnPointerEnter={mapCanvas}
         onclose={() => {
           openInfoSublayerId = null;
         }}

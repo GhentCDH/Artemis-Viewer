@@ -15,7 +15,7 @@
     class?: string;
     style?: string;
     showClose?: boolean;
-    closeOnPointerDistance?: number;
+    closeOnPointerEnter?: HTMLElement | null;
     onclose?: () => void;
   }
 
@@ -28,7 +28,7 @@
     class: className = '',
     style = '',
     showClose = false,
-    closeOnPointerDistance,
+    closeOnPointerEnter,
     onclose,
   }: Props = $props();
 
@@ -58,7 +58,7 @@
   title={localizedTitle}
   {subtitle}
   {showClose}
-  {closeOnPointerDistance}
+  {closeOnPointerEnter}
   {onclose}
   {style}
 >

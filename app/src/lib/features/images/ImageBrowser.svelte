@@ -1,6 +1,5 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
-  import { browser } from '$app/environment';
   import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
   import { hideTooltip, showTooltip } from '$lib/shared/primitives/tooltipStore.svelte';
   import MetadataInfoWindow from '$lib/shared/metadata/MetadataInfoWindow.svelte';
@@ -36,9 +35,10 @@
   let collectionDetails = $state<ImageCollectionDetails[]>([]);
   let openInfoCollectionId = $state<string | null>(null);
   let yearTooltipTimer: ReturnType<typeof setTimeout> | null = null;
-  /* Match sublayer info: dismiss once the pointer moves more than 6rem away. */
-  const detailCloseDistance =
-    6 * (browser ? parseFloat(getComputedStyle(document.documentElement).fontSize) : 16);
+  /* The detail popup opens beside the panel, often well outside a pointer-distance
+     threshold from the info button that triggered it, so proximity can't drive the
+     close. Dismiss instead once the pointer actually reaches the map. */
+  const mapCanvas = $derived(map?.getCanvas() ?? null);
 
   $effect(() => () => {
     if (yearTooltipTimer !== null) clearTimeout(yearTooltipTimer);
@@ -257,7 +257,7 @@
             description={openInfoCollection.description}
             furtherReading={openInfoCollection.furtherReading}
             sources={openInfoCollection.sources}
-            closeOnPointerDistance={detailCloseDistance}
+            closeOnPointerEnter={mapCanvas}
             onclose={() => (openInfoCollectionId = null)}
             style="--window-width: min(21rem, calc(100vw - var(--image-browser-width) - (3 * var(--space-3)))); --window-max-height: var(--image-browser-max-height); --window-header-border-width: 0px;"
           />

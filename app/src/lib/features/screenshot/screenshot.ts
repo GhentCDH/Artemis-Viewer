@@ -110,16 +110,12 @@ async function renderElement(element: HTMLElement): Promise<HTMLImageElement> {
   clone.style.transform = 'none';
   const markup = new XMLSerializer().serializeToString(clone);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${markup}</foreignObject></svg>`;
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-
-  try {
-    const image = new Image();
-    image.src = url;
-    await image.decode();
-    return image;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  // Chromium taints canvases when a foreignObject SVG is loaded through a Blob URL.
+  // A data URL keeps the watermark readable so the composed canvas can export a PNG.
+  const image = new Image();
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  await image.decode();
+  return image;
 }
 
 export async function captureViewScreenshot(

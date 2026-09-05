@@ -136,6 +136,16 @@
     });
   }
 
+  function showTriggerTooltip(event: MouseEvent | FocusEvent): void {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    showTooltip({
+      text: t().basemap.trigger,
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+      placement: 'above',
+    });
+  }
+
   function resetLayers(): void {
     onselect(ARTEMIS_BASEMAP);
     onOverlaySelect(null);
@@ -386,7 +396,11 @@
     active={open || hasNonDefaultLayer}
     aria-label={t().basemap.trigger}
     aria-expanded={open}
-    onclick={() => { if (open) closeMenu(); else open = true; }}
+    onmouseenter={showTriggerTooltip}
+    onmouseleave={hideTooltip}
+    onfocus={showTriggerTooltip}
+    onblur={hideTooltip}
+    onclick={() => { hideTooltip(); if (open) closeMenu(); else open = true; }}
     style="--button-height: var(--app-primary-control-height);"
   >
     <svg class="basemap-icon" viewBox="0 0 24 24" aria-hidden="true">

@@ -74,13 +74,26 @@ function imageCandidates(manifest: RawIiifManifest): Array<{ canvasId: string; c
 
 function metadataFields(manifest: RawIiifManifest, manifestUrl: string): IiifMetadataField[] {
   const fields: IiifMetadataField[] = [];
+  const metadataByLabel = new Map<string, IiifMetadataField>();
   const add = (label: string, value: unknown): void => {
     const parsed = text(value);
     if (parsed) fields.push({ label, value: parsed });
   };
 
   for (const entry of Array.isArray(manifest.metadata) ? manifest.metadata : []) {
-    add(text(entry?.label) || 'Metadata', entry?.value);
+    const label = text(entry?.label) || 'Metadata';
+    const value = text(entry?.value);
+    if (!value) continue;
+    const existing = metadataByLabel.get(label);
+    if (existing) {
+      // Repeated labels describe multiple values of one field. Keep their order
+      // and line breaks, which the metadata panel already preserves.
+      existing.value += `\n${value}`;
+    } else {
+      const field = { label, value };
+      metadataByLabel.set(label, field);
+      fields.push(field);
+    }
   }
   add('Summary', manifest.summary ?? manifest.description);
   add('Provider', Array.isArray(manifest.provider) ? manifest.provider.map((provider) => provider?.label) : manifest.provider?.label);

@@ -398,7 +398,7 @@
     {#if openDocument?.pane !== 'left'}
       <div class="window-slot branding-slot">
         <div class="branding-slot-inner" bind:this={brandingWatermarkElement}>
-          <BrandingPanel style="--branding-scale: 1.6;" />
+          <BrandingPanel style="--branding-scale: 1;" />
         </div>
       </div>
     {/if}
@@ -453,7 +453,7 @@
             onfocus={(event) => showControlTooltip(t().controls.changeLanguage, event)}
             onblur={hideTooltip}
             onclick={() => i18n.setLocale(targetLocale)}
-            style="--button-height: var(--app-primary-control-height); --button-font-size: var(--text-md);"
+            style="--button-height: var(--app-primary-control-height); --button-width: var(--app-primary-control-height); --button-padding-inline: 0rem; --button-font-size: var(--text-xs);"
           >{LOCALE_SHORT_LABELS[i18n.locale]}</Button>
         </div>
         <BasemapMenu
@@ -525,12 +525,13 @@
 <style>
   .artemis-app {
     /* -- exposed -- */
-    --app-timeline-height: 9rem;
-    --app-timeline-bottom: var(--space-4);
-    --app-primary-control-height: calc(1.75rem * 1.5);
-    --app-primary-control-padding-inline: calc(var(--space-3) * 1.5);
-    --app-primary-control-gap: calc(var(--space-2) * 1.5);
-    --app-primary-control-font-size: calc(var(--text-xs) * 1.5);
+    --app-timeline-height: 7rem;
+    --app-timeline-bottom: var(--space-2);
+    --app-control-timeline-gap: var(--space-2);
+    --app-primary-control-height: calc(1.5rem * 1.25);
+    --app-primary-control-padding-inline: calc(var(--space-2) * 1.25);
+    --app-primary-control-gap: calc(var(--space-1) * 1.25);
+    --app-primary-control-font-size: var(--text-xs);
     /* -- end exposed -- */
 
     position: relative;
@@ -607,7 +608,7 @@
 
   .compare-control-slot {
     left: var(--space-4);
-    bottom: calc(var(--app-timeline-bottom) + var(--app-timeline-height) + var(--space-4));
+    bottom: calc(var(--app-timeline-bottom) + var(--app-timeline-height) + var(--app-control-timeline-gap));
     display: flex;
   }
 
@@ -619,14 +620,14 @@
   /* Zoom and map scale sit immediately left of the screenshot control. */
   .bottom-right-controls-slot {
     right: var(--space-4);
-    bottom: calc(var(--app-timeline-bottom) + var(--app-timeline-height) + var(--space-4));
+    bottom: calc(var(--app-timeline-bottom) + var(--app-timeline-height) + var(--app-control-timeline-gap));
     display: flex;
   }
 
   .bottom-right-controls {
     display: flex;
     align-items: flex-end;
-    gap: var(--space-3);
+    gap: var(--space-2);
   }
 
   .screenshot-control,
@@ -636,7 +637,7 @@
 
   .compare-control {
     display: flex;
-    gap: var(--space-2);
+    gap: var(--space-1);
   }
 
   /* Descendant selector (not inline style) so the portrait media query below can
@@ -660,9 +661,9 @@
   }
 
   .screenshot-icon {
-    /* Matches the 1.5x scale of the primary-control sizing vars above. */
-    width: calc(1rem * 1.5);
-    height: calc(1rem * 1.5);
+    /* Matches the 1.25x scale of the primary-control sizing vars above. */
+    width: calc(1rem * 1.25);
+    height: calc(1rem * 1.25);
     fill: none;
     stroke: currentColor;
     stroke-width: 1.5;
@@ -704,7 +705,7 @@
 
   @media (max-width: 56rem) {
     .artemis-app {
-      --app-timeline-height: 8.55rem;
+      --app-timeline-height: 6.75rem;
     }
   }
 

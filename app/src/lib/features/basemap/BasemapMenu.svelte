@@ -420,6 +420,11 @@
     display: flex;
   }
 
+  :global(.basemap-control > .button) {
+    --button-padding-inline: var(--space-1);
+    --button-gap: var(--space-1);
+  }
+
   .basemap-popover {
     position: absolute;
     right: 0;
@@ -557,8 +562,8 @@
 
   .basemap-icon,
   .reset-layers-icon {
-    width: calc(1rem * 1.5);
-    height: calc(1rem * 1.5);
+    width: calc(1rem * 1.75);
+    height: calc(1rem * 1.75);
     fill: none;
     stroke: currentColor;
     stroke-width: 1.5;

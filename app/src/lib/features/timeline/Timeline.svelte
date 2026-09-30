@@ -5,7 +5,6 @@
   import { timelineSelection } from './timelineSelectionStore.svelte';
   import TimeAxis from './TimeAxis.svelte';
   import Meanders from './Meanders.svelte';
-  import TimelineRiverBackdrop from './TimelineRiverBackdrop.svelte';
 
   let {
     layers = [],
@@ -18,9 +17,8 @@
 </script>
 
 <div class="timeline-shell">
-  <Window class="timeline-window" style="--window-radius: 0;" variant="docked" placement="bottom">
+  <Window class="timeline-window" style="--window-radius: var(--radius-control);" variant="docked" placement="bottom">
     <div class="track">
-      <TimelineRiverBackdrop />
       <TimeAxis range={axisRange} />
       <Meanders {layers} range={axisRange} {activeLayerIds} onLayerClick={(layerId) => timelineSelection.toggleLayer(layerId)} />
     </div>
@@ -37,11 +35,12 @@
 
   :global(.timeline-window) {
     flex: 1 1 auto;
+    margin-inline: var(--space-4);
   }
 
   .track {
     --track-width: 100%;
-    --timeline-line-width: 6.5px;
+    --timeline-line-width: 4px;
 
     position: relative;
     width: var(--track-width);

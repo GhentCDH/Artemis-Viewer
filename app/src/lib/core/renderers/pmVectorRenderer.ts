@@ -81,7 +81,7 @@ export function renderPmVectorSublayer(context: SublayerRenderContext, target: S
         'source-layer': SOURCE_LAYER,
         filter: ['==', ['get', 'type'], 'parcel'],
         paint: {
-          'line-color': readThemeColor('--color-map-parcel-line', '#c07b28'),
+          'line-color': readThemeColor('--color-map-parcel-line', '#ffbc42'),
           'line-width': 1.1,
           'line-opacity': 1,
         },

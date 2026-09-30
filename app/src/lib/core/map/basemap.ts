@@ -365,9 +365,9 @@ export function applyOverlay(map: maplibregl.Map, overlay: OverlayOption | null,
         sourceId: OVERLAY_SOURCE_ID,
         layerIdPrefix: OVERLAY_GEOJSON_LAYER_PREFIX,
         dataUrl: overlay.url,
-        fillColor: readThemeColor('--color-accent', '#3f789f'),
-        lineColor: readThemeColor('--color-accent', '#3f789f'),
-        pointColor: readThemeColor('--color-accent', '#3f789f'),
+        fillColor: readThemeColor('--color-accent', '#006ba6'),
+        lineColor: readThemeColor('--color-accent', '#006ba6'),
+        pointColor: readThemeColor('--color-accent', '#006ba6'),
       });
     }
     appliedOverlayKeyByMap.set(map, overlayKey);

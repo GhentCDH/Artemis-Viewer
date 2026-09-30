@@ -1,23 +1,23 @@
 :root {
   /* --- Typography ------------------------------------------------------ */
-  --font-ui: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-  --font-readable: 'Onest', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-ui: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-readable: 'Merriweather', Georgia, 'Times New Roman', serif;
 
-  --text-2xs: 0.8125rem;
-  --text-xs: 0.9375rem;
-  --text-sm: 1rem;
-  --text-base: 1.0625rem;
+   --text-2xs: 0.6875rem;
+   --text-xs: 0.75rem;
+   --text-sm: 0.875rem;
+   --text-base: 1rem;
   /* Resolves to 16 CSS px at the minimum root scale, preventing iOS Safari
      from zooming the viewport when a form control receives focus. */
   --text-mobile-input-min: 2rem;
-  --text-md: 1.1875rem;
-  --text-lg: 1.4375rem;
+   --text-md: 1.25rem;
+   --text-lg: 1.5rem;
 
   /* --- Palette (primitive) ---------------------------------------------
      Raw values only. Nothing outside this file may reference --palette-*. */
-  --palette-cream-50: #f8f5ed;
-  --palette-cream-100: #fbf8f1;
-  --palette-cream-200: #f2ede3;
+  --palette-cream-50: #edede9;
+  --palette-cream-100: #edede9;
+   --palette-cream-200: #e2e2df;
   --palette-brown-600: #78643c;
   --palette-brown-700: #6d5c3a;
   --palette-brown-800: #50442c;
@@ -29,10 +29,10 @@
   --palette-gray-750: #414141;
   --palette-green-600: #4a7a4a;
   --palette-rust-700: #8b3a2a;
-  --palette-blue-600: #3f789f;
-  --palette-blue-650: #2f6f99;
-  --palette-blue-675: #2a6389;
-  --palette-blue-700: #326481;
+   --palette-blue-600: #006ba6;
+   --palette-blue-650: #005f94;
+   --palette-blue-675: #00588a;
+   --palette-blue-700: #004f7d;
   --palette-slate-400: #8fa8b7;
   --palette-slate-450: #7d9aab;
   --palette-slate-500: #607d91;
@@ -43,9 +43,9 @@
 
   /* --- Color (semantic) -------------------------------------------------
      Components reference only these, never --palette-* directly. */
-  --color-text-primary: var(--palette-gray-750);
-  --color-text-secondary: var(--palette-gray-650);
-  --color-text-muted: var(--palette-gray-550);
+   --color-text-primary: #293241;
+   --color-text-secondary: #455a64;
+   --color-text-muted: #607d8b;
   --color-text-ok: var(--palette-green-600);
   --color-text-error: var(--palette-rust-700);
 
@@ -56,7 +56,7 @@
   --color-surface-raised: var(--palette-cream-50);
   --color-surface-control: var(--palette-cream-100);
   --color-surface-control-hover: var(--palette-cream-200);
-  --color-surface-tint: var(--palette-white);
+   --color-surface-tint: var(--palette-cream-50);
 
   --color-accent: var(--palette-blue-600);
   --color-accent-hover: var(--palette-blue-700);
@@ -64,8 +64,8 @@
 
   /* Muted counterpart to the accent blue, for primary canvas controls that
      should stand out from plain surface buttons without shouting. */
-  --color-accent-muted: var(--palette-slate-500);
-  --color-accent-muted-hover: var(--palette-slate-600);
+   --color-accent-muted: var(--palette-blue-600);
+   --color-accent-muted-hover: var(--palette-blue-700);
   --color-accent-muted-contrast: var(--palette-white);
   --color-focus-ring: color-mix(in srgb, var(--color-accent) 46%, transparent);
 
@@ -79,6 +79,7 @@
   --color-map-image-pin: var(--palette-slate-700);
   --color-map-image-pin-outline: color-mix(in srgb, var(--palette-gray-500) 65%, transparent);
   --color-map-image-pin-shadow: color-mix(in srgb, var(--color-shadow-ink) 40%, transparent);
+  --color-map-parcel-line: #274c77;
   --opacity-map-border: .2;
   --opacity-iiif-active-mask: .22;
 
@@ -104,6 +105,7 @@
   --radius-sm: calc(var(--space-4) / var(--control-corner-ratio));
   --radius-md: calc(var(--space-6) / var(--control-corner-ratio));
   --radius-lg: calc(var(--space-8) / var(--control-corner-ratio));
+   --radius-control: 0.375rem;
   --radius-pill: 999px;
 
   /* --- Z-index scale ------------------------------------------------------
@@ -118,10 +120,9 @@
 }
 
 html {
-  /* Fluid root scale: the whole rem-based UI tracks viewport width.
-     rem-based bounds keep user font-size preferences in effect.
-     ~8px on phone-sized windows → ~16px on large displays. */
-  font-size: clamp(0.5rem, 0.382rem + 0.59vw, 1rem);
+  /* Keep responsive sizing within a readable range while preserving user
+     font-size preferences. */
+  font-size: clamp(0.875rem, 0.75rem + 0.39vw, 1rem);
   box-sizing: border-box;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;

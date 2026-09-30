@@ -289,7 +289,7 @@
     color: var(--color-text-primary);
     font-family: var(--font-readable);
     font-size: var(--iiif-viewer-header-title-font-size);
-    font-weight: 600;
+    font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: center;
@@ -337,7 +337,7 @@
     color: var(--color-text-secondary);
     font-family: var(--font-ui);
     font-size: var(--text-xs);
-    font-weight: 600;
+    font-weight: 700;
   }
 
   .iiif-viewer__metadata dd {

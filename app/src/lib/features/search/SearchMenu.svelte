@@ -1,7 +1,6 @@
 <script lang="ts">
   import type maplibregl from 'maplibre-gl';
   import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
-  import Window from '$lib/shared/primitives/Window.svelte';
   import Button from '$lib/shared/primitives/Button.svelte';
   import Toggle from '$lib/shared/primitives/Toggle.svelte';
   import { datasetUrl } from '$lib/core/dataset/dataSource';
@@ -31,6 +30,7 @@
   let activeOnly = $state(false);
   let index = $state<SearchIndex | null>(null);
   let inputElement = $state<HTMLInputElement | undefined>(undefined);
+  let menuElement = $state<HTMLDivElement | undefined>(undefined);
 
   const trimmedQuery = $derived(query.trim());
   const activeLayerIds = $derived(new Set(timelineSelection.activeLayerIds));
@@ -111,20 +111,16 @@
     ensureIndexLoaded();
   }
 
-  function close(): void {
-    expanded = false;
-  }
-
-  function toggle(): void {
-    if (expanded) close();
-    else open();
+  function handleBlur(event: FocusEvent): void {
+    const nextTarget = event.relatedTarget;
+    if (!(nextTarget instanceof Node) || !menuElement?.contains(nextTarget)) expanded = false;
   }
 
   function select(result: SearchResult): void {
     const target = focusSearchResult(result, { leftMap, rightMap });
     if (target) onfocus?.(target);
     query = result.kind === 'toponym' ? result.text : result.kind === 'image' ? result.title : result.label;
-    close();
+    expanded = false;
   }
 
   function selectTopMatch(): void {
@@ -140,30 +136,8 @@
   }
 </script>
 
-<div class="search-menu">
-  <div class="search-trigger-layer">
-    <Button variant="prominent" active={expanded} class="search-trigger" aria-label={t().search.trigger} aria-expanded={expanded} onclick={toggle}>
-      <svg class="search-icon search-trigger-icon" viewBox="0 0 16 16" aria-hidden="true">
-        <circle cx="6.8" cy="6.8" r="4.3"></circle>
-        <path d="M10.2 10.2 14 14"></path>
-      </svg>
-      <span class="search-trigger-text">{t().search.trigger}</span>
-    </Button>
-  </div>
-
-  {#if expanded}
-    <div class="search-modal-layer">
-      <Window
-        class="search-window"
-        variant="modal"
-        placement="center"
-        backdrop
-        closeOnEscape
-        onclose={close}
-        style="--window-width: min(48rem, calc(100vw - (2 * var(--space-3)))); --window-height: min(54rem, calc(100dvh - (2 * var(--space-3))));"
-      >
-        {#snippet header()}
-      <form class="search-form" onsubmit={(event) => { event.preventDefault(); selectTopMatch(); }}>
+<div bind:this={menuElement} class:search-menu--expanded={expanded} class="search-menu">
+  <form class="search-form" onsubmit={(event) => { event.preventDefault(); selectTopMatch(); }}>
         <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="6.8" cy="6.8" r="4.3"></circle>
           <path d="M10.2 10.2 14 14"></path>
@@ -174,19 +148,25 @@
           type="text"
           placeholder={t().search.placeholder}
           aria-label={t().search.inputAria}
+          onfocus={open}
+          onblur={handleBlur}
         />
-      </form>
-      <Button iconOnly aria-label={t().search.close} onclick={close}>×</Button>
-        {/snippet}
+        <kbd class="search-shortcut" aria-hidden="true">/</kbd>
+  </form>
 
+  {#if expanded}
+    <div class="search-results-layer">
+      <div class="search-scope-bar" aria-label={t().search.scopeLabel}>
+        <div class="search-tabs">
+          <Button variant="quiet" active={activeTab === 'all'} onclick={() => (activeTab = 'all')}>{t().search.tabAll}</Button>
+          <Button variant="quiet" active={activeTab === 'toponyms'} onclick={() => (activeTab = 'toponyms')}>{t().search.mapText}<span class="scope-count">{visibleToponyms.length}</span></Button>
+          <Button variant="quiet" active={activeTab === 'sheets'} onclick={() => (activeTab = 'sheets')}>{t().search.sheets}<span class="scope-count">{visibleSheets.length}</span></Button>
+          <Button variant="quiet" active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>{t().search.photographs}<span class="scope-count">{imageMatches.length}</span></Button>
+        </div>
+        <span class="result-count">{totalVisible}</span>
+      </div>
     <div class="search-body">
       <div class="search-toolbar">
-        <div class="search-tabs">
-          <Button active={activeTab === 'all'} onclick={() => (activeTab = 'all')}>{t().search.tabAll}</Button>
-          <Button active={activeTab === 'toponyms'} onclick={() => (activeTab = 'toponyms')}>{t().search.toponyms}</Button>
-          <Button active={activeTab === 'sheets'} onclick={() => (activeTab = 'sheets')}>{t().search.sheets}</Button>
-          <Button active={activeTab === 'images'} onclick={() => (activeTab = 'images')}>{t().images.trigger}</Button>
-        </div>
         <div class="active-only-toggle" class:is-active={activeOnly}>
           <svg class="target-icon" viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="8" cy="8" r="5.6"></circle>
@@ -271,69 +251,69 @@
         </div>
       {/if}
     </div>
-      </Window>
     </div>
   {/if}
 </div>
 
 <style>
   .search-menu,
-  .search-trigger-layer {
+  .search-form {
     display: flex;
   }
 
   .search-menu {
-    /* -- exposed -- */
-    --search-trigger-icon-size: 1.5rem;
-    /* -- end exposed -- */
+    position: relative;
+    min-width: 0;
+    flex: 1 1 18rem;
   }
 
-  .search-modal-layer {
-    position: fixed;
-    inset: 0;
-    z-index: var(--z-modal);
+  .search-form {
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    width: 100%;
+  }
+
+  .search-menu--expanded {
+    flex-basis: 30rem;
+  }
+
+  .search-shortcut {
+    flex: 0 0 auto;
+    color: var(--color-text-muted);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+  }
+
+  .search-results-layer {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + var(--space-3));
+    z-index: var(--z-popover);
+    display: flex;
+    width: min(32rem, calc(100vw - (2 * var(--space-3))));
+    max-height: min(32rem, calc(100dvh - 10rem));
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface-raised);
+    box-shadow: 0 0.5rem 2rem color-mix(in srgb, var(--color-shadow-ink) 24%, transparent);
+  }
+
+  .search-scope-bar {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--color-border);
   }
 
-  /* Descendant selector (not inline style) so the portrait media query below can
-     override these; the extra specificity beats the Button defaults outright. */
-  .search-trigger-layer :global(.search-trigger) {
-    --button-height: var(--app-primary-control-height);
-    --button-padding-inline: var(--app-primary-control-padding-inline);
-    --button-gap: var(--app-primary-control-gap);
-    --button-font-size: var(--app-primary-control-font-size);
-  }
-
-  .search-trigger-text {
-    max-width: 13rem;
-    overflow: hidden;
-    color: inherit;
-    font-family: inherit;
-    font-size: inherit;
-    font-weight: inherit;
-    line-height: inherit;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* Portrait windows are too narrow for labelled controls: collapse the trigger
-     to a square icon-only button (the compare toggle in Canvas.svelte does the
-     same). The descendant selector outranks the Button defaults outright. */
-  @media (orientation: portrait) {
-    .search-trigger-layer :global(.search-trigger) {
-      --button-width: var(--app-primary-control-height);
-      --button-padding-inline: 0rem;
-    }
-
-    .search-trigger-text {
-      display: none;
-    }
-
-    .search-menu {
-      --search-trigger-icon-size: 1.75rem;
-    }
+  .scope-count,
+  .result-count {
+    color: var(--color-text-muted);
+    font-size: var(--text-2xs);
   }
 
   .search-icon {
@@ -347,29 +327,6 @@
     stroke-linejoin: round;
   }
 
-  .search-trigger-icon {
-    width: var(--search-trigger-icon-size);
-    height: var(--search-trigger-icon-size);
-  }
-
-  /* Fixed modal size is set via --window-width/--window-height on the Window's
-     inline style: a :global(.search-window) rule ties with (or loses to)
-     Window's own scoped rule and is unreliable. */
-  :global(.search-window .window-body) {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .search-form {
-    display: flex;
-    flex: 1 1 auto;
-    align-items: center;
-    gap: var(--space-2);
-    min-width: 0;
-    color: var(--color-text-muted);
-  }
-
   .search-form input {
     flex: 1 1 auto;
     min-width: 0;
@@ -378,7 +335,7 @@
     background: transparent;
     color: var(--color-text-primary);
     font-family: var(--font-ui);
-    font-size: var(--text-base);
+    font-size: var(--text-sm);
   }
 
   @media (max-width: 40rem) {

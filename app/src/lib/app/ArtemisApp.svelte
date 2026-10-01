@@ -79,6 +79,7 @@
   let openDocumentTitle = $state('');
   let viewerCanvasHost = $state<HTMLElement | null>(null);
   let isViewerExpanded = $state(false);
+  let isTimelineCollapsed = $state(false);
   let isCapturingScreenshot = $state(false);
   let isMobile = $state(false);
   let selectedBasemap = $state<BasemapOption>(ARTEMIS_BASEMAP);
@@ -334,7 +335,7 @@
   <div
     class="workspace-layer"
     class:workspace-layer--viewer-expanded={isViewerExpanded}
-    class:workspace-layer--compare={isCompare}
+    class:workspace-layer--compare={isCompare && !openDocument}
     bind:this={workspaceElement}
   >
     {#if openDocument?.pane !== 'left'}
@@ -393,18 +394,26 @@
 
   <div
     class="overlay-layer"
+    class:overlay-layer--timeline-collapsed={isTimelineCollapsed}
     style:--app-branding-cover-width={`${brandingCoverWidthRem}rem`}
   >
     {#if openDocument?.pane !== 'left'}
       <div class="window-slot branding-slot">
         <div class="branding-slot-inner" bind:this={brandingWatermarkElement}>
-          <BrandingPanel style="--branding-scale: 1;" />
+          <BrandingPanel style="--branding-scale: 1.3;" />
         </div>
       </div>
     {/if}
 
-    <div class="window-slot compare-control-slot">
-      <div class="compare-control">
+    <div class="window-slot command-bar-slot">
+      <div class="command-bar">
+        <SearchMenu
+          {leftMap}
+          {rightMap}
+          onfocus={(target) => {
+            searchPing = { ...target, id: ++nextSearchPingId };
+          }}
+        />
         <Button
           variant="prominent"
           active={isCompare}
@@ -419,14 +428,13 @@
             <rect x="9" y="9" width="13" height="13" rx="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          <span class="compare-toggle-text">{isCompare ? t().controls.exitCompare : t().controls.compare}</span>
+          <span class="compare-toggle-text">{t().controls.compareMaps}</span>
         </Button>
-        <SearchMenu
-          {leftMap}
-          {rightMap}
-          onfocus={(target) => {
-            searchPing = { ...target, id: ++nextSearchPingId };
-          }}
+        <span class="command-divider" aria-hidden="true"></span>
+        <ImageBrowser
+          map={leftMap}
+          showControls={!openDocument}
+          onOpenImage={(image) => openIiifDocument('left', { manifestUrl: image.manifestUrl, imageId: '' })}
         />
       </div>
     </div>
@@ -487,14 +495,6 @@
       </div>
     </div>
 
-    <div class="window-slot image-browser-slot">
-      <ImageBrowser
-        map={leftMap}
-        showControls={!openDocument}
-        onOpenImage={(image) => openIiifDocument('left', { manifestUrl: image.manifestUrl, imageId: '' })}
-      />
-    </div>
-
     {#if !isCompare || openDocument?.pane !== 'left'}
       <div class="window-slot sublayer-menu-slot sublayer-menu-slot--left" class:sublayer-menu-slot--split={isCompare}>
         <PaneSublayerMenu layer={leftMenuLayer} map={leftMap} />
@@ -507,7 +507,7 @@
     {/if}
 
     <div class="window-slot timeline-slot">
-      <Timeline {layers} />
+      <Timeline {layers} oncollapsed={(collapsed) => (isTimelineCollapsed = collapsed)} />
     </div>
   </div>
 
@@ -556,9 +556,28 @@
     z-index: var(--z-window);
   }
 
+  .workspace-layer--compare::after {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent);
+    content: '';
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+
   .overlay-layer {
     z-index: var(--z-overlay);
     pointer-events: none;
+  }
+
+  .overlay-layer--timeline-collapsed .command-bar-slot,
+  .overlay-layer--timeline-collapsed .bottom-right-controls-slot {
+    bottom: var(--app-timeline-bottom);
   }
 
   .window-slot {
@@ -606,15 +625,108 @@
     right: var(--space-4);
   }
 
-  .compare-control-slot {
+  .command-bar-slot {
     left: var(--space-4);
     bottom: calc(var(--app-timeline-bottom) + var(--app-timeline-height) + var(--app-control-timeline-gap));
+    width: min(42rem, calc(100vw - (2 * var(--space-4))));
     display: flex;
   }
 
-  .image-browser-slot {
-    top: var(--space-4);
-    right: var(--space-4);
+  .command-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    width: 100%;
+    min-width: 0;
+    padding: var(--space-1);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface-raised);
+    box-shadow: 0 0.25rem 1rem color-mix(in srgb, var(--color-shadow-ink) 22%, transparent);
+    pointer-events: auto;
+  }
+
+  .command-bar :global(.search-menu) {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .command-bar :global(.search-form) {
+    min-height: var(--app-primary-control-height);
+    padding-inline: var(--space-2);
+    color: var(--color-text-primary);
+  }
+
+  .command-bar :global(.search-form input::placeholder) {
+    color: var(--color-text-muted);
+    opacity: 1;
+  }
+
+  .command-bar :global(.search-menu--expanded) {
+    flex-basis: 30rem;
+  }
+
+  .command-bar:has(:global(.search-menu--expanded)) {
+    width: min(60rem, calc(100vw - (2 * var(--space-4))));
+  }
+
+  .command-bar:has(:global(.search-menu--expanded)) :global(.compare-toggle),
+  .command-bar:has(:global(.search-menu--expanded)) :global(.image-browser-trigger) {
+    --button-width: var(--app-primary-control-height);
+    --button-padding-inline: 0rem;
+  }
+
+  .command-bar:has(:global(.search-menu--expanded)) :global(.compare-toggle-text),
+  .command-bar:has(:global(.search-menu--expanded)) :global(.image-browser-trigger-text) {
+    display: none;
+  }
+
+  .command-bar :global(.image-browser) {
+    flex: 0 0 auto;
+  }
+
+  .command-bar :global(.image-browser-trigger) {
+    --button-height: var(--app-primary-control-height);
+    --button-gap: var(--app-primary-control-gap);
+    --button-font-size: var(--app-primary-control-font-size);
+  }
+
+  .command-divider {
+    position: relative;
+    flex: 0 0 1.25rem;
+    width: 1.25rem;
+    min-height: var(--app-primary-control-height);
+  }
+
+  .command-divider::before {
+    position: absolute;
+    inset-block: var(--space-1);
+    left: 50%;
+    width: 1px;
+    background: var(--color-border);
+    content: '';
+    transform: translateX(-50%);
+  }
+
+  .command-bar :global(.compare-toggle),
+  .command-bar :global(.image-browser-trigger) {
+    --button-radius: 999px;
+    --button-flex-shrink: 0;
+    --button-padding-inline: var(--space-3);
+    --button-bg: var(--color-surface-raised);
+    --button-bg-hover: var(--color-surface-control-hover);
+    --button-text: var(--color-text-primary);
+    --button-border: var(--color-accent);
+    --button-border-hover: var(--color-accent-hover);
+  }
+
+  .command-bar :global(.compare-toggle.is-active),
+  .command-bar :global(.image-browser-trigger.is-active) {
+    --button-bg: var(--color-accent);
+    --button-bg-hover: var(--color-accent-hover);
+    --button-text: var(--color-accent-contrast);
+    --button-border: var(--color-accent);
+    --button-border-hover: var(--color-accent-hover);
   }
 
   /* Zoom and map scale sit immediately left of the screenshot control. */
@@ -635,14 +747,7 @@
     display: flex;
   }
 
-  .compare-control {
-    display: flex;
-    gap: var(--space-1);
-  }
-
-  /* Descendant selector (not inline style) so the portrait media query below can
-     override these; the extra specificity beats the Button defaults outright. */
-  .compare-control :global(.compare-toggle) {
+  .command-bar :global(.compare-toggle) {
     --button-height: var(--app-primary-control-height);
     --button-padding-inline: var(--app-primary-control-padding-inline);
     --button-gap: var(--app-primary-control-gap);
@@ -650,9 +755,9 @@
   }
 
   .compare-icon {
-    display: none;
-    width: calc(1rem * 1.5);
-    height: calc(1rem * 1.5);
+    display: block;
+    width: 1.125rem;
+    height: 1.125rem;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.5;
@@ -680,6 +785,16 @@
       flex-direction: column;
     }
 
+    .workspace-layer--compare::after {
+      top: 50%;
+      right: 0;
+      bottom: auto;
+      left: 0;
+      width: auto;
+      height: 2px;
+      transform: translateY(-50%);
+    }
+
     .sublayer-menu-slot--left.sublayer-menu-slot--split {
       right: var(--space-4);
     }
@@ -689,7 +804,7 @@
       left: var(--space-4);
     }
 
-    .compare-control :global(.compare-toggle) {
+    .command-bar :global(.compare-toggle) {
       --button-width: var(--app-primary-control-height);
       --button-padding-inline: 0rem;
     }
@@ -709,8 +824,32 @@
     }
   }
 
+  @media (min-width: 40.01rem) and (max-width: 90rem) {
+    .artemis-app {
+      --app-primary-control-height: 1.375rem;
+      --app-primary-control-padding-inline: var(--space-2);
+      --app-primary-control-gap: var(--space-1);
+      --app-timeline-height: 6.5rem;
+    }
+  }
+
   @media (max-width: 40rem) {
-    .compare-control :global(.compare-toggle) {
+    .artemis-app {
+      --app-primary-control-height: 1.375rem;
+      --app-primary-control-padding-inline: var(--space-2);
+      --app-primary-control-gap: var(--space-1);
+    }
+
+    .command-bar-slot {
+      width: calc(100vw - (2 * var(--space-3)));
+      left: var(--space-3);
+    }
+
+    .command-bar:has(:global(.search-menu--expanded)) {
+      width: calc(100vw - (2 * var(--space-3)));
+    }
+
+    .command-bar :global(.compare-toggle) {
       display: none;
     }
   }

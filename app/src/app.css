@@ -9,7 +9,7 @@
    --text-base: 1rem;
   /* Resolves to 16 CSS px at the minimum root scale, preventing iOS Safari
      from zooming the viewport when a form control receives focus. */
-  --text-mobile-input-min: 2rem;
+  --text-mobile-input-min: 16px;
    --text-md: 1.25rem;
    --text-lg: 1.5rem;
 
@@ -120,9 +120,7 @@
 }
 
 html {
-  /* Keep responsive sizing within a readable range while preserving user
-     font-size preferences. */
-  font-size: clamp(0.875rem, 0.75rem + 0.39vw, 1rem);
+  font-size: 1rem;
   box-sizing: border-box;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
@@ -130,6 +128,24 @@ html {
   color-scheme: light;
   height: 100%;
   overflow: hidden;
+}
+
+@media (min-width: 90rem) {
+  html {
+    font-size: 1.0625rem;
+  }
+}
+
+@media (max-width: 90rem) {
+  html {
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 40rem) {
+  html {
+    font-size: 0.875rem;
+  }
 }
 
 *,

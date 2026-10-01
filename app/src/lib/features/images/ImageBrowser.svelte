@@ -243,7 +243,7 @@
         <circle cx="8.2" cy="9.3" r="1.7"></circle>
         <path d="m5.5 16.5 4.2-4.2 3.2 3 2.3-2.2 3.3 3.4"></path>
       </svg>
-      <span class="image-browser-trigger-text">{t().images.trigger}</span>
+      <span class="image-browser-trigger-text">{t().images.viewImages}</span>
     </Button>
   {/if}
 
@@ -480,9 +480,9 @@
   }
 
   .image-browser-panel-layer {
-    position: absolute;
-    top: calc(var(--image-browser-trigger-height) + var(--space-2));
-    right: 0;
+    position: fixed;
+    top: var(--space-4);
+    right: var(--space-4);
   }
 
   /* Own wrapper element anchored beside the Landscapes window, so the detail
@@ -767,7 +767,7 @@
 
     .image-browser-panel-layer {
       position: fixed;
-      top: calc(var(--space-3) + var(--image-browser-trigger-height) + var(--space-2));
+      top: var(--space-3);
       right: var(--space-3);
     }
 

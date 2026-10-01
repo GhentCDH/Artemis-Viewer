@@ -1,12 +1,31 @@
 <script lang="ts">
+  import { t } from '$lib/shared/i18n/i18nStore.svelte';
+  import Button from '$lib/shared/primitives/Button.svelte';
   import { DEFAULT_AXIS_RANGE, getAxisTicks, yearToPercent, type AxisRange } from './timelineScale';
 
-  let { range = DEFAULT_AXIS_RANGE }: { range?: AxisRange } = $props();
+  let {
+    range = DEFAULT_AXIS_RANGE,
+    onclose,
+  }: {
+    range?: AxisRange;
+    onclose?: () => void;
+  } = $props();
 
   const ticks = $derived(getAxisTicks(range));
 </script>
 
 <div class="time-axis">
+  <Button
+    class="axis-close"
+    iconOnly
+    variant="quiet"
+    aria-label={t().timeline.close}
+    onclick={() => onclose?.()}
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m6 10 6 6 6-6"></path>
+    </svg>
+  </Button>
   <div class="axis-line"></div>
   {#each ticks as year (year)}
     <div class="axis-tick" style="left: {yearToPercent(year, range)}%">
@@ -21,6 +40,26 @@
     position: relative;
     width: 100%;
     height: 100%;
+  }
+
+  :global(.axis-close) {
+    position: absolute;
+    z-index: 1;
+    top: var(--space-1);
+    left: 50%;
+    transform: translateX(-50%);
+    --button-height: 1.75rem;
+    --button-text: var(--color-text-muted);
+  }
+
+  :global(.axis-close svg) {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .axis-line {

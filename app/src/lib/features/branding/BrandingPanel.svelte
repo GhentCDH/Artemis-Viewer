@@ -363,8 +363,10 @@
   }
 
   .logo-grid img {
+    display: block;
+    width: 100%;
     max-width: 100%;
-    max-height: 3.5rem;
+    max-height: 3.25rem;
     object-fit: contain;
   }
 

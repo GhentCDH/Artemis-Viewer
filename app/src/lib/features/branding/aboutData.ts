@@ -97,6 +97,7 @@ export const PARTNER_LOGOS: PartnerLogo[] = [
   { name: 'KBR', alt: 'Logo KBR', src: `${base}/attribution-logos/logo_KRB.png`, href: 'https://www.kbr.be' },
   { name: 'Nationaal Geografisch Instituut', alt: 'Logo Nationaal Geografisch Instituut', src: `${base}/attribution-logos/logo_NGI.png`, href: 'https://www.ngi.be' },
   { name: 'Rijksarchief', alt: 'Logo Rijksarchief', src: `${base}/attribution-logos/logo_Rijksarchief.png`, href: 'https://www.arch.be' },
+  { name: 'Plantentuin Meise', alt: 'Logo Plantentuin Meise', src: `${base}/attribution-logos/logo_plantentuinmeise.jpg`, href: 'https://www.plantentuinmeise.be' },
   { name: 'FWO', alt: 'Logo FWO', src: `${base}/attribution-logos/logo_fwo.png`, href: 'https://www.fwo.be' },
 ];
 

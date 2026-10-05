@@ -2,6 +2,8 @@
 // geomapsLoader.ts. The producer-side on-disk contract lives in Artemis-Data's
 // src/lib/iiif/types.ts (CompactGeomap) — keep the two in sync.
 export interface NormalizedGeomapsCanvas {
+  /** Unique per georeferenced map; several maps can share one image (`imageId`). */
+  id: string;
   imageId: string;
   label: string;
   imageServiceUrl: string;

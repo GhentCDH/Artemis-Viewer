@@ -4,6 +4,7 @@
 import type { GeomapsLoadResult, NormalizedGeomapsCanvas, NormalizedIiifImageInfo } from './geomapsTypes';
 
 interface RawGeomapsMap {
+  id?: string;
   imageId?: string;
   label?: string;
   width?: number;
@@ -116,6 +117,7 @@ export async function loadGeomaps(datasetBaseUrl: string, geomapsPath: string): 
       const { bbox, center } = geoBoundsFromGcps(gcps);
 
       canvases.push({
+        id: String(map.id ?? '').trim() || imageId,
         imageId,
         label: String(map.label ?? imageId).trim(),
         imageServiceUrl,
@@ -124,6 +126,7 @@ export async function loadGeomaps(datasetBaseUrl: string, geomapsPath: string): 
         geoCenter: center,
       });
 
+      if (imageInfos.some((entry) => entry.serviceUrl === imageServiceUrl)) continue;
       imageInfos.push({
         serviceUrl: imageServiceUrl,
         info: {

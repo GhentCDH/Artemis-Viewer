@@ -124,7 +124,8 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     console.warn(`[allmaps ${layerId}] addImageInfos failed — per-canvas info.json fetches will happen instead`, error);
   }
 
-  // A canvas must be in exactly one of these lifecycle states. In particular, don't mark it as
+  // A canvas must be in exactly one of these lifecycle states, keyed by its geomap id (several
+  // georeferenced maps can share one image, so imageId is not unique). In particular, don't mark it as
   // resident before addGeoreferencedMap succeeds: doing so used to make malformed maps
   // permanently look loaded, and makes removal/re-entry races impossible to reason about.
   const queuedCanvasIds = new Set<string>();
@@ -201,7 +202,10 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
   // once per drain, only the sprites for canvases added in that drain.
   // Sprites are an optimization: any failure is non-fatal — Allmaps fetches full-res tiles directly.
   let warnedSpritesUnavailable = false;
-  async function uploadSpritesForCanvases(canvases: NormalizedGeomapsCanvas[]): Promise<void> {
+  async function uploadSpritesForCanvases(addedCanvases: NormalizedGeomapsCanvas[]): Promise<void> {
+    // Maps sharing an image share its sprite: Allmaps binds one sprite to every warped map on that
+    // resource, so upload it once per image.
+    const canvases = [...new Map(addedCanvases.map((canvas) => [canvas.imageServiceUrl, canvas])).values()];
     if (canvases.length === 0) return;
 
     if (!context.allmapsOptions.spritesEnabled) {
@@ -260,7 +264,7 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
       uploads.push(
         layer.addSprites([singleSprite], fileUrl, [sprite.width, sprite.height]).then(
           () => undefined,
-          (error) => console.warn(`[allmaps ${layerId}] addSprites failed for canvas ${canvas.imageId}`, error)
+          (error) => console.warn(`[allmaps ${layerId}] addSprites failed for canvas ${canvas.id}`, error)
         )
       );
     }
@@ -350,8 +354,8 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
         }
         const chunk = pendingQueue.splice(0, RECONCILE_CHUNK);
         for (const canvas of chunk) {
-          queuedCanvasIds.delete(canvas.imageId);
-          addingCanvasIds.add(canvas.imageId);
+          queuedCanvasIds.delete(canvas.id);
+          addingCanvasIds.add(canvas.id);
         }
         const results = await Promise.allSettled(
           chunk.map((canvas) =>
@@ -366,7 +370,7 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
         const evictionBounds = paddedViewportBounds(ALLMAPS_EVICTION_VIEWPORT_MARGIN);
         for (const [index, result] of results.entries()) {
           const canvas = chunk[index];
-          addingCanvasIds.delete(canvas.imageId);
+          addingCanvasIds.delete(canvas.id);
           if (result.status === 'fulfilled') {
             // The camera may have moved while triangulation was in flight. Destroy a map that is
             // already outside the wider retention bounds instead of briefly making it resident
@@ -377,18 +381,18 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
               } catch (error) {
                 // The add succeeded, so retain ownership if removal unexpectedly fails. Losing
                 // this ID would leave an Allmaps map that the reconciler can never remove.
-                residentMapIdsByCanvasId.set(canvas.imageId, result.value);
-                console.warn(`[allmaps ${layerId}] immediate removeGeoreferencedMapById failed for canvas ${canvas.imageId}`, error);
+                residentMapIdsByCanvasId.set(canvas.id, result.value);
+                console.warn(`[allmaps ${layerId}] immediate removeGeoreferencedMapById failed for canvas ${canvas.id}`, error);
               }
             } else {
-              residentMapIdsByCanvasId.set(canvas.imageId, result.value);
+              residentMapIdsByCanvasId.set(canvas.id, result.value);
               addedThisDrain.push(canvas);
               addedMapIds.push(result.value);
             }
           } else {
             // skip this canvas — its georeferencing data is likely malformed
-            failedCanvasIds.add(canvas.imageId);
-            console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${canvas.imageId}`, result.reason);
+            failedCanvasIds.add(canvas.id);
+            console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${canvas.id}`, result.reason);
           }
         }
         if (context.allmapsOptions.showHighStretch && addedMapIds.length > 0) {
@@ -401,7 +405,7 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
       }
       // A moveend can evict maps while another chunk is being triangulated. Only upload sprites
       // for maps that still exist when this drain finishes.
-      await uploadSpritesForCanvases(addedThisDrain.filter((canvas) => residentMapIdsByCanvasId.has(canvas.imageId)));
+      await uploadSpritesForCanvases(addedThisDrain.filter((canvas) => residentMapIdsByCanvasId.has(canvas.id)));
     } finally {
       draining = false;
       // A moveend may enqueue work while this drain is awaiting sprite decoding/upload. Its
@@ -426,7 +430,7 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
       const canvas = pendingQueue[index];
       if (canvas.geoBbox && !bboxIntersects(canvas.geoBbox, evictionBounds)) {
         pendingQueue.splice(index, 1);
-        queuedCanvasIds.delete(canvas.imageId);
+        queuedCanvasIds.delete(canvas.id);
       }
     }
 
@@ -435,28 +439,28 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     // retain reusable tile entries until its normal pruning runs; missing bboxes stay resident
     // because there is no safe spatial eviction decision for them.
     for (const canvas of geomaps.canvases) {
-      const mapId = residentMapIdsByCanvasId.get(canvas.imageId);
+      const mapId = residentMapIdsByCanvasId.get(canvas.id);
       if (!mapId || !canvas.geoBbox || bboxIntersects(canvas.geoBbox, evictionBounds)) continue;
       try {
         layer.removeGeoreferencedMapById(mapId);
-        residentMapIdsByCanvasId.delete(canvas.imageId);
+        residentMapIdsByCanvasId.delete(canvas.id);
       } catch (error) {
-        console.warn(`[allmaps ${layerId}] removeGeoreferencedMapById failed for canvas ${canvas.imageId}`, error);
+        console.warn(`[allmaps ${layerId}] removeGeoreferencedMapById failed for canvas ${canvas.id}`, error);
       }
     }
 
     let queued = false;
     for (const canvas of geomaps.canvases) {
       if (
-        residentMapIdsByCanvasId.has(canvas.imageId) ||
-        queuedCanvasIds.has(canvas.imageId) ||
-        addingCanvasIds.has(canvas.imageId) ||
-        failedCanvasIds.has(canvas.imageId)
+        residentMapIdsByCanvasId.has(canvas.id) ||
+        queuedCanvasIds.has(canvas.id) ||
+        addingCanvasIds.has(canvas.id) ||
+        failedCanvasIds.has(canvas.id)
       ) {
         continue;
       }
       if (!canvas.geoBbox || bboxIntersects(canvas.geoBbox, loadBounds)) {
-        queuedCanvasIds.add(canvas.imageId);
+        queuedCanvasIds.add(canvas.id);
         pendingQueue.push(canvas);
         queued = true;
       }
@@ -483,12 +487,12 @@ export async function renderIiifAllmapsWarp(context: SublayerRenderContext, targ
     for (const [index, result] of results.entries()) {
       if (result.status === 'fulfilled') {
         const canvas = geomaps.canvases[index];
-        residentMapIdsByCanvasId.set(canvas.imageId, result.value);
+        residentMapIdsByCanvasId.set(canvas.id, result.value);
         addedCanvases.push(canvas);
         addedMapIds.push(result.value);
       } else {
-        failedCanvasIds.add(geomaps.canvases[index].imageId);
-        console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${geomaps.canvases[index].imageId}`, result.reason);
+        failedCanvasIds.add(geomaps.canvases[index].id);
+        console.warn(`[allmaps ${layerId}] addGeoreferencedMap failed for canvas ${geomaps.canvases[index].id}`, result.reason);
       }
     }
     if (context.allmapsOptions.showHighStretch && addedMapIds.length > 0) {

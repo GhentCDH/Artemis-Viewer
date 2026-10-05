@@ -8,30 +8,38 @@
 		     stylesheet: no third-party round-trip before first paint, and the faces live in the
 		     app's own cache scope. Inline @font-face (rather than app.css) so discovery happens
 		     during HTML parse and %sveltekit.assets% keeps the URLs base-path-safe. -->
-		<link rel="preload" href="%sveltekit.assets%/fonts/space-mono-400-latin.woff2" as="font" type="font/woff2" crossorigin />
-		<link rel="preload" href="%sveltekit.assets%/fonts/onest-400-latin.woff2" as="font" type="font/woff2" crossorigin />
-		<link rel="preload" href="%sveltekit.assets%/fonts/space-mono-700-latin.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="%sveltekit.assets%/fonts/poppins-400-latin.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="%sveltekit.assets%/fonts/merriweather-latin.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="%sveltekit.assets%/fonts/poppins-600-latin.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="%sveltekit.assets%/fonts/poppins-700-latin.woff2" as="font" type="font/woff2" crossorigin />
 		<style>
 			@font-face {
-				font-family: 'Onest';
+				font-family: 'Merriweather';
+				font-style: normal;
+				font-weight: 400 700;
+				font-display: swap;
+				src: url('%sveltekit.assets%/fonts/merriweather-latin.woff2') format('woff2');
+			}
+			@font-face {
+				font-family: 'Poppins';
 				font-style: normal;
 				font-weight: 400;
 				font-display: swap;
-				src: url('%sveltekit.assets%/fonts/onest-400-latin.woff2') format('woff2');
+				src: url('%sveltekit.assets%/fonts/poppins-400-latin.woff2') format('woff2');
 			}
 			@font-face {
-				font-family: 'Space Mono';
+				font-family: 'Poppins';
 				font-style: normal;
-				font-weight: 400;
+				font-weight: 600;
 				font-display: swap;
-				src: url('%sveltekit.assets%/fonts/space-mono-400-latin.woff2') format('woff2');
+				src: url('%sveltekit.assets%/fonts/poppins-600-latin.woff2') format('woff2');
 			}
 			@font-face {
-				font-family: 'Space Mono';
+				font-family: 'Poppins';
 				font-style: normal;
 				font-weight: 700;
 				font-display: swap;
-				src: url('%sveltekit.assets%/fonts/space-mono-700-latin.woff2') format('woff2');
+				src: url('%sveltekit.assets%/fonts/poppins-700-latin.woff2') format('woff2');
 			}
 		</style>
 		%sveltekit.head%

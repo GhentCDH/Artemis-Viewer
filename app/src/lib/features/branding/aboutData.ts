@@ -1,7 +1,7 @@
 // Structural (language-independent) About content: names, institutions, logos,
 // links. The translatable prose lives in the i18n dictionaries; team roles are
 // dictionary keys so the roster is maintained in exactly one place.
-import type { TeamRole } from '$lib/shared/i18n/i18nStore.svelte';
+import type { LocalizedText, TeamRole } from '$lib/shared/i18n/i18nStore.svelte';
 import { base } from '$app/paths';
 
 export const SITE_TITLE = 'Schelde Gemapt';
@@ -12,18 +12,18 @@ export interface TeamMember {
 }
 
 export interface TeamUnit {
-  name: string;
+  name: LocalizedText;
   members: TeamMember[];
 }
 
 export interface TeamInstitution {
-  name: string;
+  name: LocalizedText;
   units: TeamUnit[];
 }
 
 export const TEAM: TeamInstitution[] = [
   {
-    name: 'Universiteit Gent',
+    name: { nl: 'Universiteit Gent', en: 'Ghent University' },
     units: [
       {
         name: 'Ghent Centre for Digital Humanities',
@@ -49,10 +49,10 @@ export const TEAM: TeamInstitution[] = [
     ],
   },
   {
-    name: 'Universiteit Antwerpen',
+    name: { nl: 'Universiteit Antwerpen', en: 'University of Antwerp' },
     units: [
       {
-        name: 'Centrum voor Stadsgeschiedenis',
+        name: { nl: 'Centrum voor Stadsgeschiedenis', en: 'Centre for Urban History' },
         members: [
           { name: 'Iason Jongepier', role: 'promotor' },
           { name: 'Tim Soens', role: 'coPromotor' },
@@ -92,11 +92,12 @@ export interface PartnerLogo {
 }
 
 export const PARTNER_LOGOS: PartnerLogo[] = [
-  { name: 'Universiteit Antwerpen', alt: 'Logo Universiteit Antwerpen', src: `${base}/attribution-logos/Logo_UAntw.jpg`, href: 'https://www.uantwerpen.be' },
+  { name: 'Universiteit Gent', alt: 'Logo Universiteit Gent', src: `${base}/attribution-logos/logo_Ugent.png`, href: 'https://www.ugent.be' },
+  { name: 'Universiteit Antwerpen', alt: 'Logo Universiteit Antwerpen', src: `${base}/attribution-logos/Logo_UAntw.png`, href: 'https://www.uantwerpen.be' },
   { name: 'KBR', alt: 'Logo KBR', src: `${base}/attribution-logos/logo_KRB.png`, href: 'https://www.kbr.be' },
   { name: 'Nationaal Geografisch Instituut', alt: 'Logo Nationaal Geografisch Instituut', src: `${base}/attribution-logos/logo_NGI.png`, href: 'https://www.ngi.be' },
   { name: 'Rijksarchief', alt: 'Logo Rijksarchief', src: `${base}/attribution-logos/logo_Rijksarchief.png`, href: 'https://www.arch.be' },
-  { name: 'Universiteit Gent', alt: 'Logo Universiteit Gent', src: `${base}/attribution-logos/logo_Ugent.png`, href: 'https://www.ugent.be' },
+  { name: 'Plantentuin Meise', alt: 'Logo Plantentuin Meise', src: `${base}/attribution-logos/logo_plantentuinmeise.jpg`, href: 'https://www.plantentuinmeise.be' },
   { name: 'FWO', alt: 'Logo FWO', src: `${base}/attribution-logos/logo_fwo.png`, href: 'https://www.fwo.be' },
 ];
 

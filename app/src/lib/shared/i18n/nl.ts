@@ -7,6 +7,7 @@ export const nl: Dictionary = {
   controls: {
     compareToggle: 'Vergelijkmodus in- of uitschakelen',
     compare: 'Vergelijk',
+    compareMaps: 'Kaarten vergelijken',
     exitCompare: 'Sluit vergelijken',
     screenshot: 'Schermafbeelding zonder interface',
     changeLanguage: 'Verander taal',
@@ -76,22 +77,27 @@ export const nl: Dictionary = {
     },
   },
   search: {
-    trigger: 'Zoeken',
+    trigger: 'Zoek',
     close: 'Sluit zoeken',
-    placeholder: 'Zoek een plaats…',
+    placeholder: 'Zoek in kaartteksten, kaarten, foto’s…',
     inputAria: 'Zoek toponiemen, kaartbladen en beelden',
+    scopeLabel: 'Zoekbereik',
     tabAll: 'Alles',
+    mapText: 'Kaarttekst',
+    photographs: 'Foto’s',
     toponyms: 'Toponiemen',
     sheets: 'Kaartbladen',
-    activeLayersOnly: 'Enkel actieve lagen',
+    activeLayersOnly: 'Enkel actieve kaart',
     loadingIndex: 'Zoekindex laden…',
     typeToSearch: 'Typ om te zoeken naar historische plaatsnamen, kaartbladen en beelden.',
     noResults: 'Geen resultaten voor “{query}”.',
   },
   images: {
     trigger: 'Landschappen',
+    viewImages: 'Bekijk beelden',
     inViewAria: 'Landschappen in beeld ({count})',
     windowTitle: 'Landschappen in beeld',
+    inViewCount: 'Landschappen ({count})',
     visibleCount: '{shown} van {total} zichtbare beelden',
     yearFilterAria: 'Filter beelden op jaartal',
     yearSanitized: 'Aangepast naar {year}: buiten bereik.',
@@ -119,6 +125,8 @@ export const nl: Dictionary = {
   timeline: {
     pillActivate: 'Activeer {label} · {startYear}–{endYear}',
     pillDeactivate: 'Deactiveer {label} · {startYear}–{endYear}',
+    close: 'Tijdlijn inklappen',
+    open: 'Tijdlijn uitklappen',
   },
   metadataInfo: {
     sources: 'Bronnen',
@@ -162,44 +170,51 @@ export const nl: Dictionary = {
     closePanel: 'Sluit paneel',
     language: 'Taal',
     aboutTab: 'Over',
-    team: 'Team',
+    title: 'Over Schelde Gemapt',
+    team: 'Artemis',
+    teamTitle: 'Team',
+    artemisTitle: 'Over ARTEMIS',
+    artemisInfo: `
+      ARTEMIS is een middelzwaar onderzoeksinfrastructuurproject van de Universiteit Gent en de Universiteit Antwerpen dat historische kaartencollecties in België omzet in herbruikbare digitale onderzoeksdata. De focus ligt op de Scheldevallei tussen Gent en Antwerpen, een landschap waar eeuwenlange interacties tussen mens en milieu hun sporen hebben nagelaten.
+
+      Met behulp van machine learning, digitale erfgoedmethoden en burgerwetenschap ontwikkelt ARTEMIS computermodellen voor de extractie van tekst- en landschapselementen uit historische kaarten. Deze worden als Linked Open Data beschikbaar gemaakt voor onderzoekers en andere gebruikers.
+
+      ARTEMIS loopt van 2024 tot 2027 en wordt gefinancierd door het Fonds Wetenschappelijk Onderzoek (FWO) en het Bijzonder Onderzoeksfonds van de Universiteit Antwerpen (BOF-UA). Het project werkt samen met de Koninklijke Bibliotheek van België, het Algemeen Rijksarchief, het Nationaal Geografisch Instituut en Plantentuin Meise.
+    `,
     partners: 'Partners',
     info: `
-      Schelde Gemapt brengt de rijke geschiedenis van het Scheldelandschap tot leven aan de hand van historische kaarten en geavanceerde digitale technieken.
+      Verken de geschiedenis van het Scheldelandschap tussen Gent en Antwerpen aan de hand van historische kaarten.
 
-      Doorheen de eeuwen is de Scheldevallei voortdurend in beweging geweest. Rivierlopen veranderden, overstromingsgebieden werden ingedijkt, nederzettingen groeiden en infrastructuren kwamen en gingen. Deze digitale tijdreis toont die dynamiek en laat zien hoe de wisselwerking tussen mens en water het landschap van vandaag heeft gevormd.
+      Door de tijd heen veranderden rivierlopen, werden polders aangelegd, groeiden dorpen en steden, en kreeg het landschap telkens een nieuwe vorm. Met Schelde Gemapt reis je door verschillende periodes en vergelijk je historische kaarten met het landschap van vandaag.
 
-      Vanuit een interactieve kaartomgeving vormt de tijdsdimensie het vertrekpunt van je ontdekkingstocht. Je navigeert door verschillende periodes en kaartlagen en vergelijkt historische situaties met het huidige landschap. Door kaarten te combineren, in en uit te schakelen en op verschillende schaalniveaus te verkennen, ontdek je langetermijnveranderingen in waterbeheer, landgebruik en bewoning. Zo wordt duidelijk hoe keuzes uit het verleden nog steeds doorwerken in hedendaagse ruimtelijke en ecologische vraagstukken.
-
-      Schelde Gemapt is ontwikkeld binnen het Artemis-project, een samenwerking tussen Universiteit Gent en Universiteit Antwerpen. Artemis heeft als doel historische kaartencollecties in België digitaal te ontsluiten en te verrijken tot herbruikbare onderzoeksdata. Met technieken zoals computervisie en burgerwetenschap worden kaarten systematisch gedigitaliseerd en geanalyseerd. De resulterende datasets worden volgens de principes van Linked Open Data beschikbaar gesteld, zodat ze breed inzetbaar zijn binnen onderzoek, erfgoed en beleid.
-
-      De focus ligt op de Scheldevallei tussen Gent en Antwerpen, een uniek en dynamisch rivierenlandschap waar natuurlijke processen en menselijke ingrepen al eeuwenlang met elkaar verweven zijn. Getijdenwerking, sedimentatie en intensief landgebruik hebben er een gebied gevormd met een bijzondere ecologische en historische gelaagdheid. Schelde Gemapt ontsluit deze gelaagdheid voor een breed publiek en maakt ze bruikbaar voor onderzoek en reflectie.
+      Ontdek hoe mens en water samen het Scheldelandschap hebben gevormd, en hoe keuzes uit het verleden nog steeds zichtbaar zijn in de omgeving van vandaag.
     `,
     roles: {
       coordinator: 'coördinator',
       mapDataManagement: 'kaarten- en databeheer',
-      publicOutreach: 'contact publiek en externe partners',
+      publicOutreach: 'publiekswerking en externe partners',
       promotor: 'promotor',
       coPromotor: 'co-promotor',
       machineLearning: 'machine learning',
       researcher: 'onderzoeker',
     },
     pipeline: {
-      title: 'Achter de schermen',
-      info: `Schelde Gemapt bestaat uit drie onderdelen. De data doorloopt ze in deze volgorde:
-
-      1. Zenodo — brondata
-      Zenodo bewaart de oorspronkelijke kaarten en data op een veilige plaats.
-
-      2. Artemis-Data — dataverwerking
-      Artemis-Data maakt de kaarten en data klaar voor snel online gebruik.
-
-      3. Artemis-Viewer — website
-      Artemis-Viewer brengt alles samen in de interactieve website die je nu gebruikt.
-
-      Samen maken deze drie onderdelen historisch bronmateriaal toegankelijk als interactief platform.`,
-      dataLinkLabel: 'Bekijk Artemis-Data op GitHub',
-      viewerLinkLabel: 'Bekijk Artemis-Viewer op GitHub',
+      title: 'Data en Software',
+      dataIntro: 'Alle data die binnen het ARTEMIS-project worden geproduceerd en via Schelde Gemapt beschikbaar worden gemaakt, zijn publiek toegankelijk via',
+      zenodoLabel: 'Zenodo',
+      dataCitation: 'Wanneer je deze datasets gebruikt voor onderzoek, publicaties of andere toepassingen, vragen we om de aanbevolen bronvermelding te volgen die bij elke dataset is opgenomen.',
+      softwareIntro: 'Schelde Gemapt is ontwikkeld met open-source software die vrij beschikbaar is voor hergebruik en verdere ontwikkeling. De broncode is beschikbaar via twee GitHub-repositories:',
+      artemisDataLabel: 'Artemis-Data',
+      artemisDataDescription: 'verwerkt en bereidt de datasets die op Zenodo worden gepubliceerd voor gebruik binnen het platform Schelde Gemapt. De software zet brondata om naar de formaten en datastructuren die nodig zijn voor online visualisatie en verkenning.',
+      artemisViewerLabel: 'Artemis-Viewer',
+      artemisViewerDescription: 'de webapplicatie die toegang biedt tot de kaarten, data en visualisaties op Schelde Gemapt.',
+      mapReaderIntro: 'De workflows voor automatische tekst-detectie en -herkenning binnen ARTEMIS zijn gebaseerd op verfijnde versies van modellen die ontwikkeld werden binnen',
+      mapReaderLabel: 'MapReader',
+      mapReaderDescription: 'De getrainde modellen, samen met de bijbehorende ground-truth datasets en documentatie, worden op een later moment gepubliceerd als onderdeel van een wetenschappelijke publicatie.',
+      zenodoUrl: 'https://doi.org/10.5281/zenodo.21219181',
+      artemisDataUrl: 'https://github.com/GhentCDH/Artemis-Data',
+      artemisViewerUrl: 'https://github.com/GhentCDH/Artemis-Viewer',
+      mapReaderUrl: 'https://github.com/maps-as-data/MapReader',
     },
   },
 };

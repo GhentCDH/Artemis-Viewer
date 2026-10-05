@@ -45,12 +45,12 @@
     --button-text: var(--color-text-primary);
     --button-border: var(--color-border);
     --button-border-hover: var(--color-border-hover);
-    --button-height: 1.75rem;
+    --button-height: 1.5rem;
     --button-width: auto;
-    --button-radius: calc(var(--button-height) / var(--control-corner-ratio));
-    --button-padding-inline: var(--space-3);
+    --button-radius: var(--radius-control);
+    --button-padding-inline: var(--space-2);
     --button-padding-block: 0rem;
-    --button-gap: var(--space-2);
+    --button-gap: var(--space-1);
     --button-font-size: var(--text-xs);
     --button-font-family: var(--font-ui);
     --button-font-weight: 400;
@@ -132,7 +132,7 @@
     --button-padding-inline: var(--space-2);
     --button-padding-block: var(--space-1);
     --button-font-size: var(--text-sm);
-    --button-font-family: var(--font-readable);
+    --button-font-family: var(--font-ui);
     --button-justify: flex-start;
     --button-shadow: none;
   }

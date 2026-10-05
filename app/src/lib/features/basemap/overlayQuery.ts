@@ -1,6 +1,8 @@
 import type maplibregl from 'maplibre-gl';
 import type { OverlayFeatureInfo, OverlayOption } from '$lib/core/map/basemap';
+import type { LayerSublayer } from '$lib/core/dataset/layerRegistry';
 import { customOverlayLayerIds } from '$lib/core/map/basemap';
+import { localize } from '$lib/shared/i18n/i18nStore.svelte';
 
 function setQueryValue(url: URL, name: string, value: string): void {
   for (const key of [...url.searchParams.keys()]) {
@@ -73,40 +75,41 @@ function parseTextFeatureInfo(body: string, infoFormat: string): Record<string, 
 
 async function queryWms(
   map: maplibregl.Map,
-  overlay: OverlayOption,
+  url: string,
+  title: string,
   event: maplibregl.MapMouseEvent,
   infoFormat: string,
 ): Promise<OverlayFeatureInfo | null> {
-  const url = new URL(overlay.url);
+  const requestUrl = new URL(url);
   const bounds = map.getBounds();
   const [west, south] = mercatorMeters(bounds.getWest(), bounds.getSouth());
   const [east, north] = mercatorMeters(bounds.getEast(), bounds.getNorth());
-  const layers = [...url.searchParams.entries()].find(([key]) => key.toLowerCase() === 'layers')?.[1] ?? '';
-  const version = [...url.searchParams.entries()].find(([key]) => key.toLowerCase() === 'version')?.[1] ?? '1.3.0';
+  const layers = [...requestUrl.searchParams.entries()].find(([key]) => key.toLowerCase() === 'layers')?.[1] ?? '';
+  const version = [...requestUrl.searchParams.entries()].find(([key]) => key.toLowerCase() === 'version')?.[1] ?? '1.3.0';
 
-  setQueryValue(url, 'SERVICE', 'WMS');
-  setQueryValue(url, 'REQUEST', 'GetFeatureInfo');
-  setQueryValue(url, 'QUERY_LAYERS', layers);
-  setQueryValue(url, 'INFO_FORMAT', infoFormat);
-  setQueryValue(url, 'FEATURE_COUNT', '10');
-  setQueryValue(url, 'WIDTH', String(map.getContainer().clientWidth));
-  setQueryValue(url, 'HEIGHT', String(map.getContainer().clientHeight));
-  setQueryValue(url, 'BBOX', `${west},${south},${east},${north}`);
+  setQueryValue(requestUrl, 'SERVICE', 'WMS');
+  setQueryValue(requestUrl, 'REQUEST', 'GetFeatureInfo');
+  setQueryValue(requestUrl, 'QUERY_LAYERS', layers);
+  setQueryValue(requestUrl, 'INFO_FORMAT', infoFormat);
+  setQueryValue(requestUrl, 'FEATURE_COUNT', '10');
+  setQueryValue(requestUrl, 'WIDTH', String(map.getContainer().clientWidth));
+  setQueryValue(requestUrl, 'HEIGHT', String(map.getContainer().clientHeight));
+  setQueryValue(requestUrl, 'BBOX', `${west},${south},${east},${north}`);
   if (version === '1.3.0') {
-    setQueryValue(url, 'CRS', 'EPSG:3857');
-    setQueryValue(url, 'I', String(Math.round(event.point.x)));
-    setQueryValue(url, 'J', String(Math.round(event.point.y)));
+    setQueryValue(requestUrl, 'CRS', 'EPSG:3857');
+    setQueryValue(requestUrl, 'I', String(Math.round(event.point.x)));
+    setQueryValue(requestUrl, 'J', String(Math.round(event.point.y)));
   } else {
-    setQueryValue(url, 'SRS', 'EPSG:3857');
-    setQueryValue(url, 'X', String(Math.round(event.point.x)));
-    setQueryValue(url, 'Y', String(Math.round(event.point.y)));
+    setQueryValue(requestUrl, 'SRS', 'EPSG:3857');
+    setQueryValue(requestUrl, 'X', String(Math.round(event.point.x)));
+    setQueryValue(requestUrl, 'Y', String(Math.round(event.point.y)));
   }
 
-  const response = await fetch(url);
+  const response = await fetch(requestUrl);
   if (!response.ok) throw new Error(`GetFeatureInfo returned HTTP ${response.status}.`);
   const body = await response.text();
   const properties = parseTextFeatureInfo(body, response.headers.get('content-type') || infoFormat);
-  return properties ? { title: overlay.label, properties } : null;
+  return properties ? { title, properties } : null;
 }
 
 export async function queryOverlayAtPoint(
@@ -117,7 +120,7 @@ export async function queryOverlayAtPoint(
   const capability = overlay.query;
   if (!capability || capability.status !== 'supported') return null;
   if (capability.strategy === 'wms-get-feature-info') {
-    return queryWms(map, overlay, event, capability.infoFormat);
+    return queryWms(map, overlay.url, overlay.label, event, capability.infoFormat);
   }
 
   const layers = customOverlayLayerIds().filter((layerId) => map.getLayer(layerId));
@@ -127,4 +130,13 @@ export async function queryOverlayAtPoint(
   return feature?.properties
     ? { title: overlay.label, properties: feature.properties }
     : null;
+}
+
+export async function queryRemoteWmsSublayerAtPoint(
+  map: maplibregl.Map,
+  sublayer: LayerSublayer,
+  event: maplibregl.MapMouseEvent,
+): Promise<OverlayFeatureInfo | null> {
+  if (sublayer.kind !== 'wms' || sublayer.source?.type !== 'remote' || !sublayer.source.url) return null;
+  return queryWms(map, sublayer.source.url, localize(sublayer.name), event, 'application/geo+json');
 }

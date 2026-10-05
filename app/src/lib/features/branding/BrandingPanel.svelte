@@ -3,12 +3,12 @@
   import Button from '$lib/shared/primitives/Button.svelte';
   import WaveSeparator from '$lib/shared/primitives/WaveSeparator.svelte';
   import DeveloperSettingsPanel from '$lib/features/developerSettings/DeveloperSettingsPanel.svelte';
-  import { i18n, paragraphs, t, LOCALES, LOCALE_NAMES, LOCALE_SHORT_LABELS } from '$lib/shared/i18n/i18nStore.svelte';
-  import { SITE_TITLE, TEAM, PARTNER_LOGOS, PIPELINE_URL, VIEWER_URL } from './aboutData';
+  import { i18n, localize, paragraphs, t, LOCALES, LOCALE_NAMES, LOCALE_SHORT_LABELS } from '$lib/shared/i18n/i18nStore.svelte';
+  import { SITE_TITLE, TEAM, PARTNER_LOGOS } from './aboutData';
 
   let { style = '' }: { style?: string } = $props();
 
-  type Tab = 'about' | 'pipeline';
+  type Tab = 'about' | 'team' | 'pipeline';
 
   let isOpen = $state(false);
   let activeTab = $state<Tab>('about');
@@ -21,6 +21,7 @@
   function close(): void {
     isOpen = false;
   }
+
 </script>
 
 <div class="branding" {style}>
@@ -32,11 +33,6 @@
       onclick={open}
       style="--button-height: var(--branding-button-height); --button-padding-inline: var(--branding-button-padding-inline); --button-gap: var(--branding-button-gap); --button-overflow: hidden;"
     >
-      <svg class="branding-gradient" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <rect class="branding-gradient-band branding-gradient-band--1" width="15" height="100" />
-        <rect class="branding-gradient-band branding-gradient-band--2" x="15" width="35" height="100" />
-        <rect class="branding-gradient-band branding-gradient-band--3" x="50" width="50" height="100" />
-      </svg>
       <svg class="branding-logo" viewBox="0 0 26 40" aria-hidden="true">
         <path
           d="M13,-30 L13,-14 C24,-3 3,11 13,21 C20,28 13,41 13,54 L13,70"
@@ -71,6 +67,7 @@
           <div class="branding-header">
             <div class="branding-tabs">
               <Button active={activeTab === 'about'} onclick={() => (activeTab = 'about')}>{t().branding.aboutTab}</Button>
+              <Button active={activeTab === 'team'} onclick={() => (activeTab = 'team')}>{t().branding.team}</Button>
               <Button active={activeTab === 'pipeline'} onclick={() => (activeTab = 'pipeline')}>{t().branding.pipeline.title}</Button>
             </div>
             <div class="branding-lang" role="group" aria-label={t().branding.language}>
@@ -87,30 +84,10 @@
 
         <div class="branding-body">
           {#if activeTab === 'about'}
-            <h3>{SITE_TITLE}</h3>
+            <h3>{t().branding.title}</h3>
             {#each paragraphs(t().branding.info) as paragraph (paragraph)}
               <p>{paragraph}</p>
             {/each}
-
-            <section class="branding-section">
-              <WaveSeparator />
-              <h4>{t().branding.team}</h4>
-              {#each TEAM as institution (institution.name)}
-                <div class="team-institution">
-                  <strong>{institution.name}</strong>
-                  {#each institution.units as unit (unit.name)}
-                    <div class="team-unit">
-                      <span class="team-unit-name">{unit.name}</span>
-                      <ul>
-                        {#each unit.members as member (member.name)}
-                          <li>{member.name}, {t().branding.roles[member.role]}</li>
-                        {/each}
-                      </ul>
-                    </div>
-                  {/each}
-                </div>
-              {/each}
-            </section>
 
             <section class="branding-section">
               <WaveSeparator />
@@ -124,6 +101,36 @@
               </div>
             </section>
 
+          {:else if activeTab === 'team'}
+            <h3>{t().branding.artemisTitle}</h3>
+            {#each paragraphs(t().branding.artemisInfo) as paragraph (paragraph)}
+              <p>{paragraph}</p>
+            {/each}
+            <h3>{t().branding.teamTitle}</h3>
+            {#each TEAM as institution (localize(institution.name))}
+              <div class="team-institution">
+                <strong>{localize(institution.name)}</strong>
+                {#each institution.units as unit (localize(unit.name))}
+                  <div class="team-unit">
+                    <span class="team-unit-name">{localize(unit.name)}</span>
+                    <ul>
+                      {#each unit.members as member (member.name)}
+                        <li>{member.name} ({t().branding.roles[member.role]})</li>
+                      {/each}
+                    </ul>
+                  </div>
+                {/each}
+              </div>
+            {/each}
+          {:else}
+            <h3>{t().branding.pipeline.title}</h3>
+            <p>{t().branding.pipeline.dataIntro} <a href={t().branding.pipeline.zenodoUrl} target="_blank" rel="noopener noreferrer">{t().branding.pipeline.zenodoLabel}</a>. {t().branding.pipeline.dataCitation}</p>
+            <p>{t().branding.pipeline.softwareIntro}</p>
+            <ul class="software-links">
+              <li><a href={t().branding.pipeline.artemisDataUrl} target="_blank" rel="noopener noreferrer">{t().branding.pipeline.artemisDataLabel}</a>: {t().branding.pipeline.artemisDataDescription}</li>
+              <li><a href={t().branding.pipeline.artemisViewerUrl} target="_blank" rel="noopener noreferrer">{t().branding.pipeline.artemisViewerLabel}</a>: {t().branding.pipeline.artemisViewerDescription}</li>
+            </ul>
+            <p>{t().branding.pipeline.mapReaderIntro} <a href={t().branding.pipeline.mapReaderUrl} target="_blank" rel="noopener noreferrer">{t().branding.pipeline.mapReaderLabel}</a>. {t().branding.pipeline.mapReaderDescription}</p>
             <section class="branding-section developer-section">
               <WaveSeparator />
               <details>
@@ -133,14 +140,6 @@
                 </div>
               </details>
             </section>
-
-          {:else}
-            <h3>{t().branding.pipeline.title}</h3>
-            {#each paragraphs(t().branding.pipeline.info) as paragraph (paragraph)}
-              <p>{paragraph}</p>
-            {/each}
-            <p><a href={PIPELINE_URL} target="_blank" rel="noopener noreferrer">{t().branding.pipeline.dataLinkLabel}</a></p>
-            <p><a href={VIEWER_URL} target="_blank" rel="noopener noreferrer">{t().branding.pipeline.viewerLinkLabel}</a></p>
           {/if}
         </div>
       </Window>
@@ -157,10 +156,9 @@
     --branding-button-gap: 0.55rem;
     --branding-logo-width: 1.05rem;
     --branding-logo-height: 2rem;
-    --branding-gradient-width: 40%;
-    --branding-text-gap: 0.08rem;
-    --branding-title-size: 0.7875rem;
-    --branding-subtitle-size: 0.6975rem;
+    --branding-text-gap: 0.12rem;
+    --branding-title-size: var(--text-xs);
+    --branding-subtitle-size: var(--text-2xs);
     --branding-modal-width: min(60rem, 92vw);
     --branding-modal-height: min(68rem, 94vh);
     /* -- end exposed -- */
@@ -199,41 +197,16 @@
     line-height: 1.1;
   }
 
-  .branding-gradient {
-    position: absolute;
-    inset: 0 0 0 auto;
-    width: var(--branding-gradient-width);
-    height: 100%;
-    pointer-events: none;
-  }
-
-  .branding-gradient-band {
-    stroke: none;
-  }
-
-  .branding-gradient-band--1 {
-    fill: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-control));
-  }
-
-  .branding-gradient-band--2 {
-    fill: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface-control));
-  }
-
-  .branding-gradient-band--3 {
-    fill: color-mix(in srgb, var(--color-accent) 30%, var(--color-surface-control));
-  }
-
   .branding-title {
     font-size: var(--branding-title-size);
     font-weight: 700;
-    letter-spacing: 0.25em;
+    letter-spacing: 0.08em;
   }
 
   .branding-subtitle {
     color: var(--color-accent);
     font-size: var(--branding-subtitle-size);
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
+    letter-spacing: 0.02em;
   }
 
   .branding-modal-layer {
@@ -280,6 +253,7 @@
 
   .branding-body h3 {
     margin: 0 0 var(--space-3);
+    font-family: var(--font-ui);
     font-size: var(--text-base);
     font-weight: 700;
   }
@@ -290,6 +264,19 @@
     font-family: var(--font-readable);
     font-size: var(--text-sm);
     line-height: 1.5;
+  }
+
+  .software-links {
+    margin: 0 0 var(--space-3);
+    padding-left: var(--space-4);
+    color: var(--color-text-secondary);
+    font-family: var(--font-readable);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+  }
+
+  .software-links li + li {
+    margin-top: var(--space-2);
   }
 
   .branding-body a {
@@ -304,11 +291,9 @@
 
   .branding-section h4 {
     margin: 0 0 var(--space-3);
-    color: var(--color-text-muted);
-    font-size: var(--text-2xs);
+    font-family: var(--font-ui);
+    font-size: var(--text-base);
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
   }
 
   .developer-section summary {
@@ -369,20 +354,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--color-border-subtle);
-    border-radius: var(--radius-xs);
     padding: var(--space-2);
-    transition: border-color 150ms ease, background 150ms ease;
+    transition: background 150ms ease;
   }
 
   .logo-grid a:hover {
-    border-color: var(--color-border-hover);
     background: var(--color-surface-control-hover);
   }
 
   .logo-grid img {
+    display: block;
+    width: 100%;
     max-width: 100%;
-    max-height: 3.5rem;
+    max-height: 3.25rem;
     object-fit: contain;
   }
 

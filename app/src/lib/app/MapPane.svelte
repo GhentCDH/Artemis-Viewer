@@ -14,7 +14,7 @@
   import type { LayerSummary } from '$lib/core/dataset/layerRegistry';
   import type { ActiveIiifMask, IiifMaskHit } from '$lib/core/renderers/iiif/iiifMaskInteraction';
   import { hasImagePinAt, restoreImagePins } from '$lib/features/images/imagePins';
-  import { queryOverlayAtPoint } from '$lib/features/basemap/overlayQuery';
+  import { queryOverlayAtPoint, queryRemoteWmsSublayerAtPoint } from '$lib/features/basemap/overlayQuery';
   import { format, t } from '$lib/shared/i18n/i18nStore.svelte';
 
   let {
@@ -93,7 +93,15 @@
   });
 
   $effect(() => {
-    if (!map || !overlay || overlay.query?.status !== 'supported') return;
+    const activeRemoteWmsSublayer = activeLayerId
+      ? layers.find((layer) => layer.id === activeLayerId)?.sublayers.find((sublayer) =>
+        sublayer.kind === 'wms'
+        && sublayer.source?.type === 'remote'
+        && sublayer.source.url
+        && (sublayersByLayerId[activeLayerId]?.[sublayer.id] ?? true)
+      )
+      : undefined;
+    if (!map || (!overlay?.query || overlay.query.status !== 'supported') && !activeRemoteWmsSublayer) return;
     let requestRevision = 0;
     const handleClick = async (event: maplibregl.MapMouseEvent) => {
       if (overlayFeatureOpen) {
@@ -103,7 +111,9 @@
       if (hasImagePinAt(map!, event.point)) return;
       const revision = ++requestRevision;
       try {
-        const info = await queryOverlayAtPoint(map!, overlay, event);
+        const info = overlay?.query?.status === 'supported'
+          ? await queryOverlayAtPoint(map!, overlay, event)
+          : await queryRemoteWmsSublayerAtPoint(map!, activeRemoteWmsSublayer!, event);
         if (revision !== requestRevision) return;
         onOverlayFeature?.({ map: map!, lngLat: [event.lngLat.lng, event.lngLat.lat], info });
       } catch (reason) {

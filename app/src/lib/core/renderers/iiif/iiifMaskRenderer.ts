@@ -72,7 +72,7 @@ export function renderIiifMasks(context: SublayerRenderContext, target: Sublayer
         ...(usesPmtiles ? { 'source-layer': PMTILES_SOURCE_LAYER } : {}),
         filter: ['==', ['get', 'manifestUrl'], ''],
         paint: {
-          'fill-color': readThemeColor('--color-accent', '#2f6f99'),
+          'fill-color': readThemeColor('--color-accent', '#006ba6'),
           'fill-opacity': readThemeNumber('--opacity-iiif-active-mask', 0.22),
         },
       });
@@ -83,7 +83,7 @@ export function renderIiifMasks(context: SublayerRenderContext, target: Sublayer
         ...(usesPmtiles ? { 'source-layer': PMTILES_SOURCE_LAYER } : {}),
         filter: ['==', ['get', 'manifestUrl'], ''],
         paint: {
-          'line-color': readThemeColor('--color-accent', '#2f6f99'),
+          'line-color': readThemeColor('--color-accent', '#006ba6'),
           'line-width': 2,
           'line-opacity': 1,
         },
@@ -95,7 +95,7 @@ export function renderIiifMasks(context: SublayerRenderContext, target: Sublayer
         ...(usesPmtiles ? { 'source-layer': PMTILES_SOURCE_LAYER } : {}),
         filter: ['==', ['get', 'manifestUrl'], ''],
         paint: {
-          'line-color': readThemeColor('--color-accent', '#2f6f99'),
+          'line-color': readThemeColor('--color-accent', '#006ba6'),
           'line-width': 1.5,
           'line-opacity': 0.9,
         },

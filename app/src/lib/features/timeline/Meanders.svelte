@@ -269,7 +269,7 @@
 
   .meander-pill.is-active .meander-active-flow {
     opacity: 0.95;
-    animation: meander-flow 1.1s linear infinite;
+    animation: meander-flow 2.2s linear infinite;
   }
 
   .meander-label {
@@ -279,8 +279,7 @@
     font-family: var(--font-ui);
     font-size: var(--text-2xs);
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    letter-spacing: 0.02em;
     color: var(--color-text-secondary);
   }
 

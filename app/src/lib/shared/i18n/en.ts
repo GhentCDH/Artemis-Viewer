@@ -18,6 +18,7 @@ export const en = {
   controls: {
     compareToggle: 'Toggle compare mode',
     compare: 'Compare',
+    compareMaps: 'Compare maps',
     exitCompare: 'Exit Compare',
     screenshot: 'Screenshot without UI',
     changeLanguage: 'Change language',
@@ -89,20 +90,25 @@ export const en = {
   search: {
     trigger: 'Search',
     close: 'Close search',
-    placeholder: 'Search for a place…',
+    placeholder: 'Search map text, sheets, photographs…',
     inputAria: 'Search toponyms, map sheets, and images',
+    scopeLabel: 'Search scope',
     tabAll: 'All',
+    mapText: 'Map text',
+    photographs: 'Photographs',
     toponyms: 'Toponyms',
     sheets: 'Sheets',
-    activeLayersOnly: 'Active layers only',
+    activeLayersOnly: 'Active map only',
     loadingIndex: 'Loading search index…',
     typeToSearch: 'Type to search historical place names, map sheets, and images.',
     noResults: 'No results for “{query}”.',
   },
   images: {
     trigger: 'Landscapes',
+    viewImages: 'View images',
     inViewAria: 'Landscapes in view ({count})',
     windowTitle: 'Landscapes in view',
+    inViewCount: 'Landscapes ({count})',
     visibleCount: '{shown} of {total} visible images',
     yearFilterAria: 'Filter images by year',
     yearSanitized: 'Adjusted to {year}: outside range.',
@@ -130,6 +136,8 @@ export const en = {
   timeline: {
     pillActivate: 'Activate {label} · {startYear}–{endYear}',
     pillDeactivate: 'Deactivate {label} · {startYear}–{endYear}',
+    close: 'Collapse timeline',
+    open: 'Expand timeline',
   },
   metadataInfo: {
     sources: 'Sources',
@@ -173,44 +181,51 @@ export const en = {
     closePanel: 'Close panel',
     language: 'Language',
     aboutTab: 'About',
-    team: 'Team',
+    title: 'About Scheldt Mapped',
+    team: 'Artemis',
+    teamTitle: 'Team',
+    artemisTitle: 'About ARTEMIS',
+    artemisInfo: `
+      ARTEMIS is a medium-scale research infrastructure project of Ghent University and the University of Antwerp that transforms Belgium's historical map collections into reusable digital research data. The project focuses on the Scheldt Valley between Ghent and Antwerp, a landscape shaped by centuries of interaction between people and the environment.
+
+      Using machine learning, digital heritage methods, and citizen science, ARTEMIS develops computer models for the extraction of text and landscape features from historical maps. These resources are published as Linked Open Data and made available to researchers and other users.
+
+      ARTEMIS runs from 2024 to 2027 and is funded by the Research Foundation Flanders (FWO) and the Special Research Fund of the University of Antwerp (BOF-UA). The project collaborates with the Royal Library of Belgium, the National Archives of Belgium, the National Geographic Institute, and Meise Botanic Garden.
+    `,
     partners: 'Partners',
     info: `
-      Schelde Gemapt brings the rich history of the Scheldt landscape to life through historical maps and advanced digital techniques.
+      Explore the history of the Scheldt landscape between Ghent and Antwerp through historical maps.
 
-      Over the centuries, the Scheldt valley has been in constant motion. River courses shifted, floodplains were embanked, settlements grew, and infrastructure came and went. This digital journey through time reveals that dynamism and shows how the interplay between people and water shaped the landscape of today.
+      Over time, river courses shifted, polders were created, villages and cities expanded, and the landscape took on new forms. With Schelde Gemapt, you can travel through different periods and compare historical maps with the landscape of today.
 
-      Within an interactive map environment, the time dimension is the starting point of your exploration. You navigate through different periods and map layers and compare historical situations with the present-day landscape. By combining maps, switching them on and off and exploring them at different scales, you discover long-term changes in water management, land use and habitation. This makes clear how choices from the past still resonate in contemporary spatial and ecological questions.
-
-      Schelde Gemapt was developed within the Artemis project, a collaboration between Ghent University and the University of Antwerp. Artemis aims to digitally unlock historical map collections in Belgium and enrich them into reusable research data. Using techniques such as computer vision and citizen science, maps are systematically digitised and analysed. The resulting datasets are published according to Linked Open Data principles, making them broadly usable in research, heritage and policy.
-
-      The focus lies on the Scheldt valley between Ghent and Antwerp, a unique and dynamic river landscape where natural processes and human interventions have been intertwined for centuries. Tidal action, sedimentation and intensive land use have shaped an area with an exceptional ecological and historical layering. Schelde Gemapt opens up this layering to a broad audience and makes it available for research and reflection.
+      Discover how people and water have shaped the Scheldt landscape together, and how decisions made in the past are still visible in the environment around us today.
     `,
     roles: {
       coordinator: 'coordinator',
       mapDataManagement: 'map and data management',
-      publicOutreach: 'public and partner engagement',
+      publicOutreach: 'public and external partner engagement',
       promotor: 'principal investigator',
       coPromotor: 'co-investigator',
       machineLearning: 'machine learning',
       researcher: 'researcher',
     },
     pipeline: {
-      title: 'Behind the scenes',
-      info: `Schelde Gemapt consists of three parts. Data flows through them in this order:
-
-      1. Zenodo — source data
-      Zenodo safely stores the original maps and data.
-
-      2. Artemis-Data — data processing
-      Artemis-Data prepares the maps and data for fast online use.
-
-      3. Artemis-Viewer — website
-      Artemis-Viewer brings everything together in the interactive website you are using now.
-
-      Together, these three parts turn historical source material into an accessible interactive platform.`,
-      dataLinkLabel: 'View Artemis-Data on GitHub',
-      viewerLinkLabel: 'View Artemis-Viewer on GitHub',
+      title: 'Data and Software',
+      dataIntro: 'All data produced within the ARTEMIS project and made available through the Scheldt Mapped platform are publicly accessible via',
+      zenodoLabel: 'Zenodo',
+      dataCitation: 'If you use these datasets in research or other applications, please cite them according to the citation guidelines provided with each dataset.',
+      softwareIntro: 'Scheldt Mapped is built with open-source software that is freely available for reuse and further development. The source code is available through two GitHub repositories:',
+      artemisDataLabel: 'Artemis-Data',
+      artemisDataDescription: 'processes and prepares the datasets published on Zenodo for efficient use within the Scheldt Mapped platform. It transforms source data into the formats and structures required for online visualisation and exploration.',
+      artemisViewerLabel: 'Artemis-Viewer',
+      artemisViewerDescription: 'the web application that provides access to the maps, data, and visualisations available on Scheldt Mapped.',
+      mapReaderIntro: 'The automatic text spotting workflows used within ARTEMIS are based on fine-tuned versions of models developed in the context of',
+      mapReaderLabel: 'MapReader',
+      mapReaderDescription: 'The trained models, together with their ground-truth datasets and documentation, will be released at a later date as part of a forthcoming scientific publication.',
+      zenodoUrl: 'https://doi.org/10.5281/zenodo.21219181',
+      artemisDataUrl: 'https://github.com/GhentCDH/Artemis-Data',
+      artemisViewerUrl: 'https://github.com/GhentCDH/Artemis-Viewer',
+      mapReaderUrl: 'https://github.com/maps-as-data/MapReader',
     },
   },
 } satisfies MessageTree;
